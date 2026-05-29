@@ -217,6 +217,16 @@
     word-break: break-all;
   }
 
+  .download-link {
+    color: #4a9eff;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .download-link:hover {
+    text-decoration: underline;
+  }
+
   .gallery-item.generating {
     border-color: #4a9eff;
   }
@@ -316,13 +326,13 @@
     return div;
   }
 
-  function updateGalleryItem(div, vehicle, filename) {
+  function updateGalleryItem(div, vehicle, filename, imageData) {
     div.className = 'gallery-item';
     div.innerHTML = `
-      <img src="/images/${filename}" alt="${vehicle}" loading="lazy">
+      <img src="data:image/png;base64,${imageData}" alt="${vehicle}">
       <div class="info">
         <div class="vehicle-name">${vehicle}</div>
-        <div class="file-name">${filename}</div>
+        <a class="file-name download-link" href="data:image/png;base64,${imageData}" download="${filename}">Download ${filename}</a>
       </div>`;
   }
 
@@ -365,7 +375,7 @@
           card.querySelector('.placeholder').innerHTML = '<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">Failed</span>';
           setStatus(`Error on "${vehicle}": ${data.error}`, 'error');
         } else {
-          updateGalleryItem(card, vehicle, data.filename);
+          updateGalleryItem(card, vehicle, data.filename, data.image_data);
           completed++;
           updateProgress(completed, vehicles.length);
         }

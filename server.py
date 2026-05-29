@@ -78,18 +78,17 @@ def generate():
         )
 
         image_b64 = result.data[0].b64_json
-        image_bytes = base64.b64decode(image_b64)
 
         filename = f"{sanitize_filename(vehicle)}_{int(time.time())}.png"
         filepath = os.path.join(GENERATED_DIR, filename)
         with open(filepath, "wb") as f:
-            f.write(image_bytes)
+            f.write(base64.b64decode(image_b64))
 
         return jsonify({
             "success": True,
             "filename": filename,
+            "image_data": image_b64,
             "vehicle": vehicle,
-            "prompt": prompt,
         })
 
     except Exception as e:
