@@ -3,7 +3,6 @@ from openai import OpenAI
 import base64
 import os
 import re
-import time
 
 app = Flask(__name__)
 
@@ -29,19 +28,9 @@ def load_api_key():
 
 API_KEY = load_api_key()
 
-# Art-directed prompt: locked framing/scale/lighting for a consistent campaign look,
+# Art-directed render rules: locked framing/scale/lighting for a consistent campaign look,
 # rendered on a TRANSPARENT background so each car drops cleanly onto the ad template.
-DEFAULT_PROMPT = (
-    "You are my automotive image generator. I will provide vehicle models one at a time.\n"
-    "STEP 1 — REFERENCE FIRST (do this before every image): Before generating, briefly "
-    "describe the real vehicle's defining visual features — grille shape and pattern, "
-    "headlight design, body proportions, roofline (SUV vs. coupe/sloped), wheel style, "
-    "and badge placement. If you have web access, look it up to confirm; if not, state "
-    "the known factory design. Use this description as the blueprint so the rendered car "
-    "accurately matches the real model.\n"
-    "STEP 2 — GENERATE: Render the vehicle. Every image must match the EXACT SAME "
-    "composition, framing, lighting, scale, and perspective as the FIRST generated image. "
-    "Never change the visual style between vehicles.\n"
+RENDER_RULES = (
     "MANDATORY CONSISTENCY RULES — NEVER CHANGE:\n"
     "• Vehicle centered in frame • Front 3/4 angle • Facing slightly left • Entire vehicle "
     "visible with identical spacing around the car in every image • Landscape 3:2 wide aspect ratio "
@@ -51,26 +40,101 @@ DEFAULT_PROMPT = (
     "• Photorealistic ultra-high-resolution rendering • Sharp edges with clean cutout separation "
     "from the transparent background\n"
     "CRITICAL SCALE & FRAMING LOCK:\n"
-    "The vehicle MUST occupy the EXACT SAME percentage of the frame as the previous image.\n"
+    "The vehicle MUST occupy the EXACT SAME percentage of the frame in every image.\n"
     "DO NOT: • zoom in or out • change focal length • change camera distance • alter crop "
     "• alter perspective • alter wheel positioning • alter roof height within frame • alter "
     "tire-to-bottom spacing • alter spacing above vehicle • alter visual weight of vehicle in canvas\n"
     "The wheels, roofline, and body proportions must align consistently across all generated "
     "vehicles so the entire set looks like one professionally art-directed automotive campaign.\n"
-    "Every new vehicle must match: • identical camera height • identical lens perspective "
-    "• identical framing • identical vehicle scale • identical crop margins • identical "
-    "lighting direction • identical angle\n"
-    "The ONLY things allowed to change between images are the vehicle model, its body style, "
-    "and its paint color.\n"
-    "Render the image only — no text, watermarks, or captions anywhere in the image.\n"
-    "Vehicle: {vehicle}\n"
-    "Body style: {bodystyle} — match the silhouette, roofline, doors, and proportions to this body style.\n"
-    "Exterior paint color: {color}."
+    "Keep identical camera height, lens perspective, framing, vehicle scale, crop margins, "
+    "lighting direction, and angle for every vehicle.\n"
+    "Render the image only — no text, watermarks, or captions anywhere in the image."
 )
 
 
-def sanitize_filename(name):
-    return re.sub(r'[^\w\s-]', '', name).strip().replace(' ', '_')[:80]
+def research_vehicle(client, vehicle, bodystyle):
+    """Look up the real, current design of this exact model year on the web so the
+    image model renders THIS year's car (not an outdated training-data version).
+    Best-effort: returns "" on any failure so generation still proceeds."""
+    query = (
+        f"Search the web for the exact official exterior design of the {vehicle}"
+        + (f" ({bodystyle})" if bodystyle else "")
+        + ". Confirm the correct MODEL YEAR. In 110-140 words, describe ONLY the exterior so an "
+        "illustrator can draw THIS specific model year accurately: front grille shape and pattern, "
+        "headlight and daytime-running-light signature, front bumper and air intakes, overall body "
+        "proportions and roofline, side character lines, wheel design, and badge placement. If this "
+        "model year is a redesign or facelift, explicitly state what changed versus the previous "
+        "generation. Be factual and specific. No intro sentence, no pricing, no interior, no prose."
+    )
+    last_err = None
+    for tool_type in ("web_search", "web_search_preview"):
+        try:
+            resp = client.responses.create(
+                model="gpt-4.1",
+                tools=[{"type": tool_type}],
+                input=query,
+            )
+            text = (getattr(resp, "output_text", "") or "").strip()
+            if text:
+                return text
+        except Exception as e:
+            last_err = e
+            continue
+    if last_err:
+        print(f"[research] skipped ({last_err})")
+    return ""
+
+
+def classify_error(e):
+    """Turn an OpenAI/SDK exception into a clear, human reason + the raw detail.
+    `fatal` means there's no point continuing a bulk run (key/quota/access issues)."""
+    name = type(e).__name__
+    status = getattr(e, "status_code", None)
+    code = getattr(e, "code", None)
+    detail = str(getattr(e, "message", "") or e)
+    low = f"{code} {detail}".lower()
+
+    if "insufficient_quota" in low or "exceeded your current quota" in low or "billing" in low:
+        reason, fatal = ("You're out of OpenAI credits/quota — add billing or credits to the "
+                         "OpenAI account.", True)
+    elif status == 401 or name == "AuthenticationError" or "api key" in low:
+        reason, fatal = ("Invalid or missing OpenAI API key on the server.", True)
+    elif status == 403 or name == "PermissionDeniedError" or ("verified" in low and "organization" in low):
+        reason, fatal = ("This OpenAI account can't use the image model yet (gpt-image-1 may "
+                         "require organization verification).", True)
+    elif status == 429 or name == "RateLimitError":
+        reason, fatal = ("Hit the OpenAI rate limit — wait a moment and try again.", False)
+    elif status == 400 or name == "BadRequestError":
+        reason, fatal = ("Request was rejected (possibly content policy or an invalid prompt).", False)
+    elif name in ("APIConnectionError", "APITimeoutError"):
+        reason, fatal = ("Couldn't reach OpenAI (network/timeout) — check the connection and retry.", False)
+    elif status and status >= 500:
+        reason, fatal = ("OpenAI had a server error — try again shortly.", False)
+    else:
+        reason, fatal = ("Image generation failed.", False)
+
+    return {"reason": reason, "detail": detail, "fatal": fatal,
+            "code": code, "status": status or 500}
+
+
+def build_image_prompt(vehicle, bodystyle, color, reference):
+    head = f"Render a single studio product photo of this exact vehicle: {vehicle}.\n"
+    if bodystyle:
+        head += (f"Body style: {bodystyle} — match the silhouette, roofline, doors, and "
+                 f"proportions to this body style.\n")
+    head += f"Exterior paint color: {color or 'the standard factory color for this model'}.\n"
+    if reference:
+        head += ("\nAUTHORITATIVE REAL-WORLD REFERENCE (from current sources — the rendered car "
+                 "MUST match these exact details for this specific model year; do not draw an older "
+                 f"generation):\n{reference}\n")
+    return head + "\n" + RENDER_RULES
+
+
+def car_slug(vehicle, bodystyle, color):
+    """Deterministic identity for a car image: same vehicle+body+color -> same file.
+    Lowercased so matching is case-insensitive across platforms."""
+    key = " ".join(p for p in (vehicle, bodystyle, color) if p).lower()
+    return re.sub(r'[^\w\s-]', '', key).strip().replace(' ', '_')[:90]
 
 
 @app.route("/")
@@ -100,6 +164,8 @@ def generate():
     bodystyle = data.get("bodystyle", "").strip()
     color = data.get("color", "").strip()
     prompt_template = data.get("prompt_template", "").strip()
+    do_research = data.get("research", True)
+    force = bool(data.get("force", False))
 
     if not API_KEY or API_KEY == "sk-your-key-here":
         return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
@@ -107,15 +173,38 @@ def generate():
     if not vehicle:
         return jsonify({"error": "Missing vehicle name."}), 400
 
-    # Optional per-request override from the UI; otherwise the art-directed default.
-    base = prompt_template if prompt_template else DEFAULT_PROMPT
-    prompt = (base
-              .replace("{vehicle}", vehicle)
-              .replace("{bodystyle}", bodystyle or "as per the actual production model")
-              .replace("{color}", color or "the standard factory color for this model"))
+    # Deterministic identity: same vehicle + body style + color -> same file.
+    filename = f"{car_slug(vehicle, bodystyle, color)}.png"
+    filepath = os.path.join(GENERATED_DIR, filename)
+
+    # FAIL-SAFE: if this exact car was already generated, reuse it (no API call).
+    if not force and os.path.exists(filepath):
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "vehicle": vehicle,
+            "already_existed": True,
+        })
 
     try:
         client = OpenAI(api_key=API_KEY)
+
+        # STEP 1 — look up the real, current design online (so a brand-new model year
+        # is rendered correctly instead of an outdated training-data version).
+        reference = research_vehicle(client, vehicle, bodystyle) if do_research else ""
+
+        # STEP 2 — build the image prompt (optional custom override still supported).
+        if prompt_template:
+            prompt = (prompt_template
+                      .replace("{vehicle}", vehicle)
+                      .replace("{bodystyle}", bodystyle or "as per the actual production model")
+                      .replace("{color}", color or "the standard factory color for this model"))
+            if reference:
+                prompt += ("\n\nAUTHORITATIVE REAL-WORLD REFERENCE (match this exact model year):\n"
+                           + reference)
+        else:
+            prompt = build_image_prompt(vehicle, bodystyle, color, reference)
+
         result = client.images.generate(
             model="gpt-image-1",
             prompt=prompt,
@@ -129,8 +218,6 @@ def generate():
         image_b64 = result.data[0].b64_json
         image_bytes = base64.b64decode(image_b64)
 
-        filename = f"{sanitize_filename(vehicle)}_{int(time.time())}.png"
-        filepath = os.path.join(GENERATED_DIR, filename)
         with open(filepath, "wb") as f:
             f.write(image_bytes)
 
@@ -138,10 +225,20 @@ def generate():
             "success": True,
             "filename": filename,
             "vehicle": vehicle,
+            "already_existed": False,
+            "referenced": bool(reference),
+            "reference": reference,
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        info = classify_error(e)
+        print(f"[generate] error: {info['reason']} | {info['detail']}")
+        return jsonify({
+            "error": info["detail"] or info["reason"],
+            "reason": info["reason"],
+            "fatal": info["fatal"],
+            "code": info["code"],
+        }), info["status"]
 
 
 @app.route("/images/<path:filename>")

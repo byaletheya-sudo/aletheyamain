@@ -192,7 +192,9 @@
         <div class="controls">
           <button class="btn-start" id="genBtn" onclick="generateAndBuild()">Generate &amp; Download Ad</button>
           <button class="btn-ghost" id="dlBtn" onclick="downloadAd()" disabled>Download Ad Again</button>
+          <button class="btn-ghost" id="regenBtn" onclick="regenerate()" disabled>Regenerate (force new)</button>
           <label class="checkbox"><input type="checkbox" id="autoDl" checked> Auto-download after generating</label>
+          <label class="checkbox"><input type="checkbox" id="webResearch" checked> Look up the latest design online first (accurate, slower)</label>
         </div>
         <label for="promptTemplate" style="margin-top:18px;">Image prompt override (optional)</label>
         <input type="text" id="promptTemplate" placeholder="Leave blank for the default. Use {vehicle} as a placeholder.">
@@ -205,7 +207,9 @@
         <p class="hint" style="margin-bottom:10px;">
           Columns, separated by <b>Tab</b> or <b>|</b>, in this order — paste straight from a spreadsheet:<br>
           <code style="color:#7fb6ff;">Vehicle | Per&nbsp;month | Due&nbsp;at&nbsp;signing | Term | Body&nbsp;style | Badge | Color</code><br>
-          Only <b>Vehicle</b> is required; blank cells use the fields above. Badge = <code>none</code> hides the pill for that ad.
+          Only <b>Vehicle</b> is required. Prices can include <code>$</code>, commas, <code>k</code> &amp; units
+          (e.g. <code>$850/mo</code>, <code>$3K</code>, <code>48 mo</code>). <b>Badge only shows if you put one in
+          the Badge column</b> — leave it out for no badge.
         </p>
         <textarea id="bulkInput" style="min-height:150px;" placeholder="2025 Mercedes GLC 63 | 799 | 3,500 | 24 | SUV | Loaner Special | black
 2024 BMW X5 xDrive40i | 689 | 4,000 | 36 | SUV | | white
@@ -260,6 +264,7 @@
   const $ = id => document.getElementById(id);
   let lastFilename = null;        // car PNG currently in the template
   let selectedCard = null;
+  let lastReference = '';         // web-research description of the last generated car
 
   // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
   const PREVIEW_W = 380;
@@ -318,8 +323,8 @@
     $('adTitle').textContent = $('title').value || $('vehicle').value || '';
     const sub = $('bodystyle').value.trim();
     $('adSub').textContent = sub; $('adSub').style.display = sub ? '' : 'none';
-    $('adPrice').textContent = `$${$('monthly').value} Per Month`;
-    $('adTerms').textContent = `$${$('das').value} Due at Signing • ${$('term').value} Month Lease`;
+    $('adPrice').textContent = `$${money($('monthly').value)} Per Month`;
+    $('adTerms').textContent = `$${money($('das').value)} Due at Signing • ${$('term').value} Month Lease`;
     $('adPhone').textContent = `Text ${$('phone').value}`;
     $('adFine').innerHTML = boldify($('fine').value);
   }
@@ -348,6 +353,7 @@
     $('adCar').crossOrigin = 'anonymous';
     $('adCar').src = `/images/${filename}`;
     $('dlBtn').disabled = false;
+    $('regenBtn').disabled = false;
     setStatus(`Loaded ${filename} into the template. Edit pricing, then Download Ad.`, '');
   }
 
@@ -396,24 +402,36 @@
   }
 
   // ---------- generate one car and drop it into the template ----------
-  async function generateCar(vehicle) {
+  async function generateCar(vehicle, force = false) {
     const resp = await fetch('/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         vehicle,
         bodystyle: $('bodystyle').value.trim(),
         color: $('carColor').value.trim(),
+        research: $('webResearch').checked,
+        force,
         prompt_template: $('promptTemplate').value.trim(),
       }),
     });
     const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    if (data.error) return data;   // caller inspects data.error / data.reason / data.fatal
+    lastReference = data.reference || '';
     $('adCar').crossOrigin = 'anonymous';
-    $('adCar').src = `/images/${data.filename}`;
+    // cache-bust so a forced re-generation (same filename) doesn't show a stale image
+    $('adCar').src = `/images/${data.filename}?t=${Date.now()}`;
     lastFilename = data.filename;
     $('dlBtn').disabled = false;
+    $('regenBtn').disabled = false;
     await waitForImage($('adCar'));
-    return data.filename;
+    return data;
+  }
+
+  // build a clear failure line from the server's classified error
+  function failMsg(data) {
+    const r = data.reason || 'Generation failed';
+    const d = data.error && data.error !== r ? ` — ${data.error}` : '';
+    return r + d;
   }
 
   // ---------- full flow: generate car -> build ad -> auto download ----------
@@ -424,23 +442,73 @@
     renderPreview();
 
     $('genBtn').disabled = true;
-    setStatus(`Generating image for ${vehicle}…`, 'active');
+    setStatus($('webResearch').checked
+      ? `Looking up the latest ${vehicle} design + generating…`
+      : `Generating image for ${vehicle}…`, 'active');
     try {
-      await generateCar(vehicle);
+      const data = await generateCar(vehicle, false);
       await loadGallery();
-      if ($('autoDl').checked) await downloadAd();
-      else setStatus('Image generated and placed in template. Click Download Ad.', 'done');
+      if (data.error) {
+        setStatus('✕ ' + failMsg(data), 'error');
+      } else if (data.already_existed) {
+        // fail-safe: don't burn an API call; let the user re-price before downloading
+        setStatus(`"${vehicle}" was already generated — pulled up the saved image. Update the pricing, then click "Download Ad Again". (Use "Regenerate" to force a brand-new image.)`, 'done');
+      } else if ($('autoDl').checked) {
+        await downloadAd();
+      } else {
+        setStatus('Image generated and placed in template. Click Download Ad.', 'done');
+      }
     } catch (e) {
-      setStatus('Error: ' + e.message, 'error');
+      setStatus('✕ Network error: ' + e.message, 'error');
     } finally {
       $('genBtn').disabled = false;
     }
   }
 
+  // ---------- force a brand-new image even if one already exists ----------
+  async function regenerate() {
+    const vehicle = $('vehicle').value.trim();
+    if (!vehicle) { setStatus('Enter a vehicle first.', 'error'); return; }
+    if (!titleEdited) $('title').value = vehicle;
+    renderPreview();
+    $('genBtn').disabled = true; $('regenBtn').disabled = true;
+    setStatus(`Forcing a new image for ${vehicle}…`, 'active');
+    try {
+      const data = await generateCar(vehicle, true);
+      await loadGallery();
+      if (data.error) setStatus('✕ ' + failMsg(data), 'error');
+      else if ($('autoDl').checked) await downloadAd();
+      else setStatus('New image generated. Click Download Ad.', 'done');
+    } catch (e) {
+      setStatus('✕ Network error: ' + e.message, 'error');
+    } finally {
+      $('genBtn').disabled = false; $('regenBtn').disabled = false;
+    }
+  }
+
   // ---------- bulk import: one ad per line ----------
   let bulkAbort = false;
-  const clean$ = v => String(v || '').replace(/^\s*\$/, '').trim();
   const BADGE_OFF = new Set(['none', 'off', 'hide', '-', 'no']);
+
+  // format a pure number with thousands separators; leave anything else as-is
+  function money(v) {
+    const s = String(v == null ? '' : v).trim();
+    return /^\d+$/.test(s) ? Number(s).toLocaleString('en-US') : s;
+  }
+  // pull a dollar amount out of messy text: "$850/mo"->850, "$3K DAS"->3000, "$3,500"->3500
+  function parseMoney(s) {
+    const t = String(s || '').toLowerCase().replace(/[, ]/g, '');
+    const m = t.match(/(\d+(?:\.\d+)?)(k)?/);
+    if (!m) return '';
+    let n = parseFloat(m[1]);
+    if (m[2]) n *= 1000;
+    return String(Math.round(n));
+  }
+  // pull the term length out of "48 mo" / "36 month" -> "48" / "36"
+  function parseTermNum(s) {
+    const m = String(s || '').match(/\d+/);
+    return m ? m[0] : '';
+  }
 
   function parseBulk(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -450,29 +518,30 @@
     return lines.map(line => {
       const c = line.split(/\t|\|/).map(s => s.trim());
       const spec = { vehicle: c[0] };
-      if (c[1]) spec.monthly = clean$(c[1]);
-      if (c[2]) spec.das = clean$(c[2]);
-      if (c[3]) spec.term = c[3].replace(/[^\d]/g, '');
+      if (c[1]) spec.monthly = parseMoney(c[1]);
+      if (c[2]) spec.das = parseMoney(c[2]);
+      if (c[3]) spec.term = parseTermNum(c[3]);
       if (c[4]) spec.bodystyle = c[4];
-      if (c[5]) {                                  // non-empty badge cell; empty = use default badge
-        spec.badge = BADGE_OFF.has(c[5].toLowerCase()) ? null : c[5];
-      }
+      // badge only when explicitly given; otherwise NO badge for bulk rows
+      if (c[5]) spec.badge = BADGE_OFF.has(c[5].toLowerCase()) ? null : c[5];
       if (c[6]) spec.color = c[6];                 // optional paint color for the AI image
       return spec;
     }).filter(s => s.vehicle);
   }
 
-  // apply a spec onto the form (blank fields fall back to whatever is already set)
-  function applySpec(spec) {
+  // apply a row onto the form; unspecified fields fall back to the captured defaults
+  // (def is snapshotted once before the bulk run, so rows never leak into each other)
+  function applySpec(spec, def) {
     $('vehicle').value = spec.vehicle;
     $('title').value = spec.vehicle;
-    if (spec.monthly   !== undefined) $('monthly').value = spec.monthly;
-    if (spec.das       !== undefined) $('das').value = spec.das;
-    if (spec.term      !== undefined) $('term').value = spec.term;
-    if (spec.bodystyle !== undefined) $('bodystyle').value = spec.bodystyle;
-    if (spec.color     !== undefined) $('carColor').value = spec.color;
-    if (spec.badge === null) { $('showBadge').checked = false; }
-    else if (spec.badge !== undefined) { $('badge').value = spec.badge; $('showBadge').checked = true; }
+    $('monthly').value   = spec.monthly   ?? def.monthly;
+    $('das').value       = spec.das       ?? def.das;
+    $('term').value      = spec.term      ?? def.term;
+    $('bodystyle').value = spec.bodystyle ?? def.bodystyle;
+    $('carColor').value  = spec.color     ?? def.color;
+    // bulk badge is per-row: only shown when the row explicitly names one
+    if (spec.badge) { $('badge').value = spec.badge; $('showBadge').checked = true; }
+    else { $('showBadge').checked = false; }
     renderPreview();
   }
 
@@ -483,33 +552,73 @@
     const specs = parseBulk($('bulkInput').value);
     if (!specs.length) { setBulkStatus('No rows found — add at least one vehicle.', 'error'); return; }
 
+    // snapshot the form defaults once so unspecified row cells fall back to these,
+    // not to whatever the previous row left behind
+    const def = {
+      monthly: $('monthly').value, das: $('das').value, term: $('term').value,
+      bodystyle: $('bodystyle').value, color: $('carColor').value,
+    };
+
     bulkAbort = false;
     $('bulkBtn').disabled = true; $('genBtn').disabled = true;
     $('bulkStopBtn').disabled = false;
-    let done = 0;
+    let done = 0, reused = 0;
+    const failures = [];
+    let fatal = null;
 
     for (let i = 0; i < specs.length; i++) {
       if (bulkAbort) break;
       const spec = specs[i];
       setBulkStatus(`Generating ${i + 1} of ${specs.length}: ${spec.vehicle}…`, 'active');
       try {
-        applySpec(spec);
-        await generateCar(spec.vehicle);
+        applySpec(spec, def);
+        const data = await generateCar(spec.vehicle, false);
+        if (data.error) {
+          failures.push({ vehicle: spec.vehicle, reason: failMsg(data) });
+          if (data.fatal) { fatal = data; break; }   // key/quota/access — the rest will all fail too
+          await sleep(300);
+          continue;
+        }
+        if (data.already_existed) reused++;
         await downloadAd();
         done++;
         await sleep(700);            // let each download settle before the next
       } catch (e) {
-        setBulkStatus(`Error on "${spec.vehicle}": ${e.message}`, 'error');
-        await sleep(400);
+        failures.push({ vehicle: spec.vehicle, reason: 'Network error: ' + e.message });
+        await sleep(300);
       }
     }
 
     await loadGallery();
     $('bulkBtn').disabled = false; $('genBtn').disabled = false;
     $('bulkStopBtn').disabled = true;
-    setBulkStatus(bulkAbort
-      ? `Stopped. ${done} of ${specs.length} ads downloaded.`
-      : `Done — ${done} of ${specs.length} ads generated and downloaded.`, 'done');
+    showBulkSummary({ total: specs.length, done, reused, failures, fatal, aborted: bulkAbort });
+  }
+
+  const escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function showBulkSummary({ total, done, reused, failures, fatal, aborted }) {
+    const el = $('bulkStatus');
+    const reusedNote = reused ? ` · ${reused} reused an existing image` : '';
+    let head;
+    if (fatal)
+      head = `<span style="color:#ff6b6b;font-weight:700;">⛔ Stopped — ${escapeHtml(fatal.reason)}</span>`
+           + `<br><span style="color:#999;">${done} of ${total} finished before the error.${reusedNote}</span>`;
+    else if (aborted)
+      head = `<span style="color:#bbb;font-weight:700;">Stopped. ${done} of ${total} downloaded.${reusedNote}</span>`;
+    else if (!failures.length)
+      head = `<span style="color:#4aff7b;font-weight:700;">✓ All ${total} ads generated &amp; downloaded!${reusedNote}</span>`;
+    else
+      head = `<span style="color:#ffd166;font-weight:700;">Done — ${done}/${total} succeeded, ${failures.length} failed.${reusedNote}</span>`;
+
+    const list = failures.length
+      ? `<ul style="margin:8px 0 0 18px;color:#ffb4b4;font-size:0.82rem;line-height:1.5;">`
+        + failures.map(f => `<li><b>${escapeHtml(f.vehicle)}</b> — ${escapeHtml(f.reason)}</li>`).join('')
+        + `</ul>`
+      : '';
+
+    el.className = 'status';
+    el.innerHTML = head + list;
   }
 </script>
 </body>
