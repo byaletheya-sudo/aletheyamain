@@ -599,7 +599,7 @@
 <div class="plate-modal" id="plateModal">
   <div class="plate-dialog">
     <h3>Cover the license plate</h3>
-    <p>Brush over the license plate, then apply. GPT swaps just that area for the Nova plate and leaves the rest of the photo untouched.</p>
+    <p>Brush over the license plate, then apply. The real Nova plate is dropped exactly over that area — nothing else in the photo changes.</p>
     <div class="plate-canvas-wrap"><canvas id="plateCanvas"></canvas></div>
     <div class="controls">
       <label for="plateBrush">Brush</label>
@@ -1208,9 +1208,10 @@
     setS('spCapStatus', 'Copied ✓', 'done');
   }
 
-  // ---- license-plate masked inpaint: brush the plate -> GPT swaps only that area ----
+  // ---- license-plate cover: brush over the plate -> drop the real Nova plate in (exact, local) ----
   let plateSlot = 1, plateImg = null, plateTW = 1024, plateTH = 1024, plateDrawing = false;
-  let plateCtx = null, plateMask = null, plateMaskCtx = null;
+  let plateCtx = null, plateBox = null;
+  const plateRefImg = new Image(); plateRefImg.src = 'nova-plate.png';
 
   const EDIT_SIZES = [[1024, 1024], [1536, 1024], [1024, 1536]];
   function nearestEditSize(w, h) {
@@ -1225,7 +1226,7 @@
   }
   function openPlateModal(slot) {
     const url = spPhotos[slot]; if (!url) return;
-    plateSlot = slot;
+    plateSlot = slot; plateBox = null;
     const img = new Image();
     img.onload = () => {
       plateImg = img;
@@ -1233,9 +1234,7 @@
       const c = $('plateCanvas'); c.width = plateTW; c.height = plateTH;
       plateCtx = c.getContext('2d');
       coverDraw(plateCtx, img, plateTW, plateTH);
-      plateMask = document.createElement('canvas'); plateMask.width = plateTW; plateMask.height = plateTH;
-      plateMaskCtx = plateMask.getContext('2d');
-      $('plateStatus').textContent = '';
+      setS('plateStatus', 'Brush over the license plate.', '');
       $('plateApplyBtn').disabled = false;
       $('plateModal').style.display = 'flex';
     };
@@ -1244,20 +1243,22 @@
   function closePlateModal() { $('plateModal').style.display = 'none'; }
   function clearPlateMask() {
     if (!plateCtx) return;
-    plateMaskCtx.clearRect(0, 0, plateTW, plateTH);
+    plateBox = null;
     plateCtx.clearRect(0, 0, plateTW, plateTH);
     coverDraw(plateCtx, plateImg, plateTW, plateTH);
+    setS('plateStatus', 'Brush over the license plate.', '');
   }
   function platePaint(e) {
     e.preventDefault();
     const c = $('plateCanvas'), r = c.getBoundingClientRect();
-    const sx = plateTW / r.width;
-    const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * (plateTH / r.height);
+    const sx = plateTW / r.width, sy = plateTH / r.height;
+    const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
     const rad = (+$('plateBrush').value) * sx;
     plateCtx.fillStyle = 'rgba(255,70,70,0.5)';
     plateCtx.beginPath(); plateCtx.arc(x, y, rad, 0, 7); plateCtx.fill();
-    plateMaskCtx.fillStyle = '#fff';
-    plateMaskCtx.beginPath(); plateMaskCtx.arc(x, y, rad, 0, 7); plateMaskCtx.fill();
+    const b = plateBox || (plateBox = { minX: 1e9, minY: 1e9, maxX: -1e9, maxY: -1e9 });
+    b.minX = Math.min(b.minX, x - rad); b.minY = Math.min(b.minY, y - rad);
+    b.maxX = Math.max(b.maxX, x + rad); b.maxY = Math.max(b.maxY, y + rad);
   }
   (function bindPlate() {
     const c = $('plateCanvas');
@@ -1265,36 +1266,26 @@
     c.addEventListener('pointermove', e => { if (plateDrawing) platePaint(e); });
     window.addEventListener('pointerup', () => { plateDrawing = false; });
   })();
-  async function applyPlate() {
+  function applyPlate() {
+    if (!plateBox) { setS('plateStatus', 'Brush over the plate first.', 'error'); return; }
+    if (!plateRefImg.complete || !plateRefImg.naturalWidth) { setS('plateStatus', 'Plate still loading — try again.', 'error'); return; }
     const work = document.createElement('canvas'); work.width = plateTW; work.height = plateTH;
-    coverDraw(work.getContext('2d'), plateImg, plateTW, plateTH);
-    const mask = document.createElement('canvas'); mask.width = plateTW; mask.height = plateTH;
-    const mctx = mask.getContext('2d');
-    mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, plateTW, plateTH);
-    mctx.globalCompositeOperation = 'destination-out';
-    mctx.drawImage(plateMask, 0, 0);
-    setS('plateStatus', 'Adding the Nova plate… (~10-25s)', 'active');
-    $('plateApplyBtn').disabled = true;
-    try {
-      const r = await fetch('/plate-cover', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_data: work.toDataURL('image/png'),
-          mask_data: mask.toDataURL('image/png'),
-          size: plateTW + 'x' + plateTH,
-        }),
-      });
-      const d = await r.json();
-      if (d.error) { setS('plateStatus', '✕ ' + (d.reason || d.error), 'error'); return; }
-      spPhotos[plateSlot] = d.image_data;
-      $('spImg' + plateSlot).src = d.image_data;
-      setS('plateStatus', 'Nova plate added ✓', 'done');
-      setTimeout(closePlateModal, 700);
-    } catch (e) {
-      setS('plateStatus', '✕ ' + e.message, 'error');
-    } finally {
-      $('plateApplyBtn').disabled = false;
-    }
+    const ctx = work.getContext('2d');
+    coverDraw(ctx, plateImg, plateTW, plateTH);
+    const bw = Math.max(1, plateBox.maxX - plateBox.minX), bh = Math.max(1, plateBox.maxY - plateBox.minY);
+    const cx = (plateBox.minX + plateBox.maxX) / 2, cy = (plateBox.minY + plateBox.maxY) / 2;
+    // fill the brushed box with the real Nova plate (cover + clip so it stays inside the box)
+    ctx.save();
+    ctx.beginPath(); ctx.rect(plateBox.minX, plateBox.minY, bw, bh); ctx.clip();
+    const scale = Math.max(bw / plateRefImg.naturalWidth, bh / plateRefImg.naturalHeight);
+    const pw = plateRefImg.naturalWidth * scale, ph = plateRefImg.naturalHeight * scale;
+    ctx.drawImage(plateRefImg, cx - pw / 2, cy - ph / 2, pw, ph);
+    ctx.restore();
+    const out = work.toDataURL('image/png');
+    spPhotos[plateSlot] = out;
+    $('spImg' + plateSlot).src = out;
+    setS('plateStatus', 'Nova plate added ✓', 'done');
+    setTimeout(closePlateModal, 600);
   }
 
   function spBadgeFromSelect() {
