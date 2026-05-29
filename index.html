@@ -361,12 +361,17 @@
       const card = addGalleryItem(vehicle, true);
 
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 180000);
+
         const resp = await fetch('/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ vehicle }),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeout);
         const data = await resp.json();
 
         if (data.error) {
@@ -380,9 +385,11 @@
           updateProgress(completed, vehicles.length);
         }
       } catch (err) {
-        card.querySelector('.file-name').textContent = `Network error`;
+        const msg = err.name === 'AbortError' ? 'Request timed out (3 min)' : 'Network error';
+        card.querySelector('.file-name').textContent = msg;
         card.classList.remove('generating');
-        setStatus(`Network error on "${vehicle}": ${err.message}`, 'error');
+        card.querySelector('.placeholder').innerHTML = `<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">${msg}</span>`;
+        setStatus(`${msg} on "${vehicle}"`, 'error');
       }
     }
 
