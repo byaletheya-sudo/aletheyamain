@@ -405,18 +405,26 @@ def plate_cover():
     try:
         img_bytes = decode(image_data)
         mask_bytes = decode(mask_data)
+        # the real Nova plate, sent as a REFERENCE image so GPT reproduces the actual
+        # plate instead of inventing one from a text description
+        with open(os.path.join(BASE_DIR, "nova-plate.png"), "rb") as f:
+            plate_bytes = f.read()
         client = OpenAI(api_key=API_KEY)
         result = client.images.edit(
             model="gpt-image-1",
-            image=("photo.png", img_bytes, "image/png"),
+            image=[
+                ("photo.png", img_bytes, "image/png"),
+                ("nova-plate.png", plate_bytes, "image/png"),
+            ],
             mask=("mask.png", mask_bytes, "image/png"),
             prompt=(
-                "Inside the masked area only, place the Nova Auto dealer license plate: a matte-black "
-                "license plate showing a large brushed-metallic silver 'NOVA' wordmark with the angular "
-                "Nova hexagon 'N' emblem and a small 'uto', set in a black license-plate frame. Match the "
-                "original plate's exact position, angle, perspective, size, lighting and reflections so it "
-                "looks completely real and factory-mounted. Do NOT change anything else in the photo — keep "
-                "the car, paint, background, reflections and lighting pixel-identical outside the mask."
+                "The FIRST image is a photo of a car. The SECOND image is the official Nova Auto dealer "
+                "license plate. In the masked area of the FIRST image, place the Nova plate from the "
+                "second image so it replaces the existing plate. Reproduce the Nova plate's logo, "
+                "wordmark and layout faithfully, and match the car's plate position, angle, perspective, "
+                "size, lighting and subtle reflections so it looks completely real and factory-mounted. "
+                "Do NOT change anything else in the photo — keep the car, paint, background, reflections "
+                "and lighting pixel-identical outside the masked area."
             ),
             size=size,
         )
