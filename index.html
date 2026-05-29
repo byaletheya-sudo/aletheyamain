@@ -101,6 +101,20 @@
       repeating-conic-gradient(#1a1a1a 0% 25%, #141414 0% 50%) 50% / 18px 18px; }
   .gallery-item .cap { padding: 7px 9px; font-size: 0.7rem; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .spinner { width: 34px; height: 34px; border: 3px solid #333; border-top-color: #4a9eff; border-radius: 50%; animation: spin .8s linear infinite; margin: 30% auto; }
+
+  /* ---- bulk progress bar ---- */
+  .bulk-progress { display: none; margin-top: 16px; }
+  .bp-head { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; font-weight: 600; color: #cdd6e2; margin-bottom: 8px; }
+  .bp-head .bp-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bp-head .bp-pct { color: #7b9cff; flex: none; }
+  .bp-track { position: relative; height: 24px; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 999px; overflow: hidden; }
+  .bp-fill {
+    height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, #3a8eef, #7b5cff, #4ad6ff, #3a8eef);
+    background-size: 250% 100%; animation: bpShimmer 1.4s linear infinite;
+    transition: width 0.5s cubic-bezier(.4,0,.2,1);
+  }
+  @keyframes bpShimmer { to { background-position: -250% 0; } }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ================= THE AD TEMPLATE (rendered at 1080x1920) ================= */
@@ -240,12 +254,21 @@
           (e.g. <code>$850/mo</code>, <code>$3K</code>, <code>48 mo</code>). <b>Badge only shows if you put one in
           the Badge column</b> — leave it out for no badge.
         </p>
-        <textarea id="bulkInput" style="min-height:150px;" placeholder="2025 Mercedes GLC 63 | 799 | 3,500 | 24 | SUV | Loaner Special | black
+        <textarea id="bulkInput" oninput="onBulkInput()" style="min-height:150px;" placeholder="2025 Mercedes GLC 63 | 799 | 3,500 | 24 | SUV | Loaner Special | black
 2024 BMW X5 xDrive40i | 689 | 4,000 | 36 | SUV | | white
 2025 Toyota Camry XSE | 419 | 2,500 | 24 | Sedan | none | silver"></textarea>
         <div class="controls" style="margin-top:14px;">
           <button class="btn-start" id="bulkBtn" onclick="runBulk()">Generate All &amp; Download</button>
           <button class="btn-ghost" id="bulkStopBtn" onclick="bulkAbort=true" disabled>Stop</button>
+        </div>
+        <div class="bulk-progress" id="bulkProgress">
+          <div class="bp-head">
+            <span class="bp-label" id="bpLabel">Starting…</span>
+            <span class="bp-pct" id="bpPct">0%</span>
+          </div>
+          <div class="bp-track">
+            <div class="bp-fill" id="bpFill"></div>
+          </div>
         </div>
         <div class="status" id="bulkStatus"></div>
       </div>
@@ -439,9 +462,13 @@
       stage.style.position = ''; stage.style.left = ''; stage.style.top = '';
       stage.style.width = ''; stage.style.height = '';
 
-      const base = ($('vehicle').value || 'nova_ad').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_');
+      // filename: year_make_model_bodystyle  (e.g. 2026_BMW_530i_Convenience)
+      const base = [$('vehicle').value, $('bodystyle').value]
+        .filter(v => v && v.trim())
+        .join(' ')
+        .replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'nova_ad';
       const a = document.createElement('a');
-      a.download = `${base}_ad.png`;
+      a.download = `${base}.png`;
       a.href = canvas.toDataURL('image/png');
       a.click();
       setStatus('Ad downloaded ✓', 'done');
@@ -582,6 +609,9 @@
 
   // ---------- bulk import: one ad per line ----------
   let bulkAbort = false;
+  let bulkDone = new Set();   // rows already finished this session, so a re-run resumes
+  const specKey = s => JSON.stringify([s.vehicle, s.monthly, s.das, s.term, s.bodystyle, s.color, s.badge]);
+  function onBulkInput() { bulkDone.clear(); }   // editing the list starts a fresh run
   const BADGE_OFF = new Set(['none', 'off', 'hide', '-', 'no']);
 
   // format a pure number with thousands separators; leave anything else as-is
@@ -640,6 +670,31 @@
   }
 
   function setBulkStatus(t, type='') { const el = $('bulkStatus'); el.textContent = t; el.className = 'status ' + type; }
+
+  // ---- bulk progress bar ----
+  function startBulkProgress(total, alreadyDone) {
+    $('bulkProgress').style.display = 'block';
+    const pct = Math.round((alreadyDone / total) * 100);
+    $('bpFill').style.width = pct + '%';
+    $('bpPct').textContent = pct + '%';
+    $('bpLabel').textContent = alreadyDone
+      ? `Resuming — ${alreadyDone} of ${total} already done`
+      : `Starting — 0 of ${total}`;
+  }
+  function updateBulkProgress(completed, total, label) {
+    const pct = Math.round((completed / total) * 100);
+    $('bpFill').style.width = pct + '%';
+    $('bpPct').textContent = pct + '%';
+    if (label) $('bpLabel').textContent = label;
+  }
+  function finishBulkProgress({ failures, fatal, aborted }) {
+    $('bpFill').style.width = '100%';
+    $('bpPct').textContent = '100%';
+    if (fatal)        $('bpLabel').textContent = 'Stopped on an error';
+    else if (aborted) $('bpLabel').textContent = 'Stopped';
+    else if (failures) $('bpLabel').textContent = 'Finished with some errors';
+    else              $('bpLabel').textContent = 'All done';
+  }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   async function runBulk() {
@@ -656,54 +711,76 @@
     bulkAbort = false;
     $('bulkBtn').disabled = true; $('genBtn').disabled = true;
     $('bulkStopBtn').disabled = false;
-    let done = 0, reused = 0;
+    setBulkStatus('', '');
+
+    const alreadyDone = specs.filter(s => bulkDone.has(specKey(s))).length;
+    startBulkProgress(specs.length, alreadyDone);
+    let done = 0, reused = 0, skipped = 0;
     const failures = [];
     let fatal = null;
 
     for (let i = 0; i < specs.length; i++) {
       if (bulkAbort) break;
       const spec = specs[i];
-      setBulkStatus(`Generating ${i + 1} of ${specs.length}: ${spec.vehicle}…`, 'active');
+      const key = specKey(spec);
+
+      // RESUME: skip rows already finished in a previous run of this same list
+      if (bulkDone.has(key)) {
+        skipped++;
+        updateBulkProgress(i + 1, specs.length, `${i + 1} of ${specs.length} — ${spec.vehicle} (already done)`);
+        continue;
+      }
+
+      updateBulkProgress(i, specs.length, `${i + 1} of ${specs.length} — ${spec.vehicle}`);
       try {
         applySpec(spec, def);
         const data = await generateCar(spec.vehicle, false);
         if (data.error) {
           failures.push({ vehicle: spec.vehicle, reason: failMsg(data) });
           if (data.fatal) { fatal = data; break; }   // key/quota/access — the rest will all fail too
+          updateBulkProgress(i + 1, specs.length);
           await sleep(300);
           continue;
         }
         if (data.already_existed) reused++;
         await downloadAd();
+        bulkDone.add(key);
         done++;
+        updateBulkProgress(i + 1, specs.length);
         await sleep(700);            // let each download settle before the next
       } catch (e) {
         failures.push({ vehicle: spec.vehicle, reason: 'Network error: ' + e.message });
+        updateBulkProgress(i + 1, specs.length);
         await sleep(300);
       }
     }
 
+    const incomplete = !!(fatal || bulkAbort || failures.length);
+    if (!incomplete) bulkDone.clear();   // fully finished -> a fresh click re-runs from scratch
+
+    finishBulkProgress({ failures: failures.length, fatal, aborted: bulkAbort });
     await loadGallery();
     $('bulkBtn').disabled = false; $('genBtn').disabled = false;
     $('bulkStopBtn').disabled = true;
-    showBulkSummary({ total: specs.length, done, reused, failures, fatal, aborted: bulkAbort });
+    showBulkSummary({ total: specs.length, done, reused, skipped, failures, fatal, aborted: bulkAbort, incomplete });
   }
 
   const escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  function showBulkSummary({ total, done, reused, failures, fatal, aborted }) {
+  function showBulkSummary({ total, done, reused, skipped = 0, failures, fatal, aborted, incomplete }) {
     const el = $('bulkStatus');
+    const finished = done + skipped;        // completed across this run + prior runs
     const reusedNote = reused ? ` · ${reused} reused an existing image` : '';
     let head;
     if (fatal)
-      head = `<span style="color:#ff6b6b;font-weight:700;">⛔ Stopped — ${escapeHtml(fatal.reason)}</span>`
-           + `<br><span style="color:#999;">${done} of ${total} finished before the error.${reusedNote}</span>`;
+      head = `<span style="color:#ff6b6b;font-weight:700;">Stopped — ${escapeHtml(fatal.reason)}</span>`
+           + `<br><span style="color:#999;">${finished} of ${total} done before it stopped.${reusedNote}</span>`;
     else if (aborted)
-      head = `<span style="color:#bbb;font-weight:700;">Stopped. ${done} of ${total} downloaded.${reusedNote}</span>`;
+      head = `<span style="color:#bbb;font-weight:700;">Stopped. ${finished} of ${total} done.${reusedNote}</span>`;
     else if (!failures.length)
-      head = `<span style="color:#4aff7b;font-weight:700;">✓ All ${total} ads generated &amp; downloaded!${reusedNote}</span>`;
+      head = `<span style="color:#4aff7b;font-weight:700;">All ${total} ads generated &amp; downloaded!${reusedNote}</span>`;
     else
-      head = `<span style="color:#ffd166;font-weight:700;">Done — ${done}/${total} succeeded, ${failures.length} failed.${reusedNote}</span>`;
+      head = `<span style="color:#ffd166;font-weight:700;">${finished}/${total} done, ${failures.length} failed.${reusedNote}</span>`;
 
     const list = failures.length
       ? `<ul style="margin:8px 0 0 18px;color:#ffb4b4;font-size:0.82rem;line-height:1.5;">`
@@ -711,8 +788,12 @@
         + `</ul>`
       : '';
 
+    const resumeHint = incomplete
+      ? `<div style="color:#7b9cff;margin-top:8px;font-size:0.82rem;">The finished ones are saved — click <b>Generate All &amp; Download</b> again to resume from the rest. (Editing the list starts over.)</div>`
+      : '';
+
     el.className = 'status';
-    el.innerHTML = head + list;
+    el.innerHTML = head + list + resumeHint;
   }
 </script>
 </body>

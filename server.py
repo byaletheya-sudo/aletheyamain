@@ -59,14 +59,20 @@ def research_vehicle(client, vehicle, bodystyle):
     image model renders THIS year's car (not an outdated training-data version).
     Best-effort: returns "" on any failure so generation still proceeds."""
     query = (
-        f"Search the web for the exact official exterior design of the {vehicle}"
+        f"I need an accurate visual reference for the {vehicle}"
         + (f" ({bodystyle})" if bodystyle else "")
-        + ". Confirm the correct MODEL YEAR. In 110-140 words, describe ONLY the exterior so an "
-        "illustrator can draw THIS specific model year accurately: front grille shape and pattern, "
-        "headlight and daytime-running-light signature, front bumper and air intakes, overall body "
-        "proportions and roofline, side character lines, wheel design, and badge placement. If this "
-        "model year is a redesign or facelift, explicitly state what changed versus the previous "
-        "generation. Be factual and specific. No intro sentence, no pricing, no interior, no prose."
+        + ".\n"
+        "STEP 1: Search the web and determine which GENERATION of this model is sold BRAND-NEW for "
+        "that exact model year. Identify the generation name / chassis code and the year that "
+        "generation (or its facelift) was introduced. Many models were recently redesigned, and older "
+        "generations dominate image search — you MUST use the CURRENT/NEWEST generation for this model "
+        "year and IGNORE every previous generation, even if older photos are more common.\n"
+        "STEP 2: In 130-170 words, describe ONLY the exterior of THAT current generation so an "
+        "illustrator can draw it accurately. Start by stating the generation code and its years in "
+        "production, then describe: front grille shape and pattern, headlight and daytime-running-light "
+        "signature, front bumper and air intakes, overall body proportions and roofline, side character "
+        "lines, wheel design, and badge placement. Explicitly call out what makes THIS generation look "
+        "different from the previous one. Be factual and specific — no pricing, no interior, no fluff."
     )
     last_err = None
     for tool_type in ("web_search", "web_search_preview"):
@@ -126,9 +132,9 @@ def build_image_prompt(vehicle, bodystyle, color, reference):
                  f"proportions to this body style.\n")
     head += f"Exterior paint color: {color or 'the standard factory color for this model'}.\n"
     if reference:
-        head += ("\nAUTHORITATIVE REAL-WORLD REFERENCE (from current sources — the rendered car "
-                 "MUST match these exact details for this specific model year; do not draw an older "
-                 f"generation):\n{reference}\n")
+        head += ("\nAUTHORITATIVE REAL-WORLD REFERENCE (from current sources). Render the CURRENT/NEWEST "
+                 "generation of this model for this model year EXACTLY as described — never an older "
+                 f"generation, even if older designs are more familiar:\n{reference}\n")
     return head + "\n" + RENDER_RULES
 
 
