@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aletheya — Vehicle Image Generator</title>
+<title>Nova Ad Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -14,337 +18,471 @@
     min-height: 100vh;
   }
 
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 40px 20px;
+  .container { max-width: 1280px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  h1 { font-size: 1.9rem; font-weight: 700; margin-bottom: 6px; color: #fff; }
+  .subtitle { color: #888; margin-bottom: 28px; font-size: 0.95rem; }
+
+  .layout { display: grid; grid-template-columns: 1fr 420px; gap: 32px; align-items: start; }
+
+  .panel {
+    background: #151515; border: 1px solid #2a2a2a;
+    border-radius: 12px; padding: 22px; margin-bottom: 20px;
+  }
+  .panel h2 {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #888; margin-bottom: 16px;
   }
 
-  h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-    color: #fff;
+  label { display: block; font-size: 0.82rem; color: #aaa; margin: 14px 0 6px; }
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], textarea {
+    width: 100%; background: #0d0d0d; border: 1px solid #333; border-radius: 8px;
+    padding: 10px 13px; color: #fff; font-size: 0.92rem; font-family: inherit;
+    outline: none; transition: border-color 0.2s;
   }
+  input:focus, textarea:focus { border-color: #4a9eff; }
+  textarea { resize: vertical; min-height: 70px; font-size: 0.8rem; line-height: 1.5; }
+  .hint { font-size: 0.72rem; color: #666; margin-top: 5px; }
 
-  .subtitle {
-    color: #888;
-    margin-bottom: 32px;
-    font-size: 0.95rem;
-  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
-  .config-card {
-    background: #151515;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
-  }
+  .key-status { padding: 9px 13px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 4px; }
+  .key-status.ok { background: #0d1f0d; border: 1px solid #1a3a1a; color: #4aff7b; }
+  .key-status.missing { background: #1f0d0d; border: 1px solid #3a1a1a; color: #ff4a4a; }
 
-  .config-card h2 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #888;
-    margin-bottom: 16px;
-  }
-
-  label {
-    display: block;
-    font-size: 0.85rem;
-    color: #aaa;
-    margin-bottom: 6px;
-  }
-
-  textarea {
-    width: 100%;
-    background: #0d0d0d;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: #fff;
-    font-size: 0.9rem;
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    line-height: 1.6;
-    outline: none;
-    resize: vertical;
-    min-height: 180px;
-    transition: border-color 0.2s;
-  }
-
-  textarea:focus { border-color: #4a9eff; }
-
-  .controls {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 32px;
-  }
-
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   button {
-    padding: 12px 28px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
+    padding: 12px 24px; border: none; border-radius: 8px; font-size: 0.92rem;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
   }
-
   .btn-start { background: #4a9eff; color: #fff; }
   .btn-start:hover { background: #3a8eef; }
   .btn-start:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-ghost { background: #222; color: #ddd; border: 1px solid #333; }
+  .btn-ghost:hover { background: #2a2a2a; }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .btn-stop { background: #ff4a4a; color: #fff; }
-  .btn-stop:hover { background: #e63e3e; }
-  .btn-stop:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .checkbox { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #aaa; cursor: pointer; }
+  .checkbox input { width: 16px; height: 16px; accent-color: #4a9eff; }
 
-  .progress-bar {
-    background: #1a1a1a;
-    border-radius: 8px;
-    height: 8px;
-    margin-bottom: 12px;
-    overflow: hidden;
-    display: none;
-  }
+  .status { font-size: 0.88rem; color: #888; margin-top: 14px; min-height: 22px; }
+  .status.active { color: #4a9eff; } .status.error { color: #ff4a4a; } .status.done { color: #4aff7b; }
 
-  .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #4a9eff, #7b5cff);
-    border-radius: 8px;
-    transition: width 0.5s ease;
-    width: 0%;
-  }
+  /* ---- preview column ---- */
+  .preview-col { position: sticky; top: 24px; }
+  .ad-stage { width: 380px; height: 675px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .ad-scaler { transform-origin: top left; }
 
-  .status {
-    font-size: 0.9rem;
-    color: #888;
-    margin-bottom: 24px;
-    min-height: 24px;
-  }
-
-  .status.active { color: #4a9eff; }
-  .status.error { color: #ff4a4a; }
-  .status.done { color: #4aff7b; }
-
-  .gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 20px;
-  }
-
-  .gallery-item {
-    background: #151515;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
-    overflow: hidden;
-    transition: transform 0.2s;
-  }
-
-  .gallery-item:hover { transform: translateY(-2px); }
-
-  .gallery-item img {
-    width: 100%;
-    aspect-ratio: 2/3;
-    object-fit: cover;
-    display: block;
-  }
-
-  .gallery-item .info { padding: 14px; }
-
-  .gallery-item .vehicle-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: #fff;
-    margin-bottom: 4px;
-  }
-
-  .gallery-item .file-name {
-    font-size: 0.75rem;
-    color: #666;
-    word-break: break-all;
-  }
-
-  .download-link {
-    color: #4a9eff;
-    text-decoration: none;
-  }
-
-  .download-link:hover { text-decoration: underline; }
-
-  .gallery-item.generating { border-color: #4a9eff; }
-
-  .gallery-item .placeholder {
-    width: 100%;
-    aspect-ratio: 2/3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #111;
-  }
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #333;
-    border-top-color: #4a9eff;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+  .gallery-item { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
+  .gallery-item:hover { border-color: #4a9eff; }
+  .gallery-item.selected { border-color: #4a9eff; box-shadow: 0 0 0 1px #4a9eff inset; }
+  .gallery-item img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background:
+      repeating-conic-gradient(#1a1a1a 0% 25%, #141414 0% 50%) 50% / 18px 18px; }
+  .gallery-item .cap { padding: 7px 9px; font-size: 0.7rem; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spinner { width: 34px; height: 34px; border: 3px solid #333; border-top-color: #4a9eff; border-radius: 50%; animation: spin .8s linear infinite; margin: 30% auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 768px) {
-    .gallery { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  /* ================= THE AD TEMPLATE (rendered at 1080x1920) ================= */
+  .ad {
+    width: 1080px; height: 1920px; position: relative; overflow: hidden;
+    font-family: 'Poppins', sans-serif; color: #fff;
+    background:
+      radial-gradient(120% 80% at 50% 42%, #1d4f86 0%, #143a64 26%, #0c2342 55%, #081626 100%);
+  }
+  .ad__tex {
+    position: absolute; inset: 0; opacity: 0.35; mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><g fill='none' stroke='%234a8fd6' stroke-width='1' opacity='0.5'><path d='M0 0 L100 60 L0 120 Z'/><path d='M200 0 L100 60 L200 120 Z'/><path d='M100 60 L200 120 L100 200 L0 120 Z'/><path d='M0 120 L100 200'/><path d='M200 120 L100 200'/></g></svg>");
+    background-size: 360px 360px;
+  }
+  .ad__inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  .ad__logo { display: flex; align-items: center; justify-content: center; padding-top: 78px; }
+  .ad__logo img { width: 440px; height: auto; display: block; }
+
+  .ad__body { padding: 44px 64px 0; }
+  .ad__badge {
+    display: inline-block; border: 3px solid rgba(255,255,255,0.85); border-radius: 999px;
+    padding: 14px 34px; font-size: 34px; font-weight: 600; margin-bottom: 22px;
+  }
+  .ad__title { font-size: 78px; font-weight: 700; line-height: 1.02; letter-spacing: -1px; }
+  .ad__sub { font-size: 52px; font-style: italic; font-weight: 400; margin-top: 4px; }
+  .ad__price { font-size: 78px; font-weight: 700; margin-top: 34px; line-height: 1.05; }
+  .ad__terms { font-size: 44px; font-weight: 400; margin-top: 6px; }
+
+  .ad__car { flex: 1; position: relative; }
+  .ad__car img {
+    position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
+    width: 1000px; max-height: 760px; object-fit: contain;
+    filter: drop-shadow(0 40px 45px rgba(0,0,0,0.55));
+  }
+
+  .ad__phone { text-align: center; font-size: 58px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 22px; }
+  .ad__fine { text-align: center; font-size: 21px; line-height: 1.45; color: rgba(255,255,255,0.82); padding: 0 90px 56px; }
+  .ad__fine b { font-weight: 700; color: #fff; }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .preview-col { position: static; }
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Aletheya</h1>
-  <p class="subtitle">Generate AI images for your vehicle inventory, one at a time.</p>
+  <h1>Nova Ad Generator</h1>
+  <p class="subtitle">Type a vehicle + pricing → generates the car, drops it in the template, auto-downloads the finished ad.</p>
 
-  <div class="config-card">
-    <h2>Vehicle List</h2>
-    <label for="vehicleList">One vehicle per line</label>
-    <textarea id="vehicleList" placeholder="2026 Mercedes-Benz C300&#10;2026 Mercedes-Benz GLA 250&#10;2025 BMW X3 xDrive30i&#10;2024 Audi Q5 Premium"></textarea>
+  <div class="layout">
+    <!-- ============ LEFT: CONTROLS ============ -->
+    <div>
+      <div class="panel">
+        <h2>Vehicle &amp; Pricing</h2>
+        <div class="key-status missing" id="keyStatus">Checking API key...</div>
+
+        <label for="vehicle">Vehicle (used for the AI image + headline)</label>
+        <input type="text" id="vehicle" placeholder="2025 Mercedes GLC 63" oninput="syncTitleFromVehicle()">
+
+        <div class="row">
+          <div>
+            <label for="badge">Badge</label>
+            <input type="text" id="badge" value="Loaner Special" oninput="renderPreview()">
+            <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="showBadge" checked onchange="renderPreview()"> Show badge pill</label>
+          </div>
+          <div>
+            <label for="bodystyle">Body style (italic line)</label>
+            <input type="text" id="bodystyle" value="SUV" oninput="renderPreview()">
+          </div>
+        </div>
+
+        <label for="title">Headline (auto-fills from vehicle, editable)</label>
+        <input type="text" id="title" placeholder="2025 Mercedes GLC 63" oninput="renderPreview()">
+
+        <div class="row3">
+          <div>
+            <label for="monthly">Per month ($)</label>
+            <input type="text" id="monthly" value="799" oninput="renderPreview()">
+          </div>
+          <div>
+            <label for="das">Due at signing ($)</label>
+            <input type="text" id="das" value="3,500" oninput="renderPreview()">
+          </div>
+          <div>
+            <label for="term">Term (months)</label>
+            <input type="text" id="term" value="24" oninput="renderPreview()">
+          </div>
+        </div>
+
+        <label for="phone">Phone</label>
+        <input type="text" id="phone" value="(818) 873 - 3697" oninput="renderPreview()">
+
+        <label for="fine">Fine print</label>
+        <textarea id="fine" oninput="renderPreview()">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
+        <p class="hint">Wrap text in **double asterisks** to bold it.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Generate</h2>
+        <div class="controls">
+          <button class="btn-start" id="genBtn" onclick="generateAndBuild()">Generate &amp; Download Ad</button>
+          <button class="btn-ghost" id="dlBtn" onclick="downloadAd()" disabled>Download Ad Again</button>
+          <label class="checkbox"><input type="checkbox" id="autoDl" checked> Auto-download after generating</label>
+        </div>
+        <label for="promptTemplate" style="margin-top:18px;">Image prompt override (optional)</label>
+        <input type="text" id="promptTemplate" placeholder="Leave blank for the default. Use {vehicle} as a placeholder.">
+        <p class="hint">Default already requests a transparent background so the car drops cleanly onto the template.</p>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Bulk Import (one ad per line)</h2>
+        <p class="hint" style="margin-bottom:10px;">
+          Columns, separated by <b>Tab</b> or <b>|</b>, in this order — paste straight from a spreadsheet:<br>
+          <code style="color:#7fb6ff;">Vehicle | Per&nbsp;month | Due&nbsp;at&nbsp;signing | Term | Body&nbsp;style | Badge</code><br>
+          Only <b>Vehicle</b> is required; blank cells use the fields above. Badge = <code>none</code> hides the pill for that ad.
+        </p>
+        <textarea id="bulkInput" style="min-height:150px;" placeholder="2025 Mercedes GLC 63 | 799 | 3,500 | 24 | SUV | Loaner Special
+2024 BMW X5 xDrive40i | 689 | 4,000 | 36 | SUV
+2025 Toyota Camry XSE | 419 | 2,500 | 24 | Sedan | none"></textarea>
+        <div class="controls" style="margin-top:14px;">
+          <button class="btn-start" id="bulkBtn" onclick="runBulk()">Generate All &amp; Download</button>
+          <button class="btn-ghost" id="bulkStopBtn" onclick="bulkAbort=true" disabled>Stop</button>
+        </div>
+        <div class="status" id="bulkStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Previously Generated Cars (click to reuse)</h2>
+        <div class="gallery" id="gallery"></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: LIVE PREVIEW ============ -->
+    <div class="preview-col">
+      <div class="ad-stage">
+        <div class="ad-scaler" id="adScaler">
+          <!-- THE AD -->
+          <div class="ad" id="ad">
+            <div class="ad__tex"></div>
+            <div class="ad__inner">
+              <div class="ad__logo">
+                <img src="logo.png" alt="NovAuto" crossorigin="anonymous">
+              </div>
+
+              <div class="ad__body">
+                <span class="ad__badge" id="adBadge">Loaner Special</span>
+                <div class="ad__title" id="adTitle">2025 Mercedes GLC 63</div>
+                <div class="ad__sub" id="adSub">SUV</div>
+                <div class="ad__price" id="adPrice">$799 Per Month</div>
+                <div class="ad__terms" id="adTerms">$3,500 Due at Signing • 24 Month Lease</div>
+              </div>
+
+              <div class="ad__car">
+                <img id="adCar" alt="" />
+              </div>
+
+              <div class="ad__phone" id="adPhone">Text (818) 873 - 3697</div>
+              <div class="ad__fine" id="adFine"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-
-  <div class="controls">
-    <button class="btn-start" id="startBtn">Start Generating</button>
-    <button class="btn-stop" id="stopBtn" disabled>Stop</button>
-  </div>
-
-  <div class="progress-bar" id="progressBar">
-    <div class="progress-fill" id="progressFill"></div>
-  </div>
-  <div class="status" id="status"></div>
-
-  <div class="gallery" id="gallery"></div>
 </div>
 
 <script>
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const statusEl = document.getElementById('status');
-  const progressBar = document.getElementById('progressBar');
-  const progressFill = document.getElementById('progressFill');
-  const gallery = document.getElementById('gallery');
+  const $ = id => document.getElementById(id);
+  let lastFilename = null;        // car PNG currently in the template
+  let selectedCard = null;
 
-  let aborted = false;
+  // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
+  const PREVIEW_W = 380;
+  const SCALE = PREVIEW_W / 1080;
+  $('adScaler').style.transform = `scale(${SCALE})`;
 
-  startBtn.addEventListener('click', startGeneration);
-  stopBtn.addEventListener('click', () => {
-    aborted = true;
-    stopBtn.disabled = true;
-    setStatus('Stopping after current image finishes...', '');
-  });
+  // ---------- API key status ----------
+  async function checkKey() {
+    try {
+      const r = await fetch('/status'); const d = await r.json();
+      const el = $('keyStatus');
+      if (d.has_key) { el.className = 'key-status ok'; el.textContent = 'API key loaded from server .env'; }
+      else { el.className = 'key-status missing'; el.textContent = 'No API key — add OPENAI_API_KEY to .env and restart the server'; }
+    } catch { $('keyStatus').textContent = 'Could not reach server'; }
+  }
+  checkKey();
 
-  function setStatus(text, type) {
-    statusEl.textContent = text;
-    statusEl.className = 'status ' + (type || '');
+  function setStatus(t, type='') { const el = $('status'); el.textContent = t; el.className = 'status ' + type; }
+
+  // ---------- keep headline in sync with vehicle until user edits it ----------
+  let titleEdited = false;
+  $('title').addEventListener('input', () => { titleEdited = true; });
+  function syncTitleFromVehicle() {
+    if (!titleEdited) $('title').value = $('vehicle').value;
+    renderPreview();
   }
 
-  function setProgress(current, total) {
-    progressBar.style.display = 'block';
-    progressFill.style.width = `${(current / total) * 100}%`;
+  // ---------- live preview text ----------
+  function boldify(s) {
+    const esc = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return esc.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }
+  function renderPreview() {
+    const showBadge = $('showBadge').checked && $('badge').value.trim() !== '';
+    $('adBadge').textContent = $('badge').value || '';
+    $('adBadge').style.display = showBadge ? '' : 'none';
+    $('adTitle').textContent = $('title').value || $('vehicle').value || '';
+    const sub = $('bodystyle').value.trim();
+    $('adSub').textContent = sub; $('adSub').style.display = sub ? '' : 'none';
+    $('adPrice').textContent = `$${$('monthly').value} Per Month`;
+    $('adTerms').textContent = `$${$('das').value} Due at Signing • ${$('term').value} Month Lease`;
+    $('adPhone').textContent = `Text ${$('phone').value}`;
+    $('adFine').innerHTML = boldify($('fine').value);
+  }
+  renderPreview();
+
+  // ---------- gallery of previously generated cars ----------
+  async function loadGallery() {
+    try {
+      const files = await (await fetch('/images')).json();
+      const g = $('gallery'); g.innerHTML = '';
+      files.forEach(f => {
+        const d = document.createElement('div');
+        d.className = 'gallery-item';
+        d.innerHTML = `<img src="/images/${f}" loading="lazy"><div class="cap">${f}</div>`;
+        d.onclick = () => selectCar(f, d);
+        g.appendChild(d);
+      });
+    } catch {}
+  }
+  loadGallery();
+
+  function selectCar(filename, card) {
+    lastFilename = filename;
+    if (selectedCard) selectedCard.classList.remove('selected');
+    selectedCard = card; if (card) card.classList.add('selected');
+    $('adCar').crossOrigin = 'anonymous';
+    $('adCar').src = `/images/${filename}`;
+    $('dlBtn').disabled = false;
+    setStatus(`Loaded ${filename} into the template. Edit pricing, then Download Ad.`, '');
   }
 
-  function createCard(vehicle) {
-    const div = document.createElement('div');
-    div.className = 'gallery-item generating';
-    div.innerHTML = `
-      <div class="placeholder"><div class="spinner"></div></div>
-      <div class="info">
-        <div class="vehicle-name">${vehicle}</div>
-        <div class="file-name">Generating...</div>
-      </div>`;
-    gallery.appendChild(div);
-    div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    return div;
+  // ---------- image / font load helpers ----------
+  function waitForImage(img) {
+    return new Promise(res => {
+      if (img.complete && img.naturalWidth) return res();
+      img.onload = () => res(); img.onerror = () => res();
+    });
   }
 
-  function showSuccess(card, vehicle, filename, imageData) {
-    card.className = 'gallery-item';
-    card.innerHTML = `
-      <img src="data:image/png;base64,${imageData}" alt="${vehicle}">
-      <div class="info">
-        <div class="vehicle-name">${vehicle}</div>
-        <a class="file-name download-link" href="data:image/png;base64,${imageData}" download="${filename}">Download</a>
-      </div>`;
+  // ---------- render the ad to a PNG and download ----------
+  async function downloadAd() {
+    if (!lastFilename) { setStatus('Generate or select a car first.', 'error'); return; }
+    setStatus('Rendering ad…', 'active');
+    try {
+      await document.fonts.ready;
+      await waitForImage($('adCar'));
+
+      const scaler = $('adScaler');
+      const stage = scaler.parentElement;
+      const prevT = scaler.style.transform;
+      // capture at full 1080x1920: drop the preview scale, hide off-screen
+      scaler.style.transform = 'none';
+      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0';
+      stage.style.width = '1080px'; stage.style.height = '1920px';
+
+      const canvas = await html2canvas($('ad'), {
+        width: 1080, height: 1920, scale: 1, backgroundColor: null, useCORS: true, logging: false,
+      });
+
+      // restore preview
+      scaler.style.transform = prevT;
+      stage.style.position = ''; stage.style.left = ''; stage.style.top = '';
+      stage.style.width = ''; stage.style.height = '';
+
+      const base = ($('vehicle').value || 'nova_ad').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_');
+      const a = document.createElement('a');
+      a.download = `${base}_ad.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      setStatus('Ad downloaded ✓', 'done');
+    } catch (e) {
+      setStatus('Render failed: ' + e.message, 'error');
+    }
   }
 
-  function showError(card, message) {
-    card.className = 'gallery-item';
-    card.querySelector('.placeholder').innerHTML =
-      `<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">${message}</span>`;
-    card.querySelector('.file-name').textContent = message;
+  // ---------- generate one car and drop it into the template ----------
+  async function generateCar(vehicle) {
+    const resp = await fetch('/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle, prompt_template: $('promptTemplate').value.trim() }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    $('adCar').crossOrigin = 'anonymous';
+    $('adCar').src = `/images/${data.filename}`;
+    lastFilename = data.filename;
+    $('dlBtn').disabled = false;
+    await waitForImage($('adCar'));
+    return data.filename;
   }
 
-  async function startGeneration() {
-    const vehicleText = document.getElementById('vehicleList').value.trim();
-    if (!vehicleText) { setStatus('Please add at least one vehicle.', 'error'); return; }
+  // ---------- full flow: generate car -> build ad -> auto download ----------
+  async function generateAndBuild() {
+    const vehicle = $('vehicle').value.trim();
+    if (!vehicle) { setStatus('Enter a vehicle first.', 'error'); return; }
+    if (!titleEdited) $('title').value = vehicle;
+    renderPreview();
 
-    const vehicles = vehicleText.split('\n').map(v => v.trim()).filter(Boolean);
-    if (!vehicles.length) { setStatus('No vehicles found.', 'error'); return; }
+    $('genBtn').disabled = true;
+    setStatus(`Generating image for ${vehicle}…`, 'active');
+    try {
+      await generateCar(vehicle);
+      await loadGallery();
+      if ($('autoDl').checked) await downloadAd();
+      else setStatus('Image generated and placed in template. Click Download Ad.', 'done');
+    } catch (e) {
+      setStatus('Error: ' + e.message, 'error');
+    } finally {
+      $('genBtn').disabled = false;
+    }
+  }
 
-    aborted = false;
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    gallery.innerHTML = '';
+  // ---------- bulk import: one ad per line ----------
+  let bulkAbort = false;
+  const clean$ = v => String(v || '').replace(/^\s*\$/, '').trim();
+  const BADGE_OFF = new Set(['none', 'off', 'hide', '-', 'no']);
 
-    let completed = 0;
-    let failed = 0;
-
-    for (let i = 0; i < vehicles.length; i++) {
-      if (aborted) break;
-
-      const vehicle = vehicles[i];
-      setStatus(`Generating ${i + 1} of ${vehicles.length}: ${vehicle}...`, 'active');
-      setProgress(i, vehicles.length);
-
-      const card = createCard(vehicle);
-
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 180000);
-
-        const resp = await fetch('/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vehicle }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeout);
-        const data = await resp.json();
-
-        if (data.error) {
-          showError(card, data.error);
-          failed++;
-        } else {
-          showSuccess(card, vehicle, data.filename, data.image_data);
-          completed++;
-        }
-      } catch (err) {
-        const msg = err.name === 'AbortError' ? 'Timed out (3 min)' : 'Network error';
-        showError(card, msg);
-        failed++;
+  function parseBulk(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    // skip a header row if present
+    if (/^vehicle\b/i.test(lines[0])) lines.shift();
+    return lines.map(line => {
+      const c = line.split(/\t|\|/).map(s => s.trim());
+      const spec = { vehicle: c[0] };
+      if (c[1]) spec.monthly = clean$(c[1]);
+      if (c[2]) spec.das = clean$(c[2]);
+      if (c[3]) spec.term = c[3].replace(/[^\d]/g, '');
+      if (c[4]) spec.bodystyle = c[4];
+      if (c.length > 5) {                          // badge column was provided
+        const b = c[5];
+        if (b === '' || BADGE_OFF.has(b.toLowerCase())) spec.badge = null;
+        else spec.badge = b;
       }
+      return spec;
+    }).filter(s => s.vehicle);
+  }
 
-      setProgress(i + 1, vehicles.length);
+  // apply a spec onto the form (blank fields fall back to whatever is already set)
+  function applySpec(spec) {
+    $('vehicle').value = spec.vehicle;
+    $('title').value = spec.vehicle;
+    if (spec.monthly   !== undefined) $('monthly').value = spec.monthly;
+    if (spec.das       !== undefined) $('das').value = spec.das;
+    if (spec.term      !== undefined) $('term').value = spec.term;
+    if (spec.bodystyle !== undefined) $('bodystyle').value = spec.bodystyle;
+    if (spec.badge === null) { $('showBadge').checked = false; }
+    else if (spec.badge !== undefined) { $('badge').value = spec.badge; $('showBadge').checked = true; }
+    renderPreview();
+  }
+
+  function setBulkStatus(t, type='') { const el = $('bulkStatus'); el.textContent = t; el.className = 'status ' + type; }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function runBulk() {
+    const specs = parseBulk($('bulkInput').value);
+    if (!specs.length) { setBulkStatus('No rows found — add at least one vehicle.', 'error'); return; }
+
+    bulkAbort = false;
+    $('bulkBtn').disabled = true; $('genBtn').disabled = true;
+    $('bulkStopBtn').disabled = false;
+    let done = 0;
+
+    for (let i = 0; i < specs.length; i++) {
+      if (bulkAbort) break;
+      const spec = specs[i];
+      setBulkStatus(`Generating ${i + 1} of ${specs.length}: ${spec.vehicle}…`, 'active');
+      try {
+        applySpec(spec);
+        await generateCar(spec.vehicle);
+        await downloadAd();
+        done++;
+        await sleep(700);            // let each download settle before the next
+      } catch (e) {
+        setBulkStatus(`Error on "${spec.vehicle}": ${e.message}`, 'error');
+        await sleep(400);
+      }
     }
 
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-
-    if (aborted) {
-      setStatus(`Stopped. ${completed} completed, ${failed} failed.`, '');
-    } else {
-      const summary = failed
-        ? `Done. ${completed} completed, ${failed} failed.`
-        : `Done! All ${completed} images generated.`;
-      setStatus(summary, failed ? 'error' : 'done');
-    }
+    await loadGallery();
+    $('bulkBtn').disabled = false; $('genBtn').disabled = false;
+    $('bulkStopBtn').disabled = true;
+    setBulkStatus(bulkAbort
+      ? `Stopped. ${done} of ${specs.length} ads downloaded.`
+      : `Done — ${done} of ${specs.length} ads generated and downloaded.`, 'done');
   }
 </script>
 </body>
