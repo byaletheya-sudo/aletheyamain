@@ -33,7 +33,7 @@ def login_page(message=""):
 <body>
   <form class="card" method="POST" action="/login">
     <div class="brand"><span>nova</span>.byAletheya</div>
-    <div class="sub">Dealership Tools</div>
+    <div class="sub">nova.byaletheya.com</div>
     {msg}
     <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
     <button type="submit">Enter</button>
@@ -411,10 +411,12 @@ def plate_cover():
             image=("photo.png", img_bytes, "image/png"),
             mask=("mask.png", mask_bytes, "image/png"),
             prompt=(
-                "Replace ONLY the license plate inside the masked area with a clean, modern US "
-                "dealership license plate that clearly reads 'NOVA' for Nova Auto. Match the original "
-                "plate's exact position, angle, perspective, size, lighting and reflections so it looks "
-                "completely real and factory-mounted. Do not alter anything else in the photo."
+                "Inside the masked area only, place the Nova Auto dealer license plate: a matte-black "
+                "license plate showing a large brushed-metallic silver 'NOVA' wordmark with the angular "
+                "Nova hexagon 'N' emblem and a small 'uto', set in a black license-plate frame. Match the "
+                "original plate's exact position, angle, perspective, size, lighting and reflections so it "
+                "looks completely real and factory-mounted. Do NOT change anything else in the photo — keep "
+                "the car, paint, background, reflections and lighting pixel-identical outside the mask."
             ),
             size=size,
         )
