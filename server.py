@@ -10,6 +10,19 @@ app = Flask(__name__)
 GENERATED_DIR = os.path.join(os.path.dirname(__file__), "generated")
 os.makedirs(GENERATED_DIR, exist_ok=True)
 
+DEFAULT_PROMPT = """You are my automotive image generator. I will provide vehicle models one at a time.
+STEP 1 — REFERENCE FIRST (do this before every image): Before generating, briefly describe the real vehicle's defining visual features — grille shape and pattern, headlight design, body proportions, roofline (SUV vs. coupe/sloped), wheel style, and badge placement. If you have web access, look it up to confirm; if not, state the known factory design. Use this description as the blueprint so the rendered car accurately matches the real model. Then wait — show me the description and the image together.
+STEP 2 — GENERATE: Render the vehicle. Every image must match the EXACT SAME composition, framing, lighting, scale, and perspective as the FIRST generated image. Never change the visual style between vehicles. After each image, stop and wait. When I say "next," do Step 1 then Step 2 for the next car.
+MANDATORY CONSISTENCY RULES — NEVER CHANGE:
+• Vehicle centered in frame • Front 3/4 angle • Facing slightly left • Entire vehicle visible with identical spacing around the car in every image • Portrait 4:5 aspect ratio • Pure solid white background only • No floor • No shadows • No reflections • No gradients • No environment or scenery • Car windows fully opaque dark tinted black glass • Cool cinematic showroom lighting • Photorealistic ultra-high-resolution rendering • Sharp edges with clean cutout separation from background
+CRITICAL SCALE & FRAMING LOCK:
+The vehicle MUST occupy the EXACT SAME percentage of the frame as the previous image.
+DO NOT: • zoom in or out • change focal length • change camera distance • alter crop • alter perspective • alter wheel positioning • alter roof height within frame • alter tire-to-bottom spacing • alter spacing above vehicle • alter visual weight of vehicle in canvas
+The wheels, roofline, and body proportions must align consistently across all generated vehicles so the entire set looks like one professionally art-directed automotive campaign.
+Every new vehicle must match: • identical camera height • identical lens perspective • identical framing • identical vehicle scale • identical crop margins • identical lighting direction • identical angle
+The ONLY thing allowed to change between images is the actual vehicle model itself.
+Vehicle: {vehicle}"""
+
 def load_api_key():
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     if os.path.exists(env_path):
@@ -49,11 +62,10 @@ def generate():
     if not vehicle:
         return jsonify({"error": "Missing vehicle name"}), 400
 
-    prompt = prompt_template.replace("{vehicle}", vehicle) if prompt_template else (
-        f"A professional, high-quality photo of a {vehicle}, "
-        f"studio lighting, showroom setting, clean background, "
-        f"front 3/4 angle, photorealistic"
-    )
+    if prompt_template:
+        prompt = prompt_template.replace("{vehicle}", vehicle)
+    else:
+        prompt = DEFAULT_PROMPT.replace("{vehicle}", vehicle)
 
     try:
         client = OpenAI(api_key=API_KEY)
@@ -61,7 +73,7 @@ def generate():
             model="gpt-image-1",
             prompt=prompt,
             n=1,
-            size="1024x1024",
+            size="1024x1536",
             quality="high",
         )
 

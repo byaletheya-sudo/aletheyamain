@@ -195,7 +195,7 @@
 
   .gallery-item img {
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 2/3;
     object-fit: cover;
     display: block;
   }
@@ -256,17 +256,7 @@
   <h1>Vehicle Image Generator</h1>
   <p class="subtitle">Generate AI images for your vehicle inventory, one at a time.</p>
 
-  <div class="config-section">
-    <div class="config-card">
-      <h2>Settings</h2>
-      <div class="key-status missing" id="keyStatus">Checking API key...</div>
-
-      <label for="promptTemplate">Prompt Template (optional)</label>
-      <input type="text" id="promptTemplate" class="prompt-input"
-             placeholder="e.g. A dealership photo of a {vehicle}, front 3/4 angle...">
-      <p class="hint">Use {vehicle} as a placeholder. Leave blank for the default prompt.</p>
-    </div>
-
+  <div class="config-section" style="grid-template-columns: 1fr;">
     <div class="config-card">
       <h2>Vehicle List</h2>
       <label for="vehicleList">One vehicle per line</label>
@@ -293,25 +283,6 @@
 <script>
   let running = false;
   let aborted = false;
-
-  async function checkKey() {
-    try {
-      const resp = await fetch('/status');
-      const data = await resp.json();
-      const el = document.getElementById('keyStatus');
-      if (data.has_key) {
-        el.className = 'key-status ok';
-        el.textContent = 'API key loaded from server .env file';
-      } else {
-        el.className = 'key-status missing';
-        el.textContent = 'No API key found — add OPENAI_API_KEY to the .env file and restart the server';
-      }
-    } catch {
-      document.getElementById('keyStatus').textContent = 'Could not reach server';
-    }
-  }
-
-  checkKey();
 
   function setStatus(text, type = '') {
     const el = document.getElementById('status');
@@ -356,7 +327,6 @@
   }
 
   async function startGeneration() {
-    const promptTemplate = document.getElementById('promptTemplate').value.trim();
     const vehicleText = document.getElementById('vehicleList').value.trim();
 
     if (!vehicleText) { setStatus('Please add at least one vehicle.', 'error'); return; }
@@ -384,7 +354,7 @@
         const resp = await fetch('/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vehicle, prompt_template: promptTemplate }),
+          body: JSON.stringify({ vehicle }),
         });
 
         const data = await resp.json();
