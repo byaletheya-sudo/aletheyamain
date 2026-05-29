@@ -270,6 +270,10 @@
   .plate-canvas-wrap { display: flex; justify-content: center; background: #0a0d12; border: 1px solid #232733; border-radius: 10px; padding: 10px; }
   .plate-stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; margin: 0 auto; }
   #plateBase { max-width: 100%; max-height: 54vh; width: auto; height: auto; display: block; border-radius: 6px; }
+  #editCanvas { max-width: 100%; max-height: 50vh; width: auto; height: auto; display: block; margin: 0 auto; border-radius: 6px; }
+  .enh-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center; margin-top: 16px; }
+  .enh-grid label { margin: 0; color: #9aa0aa; font-size: .82rem; }
+  .enh-grid input[type=range] { width: 100%; }
   #plateOverlay { position: absolute; top: 50%; left: 50%; cursor: move; touch-action: none; user-select: none; -webkit-user-drag: none; }
   .plate-dialog .controls { margin-top: 14px; align-items: center; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .plate-dialog .controls label { margin: 0; color: #aaa; font-size: .82rem; }
@@ -519,11 +523,17 @@
 
               <label for="spPhoto1" style="margin-top:14px;">Photo 1</label>
               <input type="file" id="spPhoto1" accept="image/*" onchange="spLoadPhoto(1, event)" style="font-size:0.85rem;color:#aaa;">
-              <button class="btn-ghost" id="spPlate1" onclick="openPlateModal(1)" style="display:none; margin-top:8px;">Cover license plate</button>
+              <div class="controls" style="margin-top:8px;">
+                <button class="btn-ghost" id="spEnh1" onclick="openEditModal(1)" style="display:none;">Enhance photo</button>
+                <button class="btn-ghost" id="spPlate1" onclick="openPlateModal(1)" style="display:none;">Cover license plate</button>
+              </div>
               <div id="spPhoto2Wrap" style="display:none;">
                 <label for="spPhoto2" style="margin-top:12px;">Photo 2</label>
                 <input type="file" id="spPhoto2" accept="image/*" onchange="spLoadPhoto(2, event)" style="font-size:0.85rem;color:#aaa;">
-                <button class="btn-ghost" id="spPlate2" onclick="openPlateModal(2)" style="display:none; margin-top:8px;">Cover license plate</button>
+                <div class="controls" style="margin-top:8px;">
+                  <button class="btn-ghost" id="spEnh2" onclick="openEditModal(2)" style="display:none;">Enhance photo</button>
+                  <button class="btn-ghost" id="spPlate2" onclick="openPlateModal(2)" style="display:none;">Cover license plate</button>
+                </div>
               </div>
             </div>
 
@@ -620,6 +630,28 @@
       <button class="btn-start" id="plateApplyBtn" onclick="applyPlate()">Apply Nova Plate</button>
     </div>
     <div class="status" id="plateStatus"></div>
+  </div>
+</div>
+
+<!-- photo enhance modal -->
+<div class="plate-modal" id="editModal">
+  <div class="plate-dialog">
+    <h3>Enhance photo</h3>
+    <p>One-tap Auto fixes the lighting, or fine-tune below. Only this photo changes.</p>
+    <div class="plate-canvas-wrap"><canvas id="editCanvas"></canvas></div>
+    <div class="enh-grid">
+      <label>Brightness</label><input type="range" id="enhBright" min="60" max="160" value="100" oninput="renderEdit()">
+      <label>Contrast</label><input type="range" id="enhContrast" min="60" max="180" value="100" oninput="renderEdit()">
+      <label>Saturation</label><input type="range" id="enhSat" min="0" max="200" value="100" oninput="renderEdit()">
+      <label>Warmth</label><input type="range" id="enhWarm" min="-100" max="100" value="0" oninput="renderEdit()">
+    </div>
+    <div class="controls" style="margin-top:12px;">
+      <button class="btn-ghost" onclick="autoEnhance()">Auto</button>
+      <button class="btn-ghost" onclick="resetEnhance()">Reset</button>
+      <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-start" onclick="applyEnhance()">Apply</button>
+    </div>
+    <div class="status" id="editStatus"></div>
   </div>
 </div>
 
@@ -1328,6 +1360,76 @@
     setTimeout(closePlateModal, 500);
   }
 
+  // ---- photo enhancer: one-tap Auto (auto-levels) + brightness/contrast/saturation/warmth ----
+  let editSlot = 1, editImg = null;
+  function enhFilter() {
+    return `brightness(${$('enhBright').value}%) contrast(${$('enhContrast').value}%) saturate(${$('enhSat').value}%)`;
+  }
+  function drawEnhanced(ctx, img, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.filter = enhFilter();
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.filter = 'none';
+    const warm = +$('enhWarm').value;
+    if (warm !== 0) {
+      ctx.globalCompositeOperation = 'soft-light';
+      ctx.fillStyle = warm > 0 ? `rgba(255,150,40,${Math.abs(warm) / 100 * 0.5})` : `rgba(40,150,255,${Math.abs(warm) / 100 * 0.5})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  function renderEdit() {
+    if (!editImg) return;
+    const c = $('editCanvas');
+    drawEnhanced(c.getContext('2d'), editImg, c.width, c.height);
+  }
+  function resetEnhance() {
+    $('enhBright').value = 100; $('enhContrast').value = 100; $('enhSat').value = 100; $('enhWarm').value = 0;
+    renderEdit(); setS('editStatus', '', '');
+  }
+  function openEditModal(slot) {
+    const url = spPhotos[slot]; if (!url) return;
+    editSlot = slot;
+    const img = new Image();
+    img.onload = () => {
+      editImg = img;
+      const maxW = 820, s = Math.min(1, maxW / img.naturalWidth);
+      const c = $('editCanvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      resetEnhance();
+      $('editModal').style.display = 'flex';
+    };
+    img.src = url;
+  }
+  function closeEditModal() { $('editModal').style.display = 'none'; }
+  function autoEnhance() {
+    // sample luminance, stretch 2nd–98th percentile into brightness+contrast
+    const ss = Math.min(180, editImg.naturalWidth), sh = Math.round(editImg.naturalHeight * ss / editImg.naturalWidth);
+    const s = document.createElement('canvas'); s.width = ss; s.height = sh;
+    s.getContext('2d').drawImage(editImg, 0, 0, ss, sh);
+    const data = s.getContext('2d').getImageData(0, 0, ss, sh).data;
+    const hist = new Array(256).fill(0); let n = 0;
+    for (let i = 0; i < data.length; i += 4) { hist[Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])]++; n++; }
+    const pct = p => { let t = n * p, c = 0; for (let i = 0; i < 256; i++) { c += hist[i]; if (c >= t) return i; } return 255; };
+    const p1 = pct(0.02) / 255, p99 = pct(0.98) / 255;
+    let cF = 1.1, bF = 1.0;
+    const A = p1 - 0.5, B = p99 - 0.5, denom = 0.97 * A - 0.03 * B;
+    if (p99 - p1 > 0.05 && Math.abs(denom) > 1e-4) { cF = -0.47 / denom; bF = 0.03 / (A * cF + 0.5); }
+    $('enhContrast').value = Math.round(Math.min(2.0, Math.max(1.0, cF)) * 100);
+    $('enhBright').value = Math.round(Math.min(1.5, Math.max(0.85, bF)) * 100);
+    $('enhSat').value = 114; $('enhWarm').value = 6;
+    renderEdit(); setS('editStatus', 'Auto-enhanced ✓', 'done');
+  }
+  function applyEnhance() {
+    const bw = Math.min(editImg.naturalWidth, 1600), bh = Math.round(editImg.naturalHeight * bw / editImg.naturalWidth);
+    const work = document.createElement('canvas'); work.width = bw; work.height = bh;
+    drawEnhanced(work.getContext('2d'), editImg, bw, bh);
+    const out = work.toDataURL('image/jpeg', 0.92);
+    spPhotos[editSlot] = out;
+    $('spImg' + editSlot).src = out;
+    setS('editStatus', 'Applied ✓', 'done');
+    setTimeout(closeEditModal, 500);
+  }
+
   function spBadgeFromSelect() {
     const v = $('spBadgeSelect').value;
     if (v === '__custom') { $('spBadge').value = ''; $('spBadge').focus(); }
@@ -1349,6 +1451,7 @@
     spPhotos[slot] = url;
     $('spImg' + slot).src = url;
     $('spPlate' + slot).style.display = '';   // enable "Cover license plate"
+    $('spEnh' + slot).style.display = '';      // enable "Enhance photo"
     setSpStatus('', '');
   }
 
