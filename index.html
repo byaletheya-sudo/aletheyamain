@@ -84,7 +84,7 @@
 
   /* ---- preview column ---- */
   .preview-col { position: sticky; top: 24px; }
-  .ad-stage { width: 380px; height: 675px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .ad-stage { width: 456px; height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .ad-scaler { transform-origin: top left; }
 
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
@@ -178,7 +178,7 @@
   .view-inner { max-width: 1280px; margin: 0 auto; padding: 32px 28px 80px; }
 
   /* ================= SOLD POST TEMPLATE (1080x1920) ================= */
-  .sp-stage { width: 380px; height: 675px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .sp-stage { width: 456px; height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .sp-scaler { transform-origin: top left; }
   .sp {
     width: 1080px; height: 1920px; position: relative; overflow: hidden;
@@ -186,19 +186,9 @@
     background: #05080d;
   }
   /* simplified dark-luxury backdrop: blue glow + bottom vignette */
-  .sp__bg { position: absolute; inset: 0;
-    background:
-      radial-gradient(120% 72% at 50% 120%, rgba(0,0,0,.62), rgba(0,0,0,0) 55%),
-      radial-gradient(78% 52% at 50% 15%, rgba(52,118,222,.40), rgba(8,16,30,0) 70%),
-      linear-gradient(180deg, #0b1626 0%, #070d18 55%, #04070c 100%);
-  }
-  .sp__grid { position: absolute; inset: 0; opacity: .045;
-    background-image: linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
-    background-size: 92px 92px;
-    -webkit-mask-image: radial-gradient(72% 60% at 50% 42%, #000 25%, transparent 80%);
-            mask-image: radial-gradient(72% 60% at 50% 42%, #000 25%, transparent 80%);
-  }
+  /* default sold backdrop = the premium Nova studio image */
+  .sp__bg { position: absolute; inset: 0; background: #05080d url('sold-bg.png') center / cover no-repeat; }
+  .sp__grid { display: none; }
 
   /* top brand — small & clean */
   .sp__top { position: absolute; top: 72px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -222,11 +212,11 @@
 
   /* bottom luxury info panel */
   .sp__panel { position: absolute; left: 78px; right: 78px; bottom: 88px; }
+  /* pill matches the lease-ad badge: white outlined, fully rounded */
   .sp__badge {
-    display: inline-block; font-size: 23px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
-    color: #cfe1ff; padding: 11px 22px; border-radius: 7px;
-    background: rgba(64,124,236,.13); border: 1px solid rgba(126,172,255,.32);
-    box-shadow: 0 0 30px rgba(64,124,236,.20);
+    display: inline-block; font-size: 38px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+    color: #fff; padding: 14px 38px; border-radius: 999px;
+    border: 3px solid rgba(255,255,255,0.85); background: transparent;
   }
   .sp__title { margin-top: 24px; font-size: 78px; font-weight: 700; line-height: 1.02; letter-spacing: -1.5px; }
   .sp__footer { margin-top: 22px; font-size: 30px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: .3px; }
@@ -242,13 +232,24 @@
   .seg { display: inline-flex; background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
   .seg button { padding: 9px 18px; background: transparent; color: #aaa; border: none; border-radius: 0; font-weight: 600; font-size: 0.85rem; }
   .seg button.active { background: #4a9eff; color: #fff; }
+
+  /* license-plate brush modal */
+  .plate-modal { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.72);
+    align-items: center; justify-content: center; padding: 24px; }
+  .plate-dialog { background: #14171d; border: 1px solid #2a2f3a; border-radius: 16px; padding: 22px; width: 560px; max-width: 94vw; }
+  .plate-dialog h3 { font-size: 1.1rem; color: #fff; margin-bottom: 6px; }
+  .plate-dialog p { font-size: .85rem; color: #9aa0aa; margin-bottom: 14px; }
+  .plate-canvas-wrap { display: flex; justify-content: center; background: #0a0d12; border: 1px solid #232733; border-radius: 10px; padding: 10px; }
+  #plateCanvas { max-width: 100%; max-height: 56vh; width: auto; height: auto; display: block; cursor: crosshair; touch-action: none; border-radius: 6px; }
+  .plate-dialog .controls { margin-top: 14px; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .plate-dialog .controls label { margin: 0; color: #aaa; font-size: .82rem; }
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand">by<span>Aletheya</span></div>
-    <div class="brand-sub">Nova Tools</div>
+    <div class="brand"><span>nova</span>.byAletheya</div>
+    <div class="brand-sub">Dealership Tools</div>
     <div class="nav-item active" id="nav-ads" onclick="showView('ads')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></span>
       Lease Ad Generator
@@ -478,9 +479,11 @@
 
               <label for="spPhoto1" style="margin-top:14px;">Photo 1</label>
               <input type="file" id="spPhoto1" accept="image/*" onchange="spLoadPhoto(1, event)" style="font-size:0.85rem;color:#aaa;">
+              <button class="btn-ghost" id="spPlate1" onclick="openPlateModal(1)" style="display:none; margin-top:8px;">Cover license plate</button>
               <div id="spPhoto2Wrap" style="display:none;">
                 <label for="spPhoto2" style="margin-top:12px;">Photo 2</label>
                 <input type="file" id="spPhoto2" accept="image/*" onchange="spLoadPhoto(2, event)" style="font-size:0.85rem;color:#aaa;">
+                <button class="btn-ghost" id="spPlate2" onclick="openPlateModal(2)" style="display:none; margin-top:8px;">Cover license plate</button>
               </div>
             </div>
 
@@ -554,6 +557,23 @@
   </main>
 </div>
 
+<!-- license-plate brush modal -->
+<div class="plate-modal" id="plateModal">
+  <div class="plate-dialog">
+    <h3>Cover the license plate</h3>
+    <p>Brush over the plate, then apply — we'll swap just that area for a Nova dealer plate and leave the rest of the photo untouched.</p>
+    <div class="plate-canvas-wrap"><canvas id="plateCanvas"></canvas></div>
+    <div class="controls">
+      <label for="plateBrush">Brush</label>
+      <input type="range" id="plateBrush" min="10" max="90" value="42" style="width:120px;">
+      <button class="btn-ghost" onclick="clearPlateMask()">Clear</button>
+      <button class="btn-ghost" onclick="closePlateModal()">Cancel</button>
+      <button class="btn-start" id="plateApplyBtn" onclick="applyPlate()">Apply Nova Plate</button>
+    </div>
+    <div class="status" id="plateStatus"></div>
+  </div>
+</div>
+
 <script>
   const $ = id => document.getElementById(id);
   let lastFilename = null;        // car PNG currently in the template
@@ -562,7 +582,7 @@
   let carReady = false;           // true once any car (AI / gallery / upload) is in the template
 
   // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
-  const PREVIEW_W = 380;
+  const PREVIEW_W = 456;   // 20% larger previews
   const SCALE = PREVIEW_W / 1080;
   $('adScaler').style.transform = `scale(${SCALE})`;
   $('spScaler').style.transform = `scale(${SCALE})`;   // sold-post preview uses the same scale
@@ -1132,6 +1152,95 @@
     setS('spCapStatus', 'Copied ✓', 'done');
   }
 
+  // ---- license-plate masked inpaint (brush over plate -> swap for a Nova plate) ----
+  let plateSlot = 1, plateImg = null, plateTW = 1024, plateTH = 1024, plateDrawing = false;
+  let plateCtx = null, plateMask = null, plateMaskCtx = null;
+
+  const EDIT_SIZES = [[1024, 1024], [1536, 1024], [1024, 1536]];
+  function nearestEditSize(w, h) {
+    const ar = w / h; let best = EDIT_SIZES[0], bd = Infinity;
+    for (const [tw, th] of EDIT_SIZES) { const d = Math.abs(ar - tw / th); if (d < bd) { bd = d; best = [tw, th]; } }
+    return best;
+  }
+  function coverDraw(ctx, img, tw, th) {
+    const s = Math.max(tw / img.naturalWidth, th / img.naturalHeight);
+    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+    ctx.drawImage(img, (tw - dw) / 2, (th - dh) / 2, dw, dh);
+  }
+  function openPlateModal(slot) {
+    const url = spPhotos[slot]; if (!url) return;
+    plateSlot = slot;
+    const img = new Image();
+    img.onload = () => {
+      plateImg = img;
+      [plateTW, plateTH] = nearestEditSize(img.naturalWidth, img.naturalHeight);
+      const c = $('plateCanvas'); c.width = plateTW; c.height = plateTH;
+      plateCtx = c.getContext('2d');
+      coverDraw(plateCtx, img, plateTW, plateTH);
+      plateMask = document.createElement('canvas'); plateMask.width = plateTW; plateMask.height = plateTH;
+      plateMaskCtx = plateMask.getContext('2d');
+      $('plateStatus').textContent = '';
+      $('plateModal').style.display = 'flex';
+    };
+    img.src = url;
+  }
+  function closePlateModal() { $('plateModal').style.display = 'none'; }
+  function clearPlateMask() {
+    if (!plateCtx) return;
+    plateMaskCtx.clearRect(0, 0, plateTW, plateTH);
+    plateCtx.clearRect(0, 0, plateTW, plateTH);
+    coverDraw(plateCtx, plateImg, plateTW, plateTH);
+  }
+  function platePaint(e) {
+    e.preventDefault();
+    const c = $('plateCanvas'), r = c.getBoundingClientRect();
+    const sx = plateTW / r.width;
+    const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * (plateTH / r.height);
+    const rad = (+$('plateBrush').value) * sx;
+    plateCtx.fillStyle = 'rgba(255,70,70,0.5)';
+    plateCtx.beginPath(); plateCtx.arc(x, y, rad, 0, 7); plateCtx.fill();
+    plateMaskCtx.fillStyle = '#fff';
+    plateMaskCtx.beginPath(); plateMaskCtx.arc(x, y, rad, 0, 7); plateMaskCtx.fill();
+  }
+  (function bindPlate() {
+    const c = $('plateCanvas');
+    c.addEventListener('pointerdown', e => { plateDrawing = true; platePaint(e); });
+    c.addEventListener('pointermove', e => { if (plateDrawing) platePaint(e); });
+    window.addEventListener('pointerup', () => { plateDrawing = false; });
+  })();
+  async function applyPlate() {
+    // working image (clean photo) + mask (opaque everywhere, transparent where brushed)
+    const work = document.createElement('canvas'); work.width = plateTW; work.height = plateTH;
+    coverDraw(work.getContext('2d'), plateImg, plateTW, plateTH);
+    const mask = document.createElement('canvas'); mask.width = plateTW; mask.height = plateTH;
+    const mctx = mask.getContext('2d');
+    mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, plateTW, plateTH);
+    mctx.globalCompositeOperation = 'destination-out';
+    mctx.drawImage(plateMask, 0, 0);
+    setS('plateStatus', 'Swapping the plate… (~10-25s)', 'active');
+    $('plateApplyBtn').disabled = true;
+    try {
+      const r = await fetch('/plate-cover', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_data: work.toDataURL('image/png'),
+          mask_data: mask.toDataURL('image/png'),
+          size: plateTW + 'x' + plateTH,
+        }),
+      });
+      const d = await r.json();
+      if (d.error) { setS('plateStatus', '✕ ' + (d.reason || d.error), 'error'); return; }
+      spPhotos[plateSlot] = d.image_data;
+      $('spImg' + plateSlot).src = d.image_data;
+      setS('plateStatus', 'Plate covered ✓', 'done');
+      setTimeout(closePlateModal, 700);
+    } catch (e) {
+      setS('plateStatus', '✕ ' + e.message, 'error');
+    } finally {
+      $('plateApplyBtn').disabled = false;
+    }
+  }
+
   function spBadgeFromSelect() {
     const v = $('spBadgeSelect').value;
     if (v === '__custom') { $('spBadge').value = ''; $('spBadge').focus(); }
@@ -1152,6 +1261,7 @@
     const url = await blobToDataURL(file);
     spPhotos[slot] = url;
     $('spImg' + slot).src = url;
+    $('spPlate' + slot).style.display = '';   // enable "Cover license plate"
     setSpStatus('', '');
   }
 

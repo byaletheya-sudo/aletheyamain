@@ -1,10 +1,69 @@
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect
 from openai import OpenAI
 import base64
 import os
 import re
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "nova-aletheya-3f9a2c7e-change-in-prod")
+
+# Simple password gate for the whole app (page + API). Override via APP_PASSWORD env.
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "novaagents")
+
+
+def login_page(message=""):
+    msg = f'<p class="err">{message}</p>' if message else ""
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nova.byAletheya</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#05080d; color:#fff;
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background-image: radial-gradient(70% 50% at 50% 35%, rgba(52,118,222,.30), rgba(8,16,30,0) 70%); }}
+  .card {{ width:340px; max-width:90vw; background:#101319; border:1px solid #232733; border-radius:16px; padding:34px 28px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.5); }}
+  .brand {{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; margin-bottom:4px; }}
+  .brand span {{ color:#4a9eff; }}
+  .sub {{ color:#6b7280; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; margin-bottom:24px; }}
+  input {{ width:100%; background:#0a0d12; border:1px solid #2a2f3a; border-radius:9px; padding:13px 15px; color:#fff; font-size:.95rem; outline:none; }}
+  input:focus {{ border-color:#4a9eff; }}
+  button {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#3a8eef; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
+  button:hover {{ background:#327fe0; }}
+  .err {{ color:#ff6b6b; font-size:.82rem; margin-bottom:12px; }}
+</style></head>
+<body>
+  <form class="card" method="POST" action="/login">
+    <div class="brand"><span>nova</span>.byAletheya</div>
+    <div class="sub">Dealership Tools</div>
+    {msg}
+    <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+    <button type="submit">Enter</button>
+  </form>
+</body></html>"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if request.form.get("password", "") == APP_PASSWORD:
+            session["ok"] = True
+            return redirect("/")
+        return login_page("Incorrect password — try again."), 401
+    return login_page()
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
+@app.before_request
+def require_login():
+    if request.path == "/login":
+        return None
+    if session.get("ok"):
+        return None
+    return redirect("/login")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Saved cars live here. Set GENERATED_DIR to a persistent disk/volume path on the
@@ -160,6 +219,11 @@ def background():
     return send_file(os.path.join(BASE_DIR, "background.png"))
 
 
+@app.route("/sold-bg.png")
+def sold_bg():
+    return send_file(os.path.join(BASE_DIR, "sold-bg.png"))
+
+
 @app.route("/status")
 def status():
     return jsonify({"has_key": bool(API_KEY and API_KEY != "sk-your-key-here")})
@@ -312,6 +376,48 @@ def caption():
     except Exception as e:
         info = classify_error(e)
         print(f"[caption] error: {info['reason']} | {info['detail']}")
+        return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
+@app.route("/plate-cover", methods=["POST"])
+def plate_cover():
+    """Masked inpaint: receive a photo + a mask (transparent where the agent brushed the
+    plate) and ask gpt-image-1 to replace ONLY that area with a Nova dealer plate."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    data = request.json or {}
+    image_data = data.get("image_data", "")
+    mask_data = data.get("mask_data", "")
+    size = data.get("size", "1024x1024")
+    if size not in ("1024x1024", "1536x1024", "1024x1536"):
+        size = "1024x1024"
+    if not image_data or not mask_data:
+        return jsonify({"error": "Missing image or mask."}), 400
+
+    def decode(d):
+        return base64.b64decode(d.split(",", 1)[1] if "," in d else d)
+
+    try:
+        img_bytes = decode(image_data)
+        mask_bytes = decode(mask_data)
+        client = OpenAI(api_key=API_KEY)
+        result = client.images.edit(
+            model="gpt-image-1",
+            image=("photo.png", img_bytes, "image/png"),
+            mask=("mask.png", mask_bytes, "image/png"),
+            prompt=(
+                "Replace ONLY the license plate inside the masked area with a clean, modern US "
+                "dealership license plate that clearly reads 'NOVA' for Nova Auto. Match the original "
+                "plate's exact position, angle, perspective, size, lighting and reflections so it looks "
+                "completely real and factory-mounted. Do not alter anything else in the photo."
+            ),
+            size=size,
+        )
+        out_b64 = result.data[0].b64_json
+        return jsonify({"success": True, "image_data": "data:image/png;base64," + out_b64})
+    except Exception as e:
+        info = classify_error(e)
+        print(f"[plate] error: {info['reason']} | {info['detail']}")
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 
