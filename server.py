@@ -7,7 +7,9 @@ import re
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GENERATED_DIR = os.path.join(BASE_DIR, "generated")
+# Saved cars live here. Set GENERATED_DIR to a persistent disk/volume path on the
+# host so the gallery survives restarts & redeploys (the default app dir is ephemeral).
+GENERATED_DIR = os.environ.get("GENERATED_DIR", "").strip() or os.path.join(BASE_DIR, "generated")
 os.makedirs(GENERATED_DIR, exist_ok=True)
 
 
@@ -251,6 +253,41 @@ def list_images():
     files = sorted(os.listdir(GENERATED_DIR), reverse=True)
     files = [f for f in files if f.endswith(".png")]
     return jsonify(files)
+
+
+@app.route("/delete", methods=["POST"])
+def delete_image():
+    name = (request.json or {}).get("filename", "")
+    # path-safety: only allow deleting a plain .png inside GENERATED_DIR
+    name = os.path.basename(name)
+    if not name.endswith(".png"):
+        return jsonify({"error": "Invalid filename."}), 400
+    path = os.path.join(GENERATED_DIR, name)
+    if os.path.exists(path):
+        os.remove(path)
+        return jsonify({"success": True, "deleted": name})
+    return jsonify({"error": "File not found."}), 404
+
+
+@app.route("/upload", methods=["POST"])
+def upload_image():
+    """Save a (background-removed) car image so it joins the gallery and persists."""
+    data = request.json or {}
+    image_data = data.get("image_data", "")
+    vehicle = data.get("vehicle", "").strip()
+    if not image_data:
+        return jsonify({"error": "Missing image data."}), 400
+    try:
+        if "," in image_data:                      # strip a data: URL prefix if present
+            image_data = image_data.split(",", 1)[1]
+        image_bytes = base64.b64decode(image_data)
+        base = car_slug(vehicle, "", "") or "uploaded_car"
+        filename = f"{base}.png"
+        with open(os.path.join(GENERATED_DIR, filename), "wb") as f:
+            f.write(image_bytes)
+        return jsonify({"success": True, "filename": filename})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

@@ -8,6 +8,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script type="module">
+  // in-browser background remover (no server/API needed). First use downloads a model.
+  try {
+    const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.8/dist/index.mjs');
+    window.__removeBg = mod.removeBackground;
+  } catch (e) {
+    console.error('background-removal load failed', e);
+    window.__removeBgError = String(e);
+  }
+</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -77,9 +87,16 @@
   .ad-scaler { transform-origin: top left; }
 
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
-  .gallery-item { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
+  .gallery-item { position: relative; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
   .gallery-item:hover { border-color: #4a9eff; }
   .gallery-item.selected { border-color: #4a9eff; box-shadow: 0 0 0 1px #4a9eff inset; }
+  .gallery-item .del {
+    position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
+    border: none; background: rgba(20,20,20,0.82); color: #ff6b6b; font-size: 15px; line-height: 1;
+    cursor: pointer; display: none; align-items: center; justify-content: center; padding: 0;
+  }
+  .gallery-item:hover .del { display: flex; }
+  .gallery-item .del:hover { background: #ff4a4a; color: #fff; }
   .gallery-item img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background:
       repeating-conic-gradient(#1a1a1a 0% 25%, #141414 0% 50%) 50% / 18px 18px; }
   .gallery-item .cap { padding: 7px 9px; font-size: 0.7rem; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -203,6 +220,18 @@
       </div>
 
       <div class="panel">
+        <h2>Or Upload Your Own Car Photo</h2>
+        <p class="hint" style="margin-bottom:12px;">
+          Upload a photo — the background is removed automatically and the car is dropped into the template.
+          Enter the <b>Vehicle</b> name above first so it's saved to your gallery.
+          <i>(First use downloads a one-time background-removal model, ~a few seconds.)</i>
+        </p>
+        <input type="file" id="carUpload" accept="image/*" onchange="handleUpload(event)"
+               style="font-size:0.85rem; color:#aaa;">
+        <div class="status" id="uploadStatus"></div>
+      </div>
+
+      <div class="panel">
         <h2>Bulk Import (one ad per line)</h2>
         <p class="hint" style="margin-bottom:10px;">
           Columns, separated by <b>Tab</b> or <b>|</b>, in this order — paste straight from a spreadsheet:<br>
@@ -265,6 +294,7 @@
   let lastFilename = null;        // car PNG currently in the template
   let selectedCard = null;
   let lastReference = '';         // web-research description of the last generated car
+  let carReady = false;           // true once any car (AI / gallery / upload) is in the template
 
   // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
   const PREVIEW_W = 380;
@@ -335,19 +365,38 @@
     try {
       const files = await (await fetch('/images')).json();
       const g = $('gallery'); g.innerHTML = '';
+      if (!files.length) { g.innerHTML = '<p class="hint">No saved cars yet.</p>'; return; }
       files.forEach(f => {
         const d = document.createElement('div');
         d.className = 'gallery-item';
-        d.innerHTML = `<img src="/images/${f}" loading="lazy"><div class="cap">${f}</div>`;
-        d.onclick = () => selectCar(f, d);
+        d.innerHTML = `<button class="del" title="Delete">&times;</button>`
+          + `<img src="/images/${f}" loading="lazy"><div class="cap">${f}</div>`;
+        d.querySelector('img').onclick = () => selectCar(f, d);
+        d.querySelector('.cap').onclick = () => selectCar(f, d);
+        d.querySelector('.del').onclick = (e) => { e.stopPropagation(); deleteImage(f); };
         g.appendChild(d);
       });
     } catch {}
   }
   loadGallery();
 
+  async function deleteImage(filename) {
+    if (!confirm(`Delete "${filename}"? This can't be undone.`)) return;
+    try {
+      const r = await fetch('/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      const d = await r.json();
+      if (d.error) { setStatus('Delete failed: ' + d.error, 'error'); return; }
+      if (lastFilename === filename) { lastFilename = null; }   // it was in the template
+      await loadGallery();
+    } catch (e) { setStatus('Delete failed: ' + e.message, 'error'); }
+  }
+
   function selectCar(filename, card) {
     lastFilename = filename;
+    carReady = true;
     if (selectedCard) selectedCard.classList.remove('selected');
     selectedCard = card; if (card) card.classList.add('selected');
     $('adCar').crossOrigin = 'anonymous';
@@ -367,7 +416,7 @@
 
   // ---------- render the ad to a PNG and download ----------
   async function downloadAd() {
-    if (!lastFilename) { setStatus('Generate or select a car first.', 'error'); return; }
+    if (!carReady) { setStatus('Generate, select, or upload a car first.', 'error'); return; }
     setStatus('Rendering ad…', 'active');
     try {
       await document.fonts.ready;
@@ -421,10 +470,55 @@
     // cache-bust so a forced re-generation (same filename) doesn't show a stale image
     $('adCar').src = `/images/${data.filename}?t=${Date.now()}`;
     lastFilename = data.filename;
+    carReady = true;
     $('dlBtn').disabled = false;
     $('regenBtn').disabled = false;
     await waitForImage($('adCar'));
     return data;
+  }
+
+  // ---------- upload a photo -> remove background -> place in template + save to gallery ----------
+  function blobToDataURL(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result); r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+  }
+  function setUploadStatus(t, type='') { const el = $('uploadStatus'); el.textContent = t; el.className = 'status ' + type; }
+
+  async function handleUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      if (!window.__removeBg) {
+        throw new Error(window.__removeBgError
+          ? 'Background remover failed to load — check your connection and refresh.'
+          : 'Background remover still loading — wait a moment and try again.');
+      }
+      setUploadStatus('Removing background… (first run downloads a one-time model, please wait)', 'active');
+      const blob = await window.__removeBg(file);          // imgly accepts a File/Blob
+      const dataUrl = await blobToDataURL(blob);
+      $('adCar').removeAttribute('crossorigin');
+      $('adCar').src = dataUrl;
+      await waitForImage($('adCar'));
+      carReady = true; lastFilename = null;
+      $('dlBtn').disabled = false;
+
+      // save it to the server so it joins the gallery and persists
+      const vehicle = $('vehicle').value.trim();
+      const save = await fetch('/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_data: dataUrl, vehicle }),
+      });
+      const sd = await save.json();
+      if (sd.filename) { lastFilename = sd.filename; await loadGallery(); }
+      setUploadStatus('Background removed & placed in the template. Update pricing, then Download Ad.', 'done');
+    } catch (err) {
+      setUploadStatus('Upload failed: ' + err.message, 'error');
+    } finally {
+      e.target.value = '';   // allow re-uploading the same file
+    }
   }
 
   // build a clear failure line from the server's classified error
