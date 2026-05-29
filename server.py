@@ -224,6 +224,11 @@ def sold_bg():
     return send_file(os.path.join(BASE_DIR, "sold-bg.png"))
 
 
+@app.route("/nova-plate.png")
+def nova_plate():
+    return send_file(os.path.join(BASE_DIR, "nova-plate.png"))
+
+
 @app.route("/status")
 def status():
     return jsonify({"has_key": bool(API_KEY and API_KEY != "sk-your-key-here")})

@@ -34,7 +34,8 @@
   h1 { font-size: 1.9rem; font-weight: 700; margin-bottom: 6px; color: #fff; }
   .subtitle { color: #888; margin-bottom: 28px; font-size: 0.95rem; }
 
-  .layout { display: grid; grid-template-columns: 1fr 420px; gap: 32px; align-items: start; }
+  .layout { display: grid; grid-template-columns: 1fr 470px; gap: 32px; align-items: start; }
+  .layout > * { min-width: 0; }   /* let columns shrink so the scaled preview can clip on mobile */
 
   .panel {
     background: #151515; border: 1px solid #2a2a2a;
@@ -84,7 +85,7 @@
 
   /* ---- preview column ---- */
   .preview-col { position: sticky; top: 24px; }
-  .ad-stage { width: 456px; height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .ad-stage { width: min(456px, 100%); height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .ad-scaler { transform-origin: top left; }
 
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
@@ -177,8 +178,20 @@
   .view.active { display: block; }
   .view-inner { max-width: 1280px; margin: 0 auto; padding: 32px 28px 80px; }
 
+  /* mobile: sidebar becomes a top bar */
+  @media (max-width: 768px) {
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
+      gap: 8px; flex-wrap: wrap; padding: 12px 14px; border-right: none; border-bottom: 1px solid #1f1f22; }
+    .sidebar .brand { font-size: 1.15rem; padding: 0 8px 0 4px; }
+    .sidebar .brand-sub { display: none; }
+    .nav-item { margin: 0; padding: 9px 12px; font-size: .85rem; }
+    .view-inner { padding: 20px 16px 64px; }
+    h1 { font-size: 1.5rem; }
+  }
+
   /* ================= SOLD POST TEMPLATE (1080x1920) ================= */
-  .sp-stage { width: 456px; height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .sp-stage { width: min(456px, 100%); height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .sp-scaler { transform-origin: top left; }
   .sp {
     width: 1080px; height: 1920px; position: relative; overflow: hidden;
@@ -240,9 +253,12 @@
   .plate-dialog h3 { font-size: 1.1rem; color: #fff; margin-bottom: 6px; }
   .plate-dialog p { font-size: .85rem; color: #9aa0aa; margin-bottom: 14px; }
   .plate-canvas-wrap { display: flex; justify-content: center; background: #0a0d12; border: 1px solid #232733; border-radius: 10px; padding: 10px; }
-  #plateCanvas { max-width: 100%; max-height: 56vh; width: auto; height: auto; display: block; cursor: crosshair; touch-action: none; border-radius: 6px; }
+  .plate-stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+  #plateBase { max-width: 100%; max-height: 54vh; width: auto; height: auto; display: block; border-radius: 6px; }
+  #plateOverlay { position: absolute; top: 50%; left: 50%; cursor: move; touch-action: none; user-select: none; -webkit-user-drag: none; }
   .plate-dialog .controls { margin-top: 14px; align-items: center; flex-wrap: wrap; gap: 10px; }
   .plate-dialog .controls label { margin: 0; color: #aaa; font-size: .82rem; }
+  .plate-dialog .controls input[type=range] { width: 110px; }
 </style>
 </head>
 <body>
@@ -561,12 +577,18 @@
 <div class="plate-modal" id="plateModal">
   <div class="plate-dialog">
     <h3>Cover the license plate</h3>
-    <p>Brush over the plate, then apply — we'll swap just that area for a Nova dealer plate and leave the rest of the photo untouched.</p>
-    <div class="plate-canvas-wrap"><canvas id="plateCanvas"></canvas></div>
+    <p>Drag the Nova plate over the real one, then resize &amp; rotate it to fit. Apply when it lines up.</p>
+    <div class="plate-canvas-wrap">
+      <div class="plate-stage" id="plateStage">
+        <img id="plateBase" alt="">
+        <img id="plateOverlay" src="nova-plate.png" alt="" draggable="false">
+      </div>
+    </div>
     <div class="controls">
-      <label for="plateBrush">Brush</label>
-      <input type="range" id="plateBrush" min="10" max="90" value="42" style="width:120px;">
-      <button class="btn-ghost" onclick="clearPlateMask()">Clear</button>
+      <label for="plateSize">Size</label>
+      <input type="range" id="plateSize" min="12" max="95" value="42" oninput="renderPlateOverlay()">
+      <label for="plateRot">Rotate</label>
+      <input type="range" id="plateRot" min="-30" max="30" value="0" oninput="renderPlateOverlay()">
       <button class="btn-ghost" onclick="closePlateModal()">Cancel</button>
       <button class="btn-start" id="plateApplyBtn" onclick="applyPlate()">Apply Nova Plate</button>
     </div>
@@ -582,10 +604,19 @@
   let carReady = false;           // true once any car (AI / gallery / upload) is in the template
 
   // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
-  const PREVIEW_W = 456;   // 20% larger previews
-  const SCALE = PREVIEW_W / 1080;
-  $('adScaler').style.transform = `scale(${SCALE})`;
-  $('spScaler').style.transform = `scale(${SCALE})`;   // sold-post preview uses the same scale
+  // Previews are fluid: each stage is min(456px, 100%) wide; scale + height derive from
+  // its actual rendered width so it works on desktop and mobile.
+  function fitStage(stageSel, scalerId, h) {
+    const stage = document.querySelector(stageSel); if (!stage) return;
+    const w = stage.clientWidth; if (!w) return;
+    stage.style.height = (w * h / 1080) + 'px';
+    $(scalerId).style.transform = `scale(${w / 1080})`;
+  }
+  function fitPreviews() {
+    fitStage('.ad-stage', 'adScaler', 1920);
+    fitStage('.sp-stage', 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
+  }
+  window.addEventListener('resize', fitPreviews);
 
   // ---------- API key status ----------
   async function checkKey() {
@@ -721,9 +752,8 @@
       });
 
       // restore preview
-      scaler.style.transform = prevT;
       stage.style.position = ''; stage.style.left = ''; stage.style.top = '';
-      stage.style.width = ''; stage.style.height = '';
+      stage.style.width = ''; fitPreviews();
 
       // filename: year_make_model_bodystyle  (e.g. 2026_BMW_530i_Convenience)
       const base = [$('vehicle').value, $('bodystyle').value]
@@ -1065,6 +1095,7 @@
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     $('view-' + name).classList.add('active');
     $('nav-' + name).classList.add('active');
+    if (typeof fitPreviews === 'function') fitPreviews();   // re-fit the now-visible preview
   }
 
   // ===================== BACKGROUND GENERATOR (ad + sold) =====================
@@ -1122,7 +1153,7 @@
     const r45 = f === '4x5';
     $('sp').classList.toggle('r45', r45);
     soldH = r45 ? 1350 : 1920;
-    document.querySelector('.sp-stage').style.height = (soldH * SCALE) + 'px';   // keep preview aspect correct
+    fitStage('.sp-stage', 'spScaler', soldH);   // keep preview aspect correct
   }
 
   // ---- auto-generated Instagram caption ----
@@ -1152,93 +1183,73 @@
     setS('spCapStatus', 'Copied ✓', 'done');
   }
 
-  // ---- license-plate masked inpaint (brush over plate -> swap for a Nova plate) ----
-  let plateSlot = 1, plateImg = null, plateTW = 1024, plateTH = 1024, plateDrawing = false;
-  let plateCtx = null, plateMask = null, plateMaskCtx = null;
+  // ---- license-plate overlay: drag/resize/rotate the Nova plate, then composite it in ----
+  let plateSlot = 1;
+  const plate = { cx: 0.5, cy: 0.62, rot: 0 };   // center (fraction of photo) + rotation
+  let plateDragging = false, plateDX = 0, plateDY = 0;
 
-  const EDIT_SIZES = [[1024, 1024], [1536, 1024], [1024, 1536]];
-  function nearestEditSize(w, h) {
-    const ar = w / h; let best = EDIT_SIZES[0], bd = Infinity;
-    for (const [tw, th] of EDIT_SIZES) { const d = Math.abs(ar - tw / th); if (d < bd) { bd = d; best = [tw, th]; } }
-    return best;
-  }
-  function coverDraw(ctx, img, tw, th) {
-    const s = Math.max(tw / img.naturalWidth, th / img.naturalHeight);
-    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-    ctx.drawImage(img, (tw - dw) / 2, (th - dh) / 2, dw, dh);
+  function renderPlateOverlay() {
+    const base = $('plateBase'), ov = $('plateOverlay');
+    if (!base.clientWidth) return;
+    const sizeFrac = (+$('plateSize').value) / 100;
+    plate.rot = +$('plateRot').value;
+    ov.style.width = (sizeFrac * base.clientWidth) + 'px';
+    ov.style.left = (plate.cx * base.clientWidth) + 'px';
+    ov.style.top = (plate.cy * base.clientHeight) + 'px';
+    ov.style.transform = `translate(-50%, -50%) rotate(${plate.rot}deg)`;
   }
   function openPlateModal(slot) {
     const url = spPhotos[slot]; if (!url) return;
     plateSlot = slot;
-    const img = new Image();
-    img.onload = () => {
-      plateImg = img;
-      [plateTW, plateTH] = nearestEditSize(img.naturalWidth, img.naturalHeight);
-      const c = $('plateCanvas'); c.width = plateTW; c.height = plateTH;
-      plateCtx = c.getContext('2d');
-      coverDraw(plateCtx, img, plateTW, plateTH);
-      plateMask = document.createElement('canvas'); plateMask.width = plateTW; plateMask.height = plateTH;
-      plateMaskCtx = plateMask.getContext('2d');
-      $('plateStatus').textContent = '';
-      $('plateModal').style.display = 'flex';
-    };
-    img.src = url;
+    plate.cx = 0.5; plate.cy = 0.62;
+    $('plateSize').value = 42; $('plateRot').value = 0;
+    $('plateStatus').textContent = '';
+    const base = $('plateBase');
+    base.onload = renderPlateOverlay;
+    base.src = url;
+    $('plateModal').style.display = 'flex';
+    if (base.complete && base.naturalWidth) renderPlateOverlay();
   }
   function closePlateModal() { $('plateModal').style.display = 'none'; }
-  function clearPlateMask() {
-    if (!plateCtx) return;
-    plateMaskCtx.clearRect(0, 0, plateTW, plateTH);
-    plateCtx.clearRect(0, 0, plateTW, plateTH);
-    coverDraw(plateCtx, plateImg, plateTW, plateTH);
-  }
-  function platePaint(e) {
-    e.preventDefault();
-    const c = $('plateCanvas'), r = c.getBoundingClientRect();
-    const sx = plateTW / r.width;
-    const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * (plateTH / r.height);
-    const rad = (+$('plateBrush').value) * sx;
-    plateCtx.fillStyle = 'rgba(255,70,70,0.5)';
-    plateCtx.beginPath(); plateCtx.arc(x, y, rad, 0, 7); plateCtx.fill();
-    plateMaskCtx.fillStyle = '#fff';
-    plateMaskCtx.beginPath(); plateMaskCtx.arc(x, y, rad, 0, 7); plateMaskCtx.fill();
-  }
-  (function bindPlate() {
-    const c = $('plateCanvas');
-    c.addEventListener('pointerdown', e => { plateDrawing = true; platePaint(e); });
-    c.addEventListener('pointermove', e => { if (plateDrawing) platePaint(e); });
-    window.addEventListener('pointerup', () => { plateDrawing = false; });
+
+  (function bindPlateDrag() {
+    const ov = $('plateOverlay');
+    ov.addEventListener('pointerdown', e => {
+      e.preventDefault(); plateDragging = true; ov.setPointerCapture(e.pointerId);
+      const r = $('plateBase').getBoundingClientRect();
+      plateDX = (e.clientX - r.left) - plate.cx * r.width;
+      plateDY = (e.clientY - r.top) - plate.cy * r.height;
+    });
+    ov.addEventListener('pointermove', e => {
+      if (!plateDragging) return;
+      const r = $('plateBase').getBoundingClientRect();
+      plate.cx = Math.min(1, Math.max(0, ((e.clientX - r.left) - plateDX) / r.width));
+      plate.cy = Math.min(1, Math.max(0, ((e.clientY - r.top) - plateDY) / r.height));
+      renderPlateOverlay();
+    });
+    const stop = () => { plateDragging = false; };
+    ov.addEventListener('pointerup', stop);
+    ov.addEventListener('pointercancel', stop);
   })();
-  async function applyPlate() {
-    // working image (clean photo) + mask (opaque everywhere, transparent where brushed)
-    const work = document.createElement('canvas'); work.width = plateTW; work.height = plateTH;
-    coverDraw(work.getContext('2d'), plateImg, plateTW, plateTH);
-    const mask = document.createElement('canvas'); mask.width = plateTW; mask.height = plateTH;
-    const mctx = mask.getContext('2d');
-    mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, plateTW, plateTH);
-    mctx.globalCompositeOperation = 'destination-out';
-    mctx.drawImage(plateMask, 0, 0);
-    setS('plateStatus', 'Swapping the plate… (~10-25s)', 'active');
-    $('plateApplyBtn').disabled = true;
-    try {
-      const r = await fetch('/plate-cover', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_data: work.toDataURL('image/png'),
-          mask_data: mask.toDataURL('image/png'),
-          size: plateTW + 'x' + plateTH,
-        }),
-      });
-      const d = await r.json();
-      if (d.error) { setS('plateStatus', '✕ ' + (d.reason || d.error), 'error'); return; }
-      spPhotos[plateSlot] = d.image_data;
-      $('spImg' + plateSlot).src = d.image_data;
-      setS('plateStatus', 'Plate covered ✓', 'done');
-      setTimeout(closePlateModal, 700);
-    } catch (e) {
-      setS('plateStatus', '✕ ' + e.message, 'error');
-    } finally {
-      $('plateApplyBtn').disabled = false;
-    }
+
+  function applyPlate() {
+    const base = $('plateBase'), ov = $('plateOverlay');
+    const NW = base.naturalWidth, NH = base.naturalHeight;
+    const canvas = document.createElement('canvas'); canvas.width = NW; canvas.height = NH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(base, 0, 0, NW, NH);
+    const pw = ((+$('plateSize').value) / 100) * NW;
+    const ph = pw * (ov.naturalHeight / ov.naturalWidth);
+    ctx.save();
+    ctx.translate(plate.cx * NW, plate.cy * NH);
+    ctx.rotate((+$('plateRot').value) * Math.PI / 180);
+    ctx.drawImage(ov, -pw / 2, -ph / 2, pw, ph);
+    ctx.restore();
+    const out = canvas.toDataURL('image/png');
+    spPhotos[plateSlot] = out;
+    $('spImg' + plateSlot).src = out;
+    setS('plateStatus', 'Plate applied ✓', 'done');
+    setTimeout(closePlateModal, 500);
   }
 
   function spBadgeFromSelect() {
@@ -1286,8 +1297,8 @@
     stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0';
     stage.style.width = '1080px'; stage.style.height = soldH + 'px';
     const canvas = await html2canvas($('sp'), { width: 1080, height: soldH, scale: 1, backgroundColor: null, useCORS: true, logging: false });
-    scaler.style.transform = prev.t; stage.style.position = prev.pos; stage.style.left = prev.left;
-    stage.style.top = prev.top; stage.style.width = prev.w; stage.style.height = prev.h;
+    stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top;
+    stage.style.width = prev.w; fitPreviews();
     return canvas;
   }
 
@@ -1329,6 +1340,8 @@
   }
 
   renderSold();
+  fitPreviews();
+  setTimeout(fitPreviews, 200);   // re-fit once fonts/images settle
 </script>
 </body>
 </html>
