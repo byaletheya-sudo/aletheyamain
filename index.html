@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vehicle Image Generator</title>
+<title>Aletheya — Vehicle Image Generator</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -33,18 +33,12 @@
     font-size: 0.95rem;
   }
 
-  .config-section {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-bottom: 32px;
-  }
-
   .config-card {
     background: #151515;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
     padding: 24px;
+    margin-bottom: 24px;
   }
 
   .config-card h2 {
@@ -62,7 +56,6 @@
     margin-bottom: 6px;
   }
 
-  input[type="text"],
   textarea {
     width: 100%;
     background: #0d0d0d;
@@ -70,52 +63,16 @@
     border-radius: 8px;
     padding: 10px 14px;
     color: #fff;
-    font-size: 0.95rem;
-    font-family: inherit;
+    font-size: 0.9rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    line-height: 1.6;
     outline: none;
+    resize: vertical;
+    min-height: 180px;
     transition: border-color 0.2s;
   }
 
-  input:focus, textarea:focus {
-    border-color: #4a9eff;
-  }
-
-  textarea {
-    resize: vertical;
-    min-height: 200px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.85rem;
-    line-height: 1.6;
-  }
-
-  .prompt-input {
-    min-height: 60px;
-  }
-
-  .hint {
-    font-size: 0.75rem;
-    color: #666;
-    margin-top: 6px;
-  }
-
-  .key-status {
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    margin-bottom: 16px;
-  }
-
-  .key-status.ok {
-    background: #0d1f0d;
-    border: 1px solid #1a3a1a;
-    color: #4aff7b;
-  }
-
-  .key-status.missing {
-    background: #1f0d0d;
-    border: 1px solid #3a1a1a;
-    color: #ff4a4a;
-  }
+  textarea:focus { border-color: #4a9eff; }
 
   .controls {
     display: flex;
@@ -133,19 +90,11 @@
     transition: all 0.2s;
   }
 
-  .btn-start {
-    background: #4a9eff;
-    color: #fff;
-  }
-
+  .btn-start { background: #4a9eff; color: #fff; }
   .btn-start:hover { background: #3a8eef; }
   .btn-start:disabled { background: #333; color: #666; cursor: not-allowed; }
 
-  .btn-stop {
-    background: #ff4a4a;
-    color: #fff;
-  }
-
+  .btn-stop { background: #ff4a4a; color: #fff; }
   .btn-stop:hover { background: #e63e3e; }
   .btn-stop:disabled { background: #333; color: #666; cursor: not-allowed; }
 
@@ -179,7 +128,7 @@
 
   .gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 20px;
   }
 
@@ -200,9 +149,7 @@
     display: block;
   }
 
-  .gallery-item .info {
-    padding: 14px;
-  }
+  .gallery-item .info { padding: 14px; }
 
   .gallery-item .vehicle-name {
     font-weight: 600;
@@ -220,24 +167,15 @@
   .download-link {
     color: #4a9eff;
     text-decoration: none;
-    cursor: pointer;
   }
 
-  .download-link:hover {
-    text-decoration: underline;
-  }
+  .download-link:hover { text-decoration: underline; }
 
-  .gallery-item.generating {
-    border-color: #4a9eff;
-  }
-
-  .gallery-item.generating img {
-    display: none;
-  }
+  .gallery-item.generating { border-color: #4a9eff; }
 
   .gallery-item .placeholder {
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 2/3;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -256,30 +194,24 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 768px) {
-    .config-section { grid-template-columns: 1fr; }
     .gallery { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Vehicle Image Generator</h1>
+  <h1>Aletheya</h1>
   <p class="subtitle">Generate AI images for your vehicle inventory, one at a time.</p>
 
-  <div class="config-section" style="grid-template-columns: 1fr;">
-    <div class="config-card">
-      <h2>Vehicle List</h2>
-      <label for="vehicleList">One vehicle per line</label>
-      <textarea id="vehicleList" placeholder="2024 Toyota Camry XSE
-2024 Honda Civic Sport
-2023 BMW M3 Competition
-2024 Ford Mustang GT"></textarea>
-    </div>
+  <div class="config-card">
+    <h2>Vehicle List</h2>
+    <label for="vehicleList">One vehicle per line</label>
+    <textarea id="vehicleList" placeholder="2026 Mercedes-Benz C300&#10;2026 Mercedes-Benz GLA 250&#10;2025 BMW X3 xDrive30i&#10;2024 Audi Q5 Premium"></textarea>
   </div>
 
   <div class="controls">
-    <button class="btn-start" id="startBtn" onclick="startGeneration()">Start Generating</button>
-    <button class="btn-stop" id="stopBtn" onclick="stopGeneration()" disabled>Stop</button>
+    <button class="btn-start" id="startBtn">Start Generating</button>
+    <button class="btn-stop" id="stopBtn" disabled>Stop</button>
   </div>
 
   <div class="progress-bar" id="progressBar">
@@ -291,74 +223,86 @@
 </div>
 
 <script>
-  let running = false;
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusEl = document.getElementById('status');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const gallery = document.getElementById('gallery');
+
   let aborted = false;
 
-  function setStatus(text, type = '') {
-    const el = document.getElementById('status');
-    el.textContent = text;
-    el.className = 'status ' + type;
+  startBtn.addEventListener('click', startGeneration);
+  stopBtn.addEventListener('click', () => {
+    aborted = true;
+    stopBtn.disabled = true;
+    setStatus('Stopping after current image finishes...', '');
+  });
+
+  function setStatus(text, type) {
+    statusEl.textContent = text;
+    statusEl.className = 'status ' + (type || '');
   }
 
-  function updateProgress(current, total) {
-    const bar = document.getElementById('progressBar');
-    const fill = document.getElementById('progressFill');
-    bar.style.display = 'block';
-    fill.style.width = `${(current / total) * 100}%`;
+  function setProgress(current, total) {
+    progressBar.style.display = 'block';
+    progressFill.style.width = `${(current / total) * 100}%`;
   }
 
-  function addGalleryItem(vehicle, generating = false) {
-    const gallery = document.getElementById('gallery');
+  function createCard(vehicle) {
     const div = document.createElement('div');
-    div.className = 'gallery-item' + (generating ? ' generating' : '');
-    div.id = 'item-' + vehicle.replace(/\s+/g, '-');
-
-    if (generating) {
-      div.innerHTML = `
-        <div class="placeholder"><div class="spinner"></div></div>
-        <div class="info">
-          <div class="vehicle-name">${vehicle}</div>
-          <div class="file-name">Generating...</div>
-        </div>`;
-    }
-
-    gallery.prepend(div);
+    div.className = 'gallery-item generating';
+    div.innerHTML = `
+      <div class="placeholder"><div class="spinner"></div></div>
+      <div class="info">
+        <div class="vehicle-name">${vehicle}</div>
+        <div class="file-name">Generating...</div>
+      </div>`;
+    gallery.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return div;
   }
 
-  function updateGalleryItem(div, vehicle, filename, imageData) {
-    div.className = 'gallery-item';
-    div.innerHTML = `
+  function showSuccess(card, vehicle, filename, imageData) {
+    card.className = 'gallery-item';
+    card.innerHTML = `
       <img src="data:image/png;base64,${imageData}" alt="${vehicle}">
       <div class="info">
         <div class="vehicle-name">${vehicle}</div>
-        <a class="file-name download-link" href="data:image/png;base64,${imageData}" download="${filename}">Download ${filename}</a>
+        <a class="file-name download-link" href="data:image/png;base64,${imageData}" download="${filename}">Download</a>
       </div>`;
+  }
+
+  function showError(card, message) {
+    card.className = 'gallery-item';
+    card.querySelector('.placeholder').innerHTML =
+      `<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">${message}</span>`;
+    card.querySelector('.file-name').textContent = message;
   }
 
   async function startGeneration() {
     const vehicleText = document.getElementById('vehicleList').value.trim();
-
     if (!vehicleText) { setStatus('Please add at least one vehicle.', 'error'); return; }
 
     const vehicles = vehicleText.split('\n').map(v => v.trim()).filter(Boolean);
-    if (vehicles.length === 0) { setStatus('No vehicles found.', 'error'); return; }
+    if (!vehicles.length) { setStatus('No vehicles found.', 'error'); return; }
 
-    running = true;
     aborted = false;
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
-    document.getElementById('gallery').innerHTML = '';
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    gallery.innerHTML = '';
 
     let completed = 0;
+    let failed = 0;
 
-    for (const vehicle of vehicles) {
+    for (let i = 0; i < vehicles.length; i++) {
       if (aborted) break;
 
-      setStatus(`Generating ${completed + 1} of ${vehicles.length}: ${vehicle}...`, 'active');
-      updateProgress(completed, vehicles.length);
+      const vehicle = vehicles[i];
+      setStatus(`Generating ${i + 1} of ${vehicles.length}: ${vehicle}...`, 'active');
+      setProgress(i, vehicles.length);
 
-      const card = addGalleryItem(vehicle, true);
+      const card = createCard(vehicle);
 
       try {
         const controller = new AbortController();
@@ -375,40 +319,32 @@
         const data = await resp.json();
 
         if (data.error) {
-          card.querySelector('.file-name').textContent = `Error: ${data.error}`;
-          card.classList.remove('generating');
-          card.querySelector('.placeholder').innerHTML = '<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">Failed</span>';
-          setStatus(`Error on "${vehicle}": ${data.error}`, 'error');
+          showError(card, data.error);
+          failed++;
         } else {
-          updateGalleryItem(card, vehicle, data.filename, data.image_data);
+          showSuccess(card, vehicle, data.filename, data.image_data);
           completed++;
-          updateProgress(completed, vehicles.length);
         }
       } catch (err) {
-        const msg = err.name === 'AbortError' ? 'Request timed out (3 min)' : 'Network error';
-        card.querySelector('.file-name').textContent = msg;
-        card.classList.remove('generating');
-        card.querySelector('.placeholder').innerHTML = `<span style="color:#ff4a4a;font-size:0.85rem;padding:20px;text-align:center">${msg}</span>`;
-        setStatus(`${msg} on "${vehicle}"`, 'error');
+        const msg = err.name === 'AbortError' ? 'Timed out (3 min)' : 'Network error';
+        showError(card, msg);
+        failed++;
       }
+
+      setProgress(i + 1, vehicles.length);
     }
 
-    running = false;
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
 
     if (aborted) {
-      setStatus(`Stopped. ${completed} of ${vehicles.length} images generated.`, '');
+      setStatus(`Stopped. ${completed} completed, ${failed} failed.`, '');
     } else {
-      setStatus(`Done! ${completed} of ${vehicles.length} images generated and saved.`, 'done');
-      updateProgress(1, 1);
+      const summary = failed
+        ? `Done. ${completed} completed, ${failed} failed.`
+        : `Done! All ${completed} images generated.`;
+      setStatus(summary, failed ? 'error' : 'done');
     }
-  }
-
-  function stopGeneration() {
-    aborted = true;
-    document.getElementById('stopBtn').disabled = true;
-    setStatus('Stopping after current image finishes...', '');
   }
 </script>
 </body>
