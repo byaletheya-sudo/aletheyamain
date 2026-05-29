@@ -60,9 +60,12 @@ DEFAULT_PROMPT = (
     "Every new vehicle must match: • identical camera height • identical lens perspective "
     "• identical framing • identical vehicle scale • identical crop margins • identical "
     "lighting direction • identical angle\n"
-    "The ONLY thing allowed to change between images is the actual vehicle model itself.\n"
+    "The ONLY things allowed to change between images are the vehicle model, its body style, "
+    "and its paint color.\n"
     "Render the image only — no text, watermarks, or captions anywhere in the image.\n"
-    "Vehicle: {vehicle}"
+    "Vehicle: {vehicle}\n"
+    "Body style: {bodystyle} — match the silhouette, roofline, doors, and proportions to this body style.\n"
+    "Exterior paint color: {color}."
 )
 
 
@@ -80,6 +83,11 @@ def logo():
     return send_file(os.path.join(BASE_DIR, "logo.png"))
 
 
+@app.route("/background.png")
+def background():
+    return send_file(os.path.join(BASE_DIR, "background.png"))
+
+
 @app.route("/status")
 def status():
     return jsonify({"has_key": bool(API_KEY and API_KEY != "sk-your-key-here")})
@@ -89,6 +97,8 @@ def status():
 def generate():
     data = request.json
     vehicle = data.get("vehicle", "").strip()
+    bodystyle = data.get("bodystyle", "").strip()
+    color = data.get("color", "").strip()
     prompt_template = data.get("prompt_template", "").strip()
 
     if not API_KEY or API_KEY == "sk-your-key-here":
@@ -98,8 +108,11 @@ def generate():
         return jsonify({"error": "Missing vehicle name."}), 400
 
     # Optional per-request override from the UI; otherwise the art-directed default.
-    prompt = (prompt_template.replace("{vehicle}", vehicle)
-              if prompt_template else DEFAULT_PROMPT.replace("{vehicle}", vehicle))
+    base = prompt_template if prompt_template else DEFAULT_PROMPT
+    prompt = (base
+              .replace("{vehicle}", vehicle)
+              .replace("{bodystyle}", bodystyle or "as per the actual production model")
+              .replace("{color}", color or "the standard factory color for this model"))
 
     try:
         client = OpenAI(api_key=API_KEY)
