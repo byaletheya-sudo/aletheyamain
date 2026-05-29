@@ -103,4 +103,5 @@ if __name__ == "__main__":
         print(f"API key loaded: sk-...{API_KEY[-4:]}")
     print("Image generator running at http://localhost:5050")
     print(f"Images will be saved to: {GENERATED_DIR}")
-    app.run(port=5050, debug=True)
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, debug=False)
