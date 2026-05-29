@@ -3,6 +3,7 @@ from openai import OpenAI
 import base64
 import os
 import re
+import json
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nova-aletheya-3f9a2c7e-change-in-prod")
@@ -381,6 +382,42 @@ def caption():
     except Exception as e:
         info = classify_error(e)
         print(f"[caption] error: {info['reason']} | {info['detail']}")
+        return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
+@app.route("/detect-plate", methods=["POST"])
+def detect_plate():
+    """Use a vision model to locate the rear license plate. Returns its 4 corners as
+    fractions of width/height — we composite the real Nova plate there, so the model
+    only DETECTS (never draws), avoiding any logo garbling."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    image_data = (request.json or {}).get("image_data", "")
+    if not image_data:
+        return jsonify({"error": "Missing image."}), 400
+    if "," not in image_data:
+        image_data = "data:image/png;base64," + image_data
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text":
+                    "Find the rear LICENSE PLATE in this car photo. Respond with ONLY strict JSON: "
+                    '{"found": true|false, "corners": [[x,y],[x,y],[x,y],[x,y]]} where corners are the '
+                    "plate's TOP-LEFT, TOP-RIGHT, BOTTOM-RIGHT, BOTTOM-LEFT as decimal fractions (0-1) of "
+                    "image width and height. Tightly bound the plate itself (not the frame). If there is no "
+                    "visible plate, return {\"found\": false}."},
+                {"type": "image_url", "image_url": {"url": image_data}},
+            ]}],
+            response_format={"type": "json_object"},
+            max_tokens=300,
+        )
+        data = json.loads(resp.choices[0].message.content or "{}")
+        return jsonify({"found": bool(data.get("found")), "corners": data.get("corners")})
+    except Exception as e:
+        info = classify_error(e)
+        print(f"[detect-plate] error: {info['reason']} | {info['detail']}")
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 

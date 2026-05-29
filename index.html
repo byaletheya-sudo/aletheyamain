@@ -599,12 +599,15 @@
 <div class="plate-modal" id="plateModal">
   <div class="plate-dialog">
     <h3>Cover the license plate</h3>
-    <p>Brush over the license plate, then apply. The real Nova plate is dropped exactly over that area — nothing else in the photo changes.</p>
+    <p>It auto-detects the plate and drops the real Nova plate right on it. If it's off, brush over the plate to place it manually. Nothing else in the photo changes.</p>
     <div class="plate-canvas-wrap"><canvas id="plateCanvas"></canvas></div>
     <div class="controls">
+      <button class="btn-ghost" id="plateDetectBtn" onclick="autoDetectPlate()">Re-detect</button>
       <label for="plateBrush">Brush</label>
       <input type="range" id="plateBrush" min="10" max="90" value="44">
       <button class="btn-ghost" onclick="clearPlateMask()">Clear</button>
+    </div>
+    <div class="controls" style="margin-top:10px;">
       <button class="btn-ghost" onclick="closePlateModal()">Cancel</button>
       <button class="btn-start" id="plateApplyBtn" onclick="applyPlate()">Apply Nova Plate</button>
     </div>
@@ -1208,9 +1211,10 @@
     setS('spCapStatus', 'Copied ✓', 'done');
   }
 
-  // ---- license-plate cover: brush over the plate -> drop the real Nova plate in (exact, local) ----
+  // ---- license-plate cover: AUTO-DETECT the plate (vision) -> composite the REAL Nova plate
+  //      onto it. GPT only locates the plate (no garbling). Manual brush stays as a fallback. ----
   let plateSlot = 1, plateImg = null, plateTW = 1024, plateTH = 1024, plateDrawing = false;
-  let plateCtx = null, plateBox = null;
+  let plateCtx = null, platePlacement = null;   // {mode:'quad', pts:[[x,y]*4]} | {mode:'box', box:{...}}
   const plateRefImg = new Image(); plateRefImg.src = 'nova-plate.png';
 
   const EDIT_SIZES = [[1024, 1024], [1536, 1024], [1024, 1536]];
@@ -1224,9 +1228,25 @@
     const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
     ctx.drawImage(img, (tw - dw) / 2, (th - dh) / 2, dw, dh);
   }
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+  // draw the Nova plate onto a detected quad (position + size + tilt)
+  function drawPlateQuad(ctx, pts) {
+    const [tl, tr, br, bl] = pts;
+    const cx = (tl[0] + tr[0] + br[0] + bl[0]) / 4, cy = (tl[1] + tr[1] + br[1] + bl[1]) / 4;
+    const ang = Math.atan2((tr[1] - tl[1]) + (br[1] - bl[1]), (tr[0] - tl[0]) + (br[0] - bl[0]));
+    const w = (dist(tl, tr) + dist(bl, br)) / 2, h = (dist(tl, bl) + dist(tr, br)) / 2;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+    ctx.drawImage(plateRefImg, -w / 2, -h / 2, w, h); ctx.restore();
+  }
+  function repaintPlatePreview() {
+    plateCtx.clearRect(0, 0, plateTW, plateTH);
+    coverDraw(plateCtx, plateImg, plateTW, plateTH);
+    if (platePlacement && platePlacement.mode === 'quad' && plateRefImg.complete) drawPlateQuad(plateCtx, platePlacement.pts);
+  }
   function openPlateModal(slot) {
     const url = spPhotos[slot]; if (!url) return;
-    plateSlot = slot; plateBox = null;
+    plateSlot = slot; platePlacement = null;
     const img = new Image();
     img.onload = () => {
       plateImg = img;
@@ -1234,19 +1254,42 @@
       const c = $('plateCanvas'); c.width = plateTW; c.height = plateTH;
       plateCtx = c.getContext('2d');
       coverDraw(plateCtx, img, plateTW, plateTH);
-      setS('plateStatus', 'Brush over the license plate.', '');
-      $('plateApplyBtn').disabled = false;
       $('plateModal').style.display = 'flex';
+      autoDetectPlate();                 // try to place it automatically right away
     };
     img.src = url;
   }
   function closePlateModal() { $('plateModal').style.display = 'none'; }
   function clearPlateMask() {
     if (!plateCtx) return;
-    plateBox = null;
-    plateCtx.clearRect(0, 0, plateTW, plateTH);
-    coverDraw(plateCtx, plateImg, plateTW, plateTH);
-    setS('plateStatus', 'Brush over the license plate.', '');
+    platePlacement = null; repaintPlatePreview();
+    setS('plateStatus', 'Cleared — Re-detect, or brush over the plate.', '');
+  }
+  async function autoDetectPlate() {
+    if (!plateImg) return;
+    setS('plateStatus', 'Detecting the plate…', 'active');
+    $('plateDetectBtn').disabled = true; $('plateApplyBtn').disabled = true;
+    try {
+      const work = document.createElement('canvas'); work.width = plateTW; work.height = plateTH;
+      coverDraw(work.getContext('2d'), plateImg, plateTW, plateTH);
+      const r = await fetch('/detect-plate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_data: work.toDataURL('image/jpeg', 0.9) }),
+      });
+      const d = await r.json();
+      if (d.error) { setS('plateStatus', '✕ ' + (d.reason || d.error) + ' — brush over the plate instead.', 'error'); return; }
+      if (!d.found || !Array.isArray(d.corners) || d.corners.length !== 4) {
+        setS('plateStatus', 'Couldn’t find the plate — brush over it to place it.', ''); return;
+      }
+      const pts = d.corners.map(c => [Math.max(0, Math.min(1, +c[0])) * plateTW, Math.max(0, Math.min(1, +c[1])) * plateTH]);
+      platePlacement = { mode: 'quad', pts };
+      repaintPlatePreview();
+      setS('plateStatus', 'Plate detected & placed ✓  (brush to adjust if needed)', 'done');
+    } catch (e) {
+      setS('plateStatus', '✕ ' + e.message, 'error');
+    } finally {
+      $('plateDetectBtn').disabled = false; $('plateApplyBtn').disabled = false;
+    }
   }
   function platePaint(e) {
     e.preventDefault();
@@ -1256,31 +1299,36 @@
     const rad = (+$('plateBrush').value) * sx;
     plateCtx.fillStyle = 'rgba(255,70,70,0.5)';
     plateCtx.beginPath(); plateCtx.arc(x, y, rad, 0, 7); plateCtx.fill();
-    const b = plateBox || (plateBox = { minX: 1e9, minY: 1e9, maxX: -1e9, maxY: -1e9 });
+    if (!platePlacement || platePlacement.mode !== 'box') platePlacement = { mode: 'box', box: { minX: 1e9, minY: 1e9, maxX: -1e9, maxY: -1e9 } };
+    const b = platePlacement.box;
     b.minX = Math.min(b.minX, x - rad); b.minY = Math.min(b.minY, y - rad);
     b.maxX = Math.max(b.maxX, x + rad); b.maxY = Math.max(b.maxY, y + rad);
   }
   (function bindPlate() {
     const c = $('plateCanvas');
-    c.addEventListener('pointerdown', e => { plateDrawing = true; platePaint(e); });
+    c.addEventListener('pointerdown', e => {
+      if (platePlacement && platePlacement.mode === 'quad') { platePlacement = null; repaintPlatePreview(); } // brushing overrides auto
+      plateDrawing = true; platePaint(e);
+    });
     c.addEventListener('pointermove', e => { if (plateDrawing) platePaint(e); });
     window.addEventListener('pointerup', () => { plateDrawing = false; });
   })();
   function applyPlate() {
-    if (!plateBox) { setS('plateStatus', 'Brush over the plate first.', 'error'); return; }
+    if (!platePlacement) { setS('plateStatus', 'Re-detect or brush over the plate first.', 'error'); return; }
     if (!plateRefImg.complete || !plateRefImg.naturalWidth) { setS('plateStatus', 'Plate still loading — try again.', 'error'); return; }
     const work = document.createElement('canvas'); work.width = plateTW; work.height = plateTH;
     const ctx = work.getContext('2d');
     coverDraw(ctx, plateImg, plateTW, plateTH);
-    const bw = Math.max(1, plateBox.maxX - plateBox.minX), bh = Math.max(1, plateBox.maxY - plateBox.minY);
-    const cx = (plateBox.minX + plateBox.maxX) / 2, cy = (plateBox.minY + plateBox.maxY) / 2;
-    // fill the brushed box with the real Nova plate (cover + clip so it stays inside the box)
-    ctx.save();
-    ctx.beginPath(); ctx.rect(plateBox.minX, plateBox.minY, bw, bh); ctx.clip();
-    const scale = Math.max(bw / plateRefImg.naturalWidth, bh / plateRefImg.naturalHeight);
-    const pw = plateRefImg.naturalWidth * scale, ph = plateRefImg.naturalHeight * scale;
-    ctx.drawImage(plateRefImg, cx - pw / 2, cy - ph / 2, pw, ph);
-    ctx.restore();
+    if (platePlacement.mode === 'quad') {
+      drawPlateQuad(ctx, platePlacement.pts);
+    } else {
+      const bx = platePlacement.box, bw = Math.max(1, bx.maxX - bx.minX), bh = Math.max(1, bx.maxY - bx.minY);
+      const cx = (bx.minX + bx.maxX) / 2, cy = (bx.minY + bx.maxY) / 2;
+      ctx.save(); ctx.beginPath(); ctx.rect(bx.minX, bx.minY, bw, bh); ctx.clip();
+      const scale = Math.max(bw / plateRefImg.naturalWidth, bh / plateRefImg.naturalHeight);
+      ctx.drawImage(plateRefImg, cx - plateRefImg.naturalWidth * scale / 2, cy - plateRefImg.naturalHeight * scale / 2, plateRefImg.naturalWidth * scale, plateRefImg.naturalHeight * scale);
+      ctx.restore();
+    }
     const out = work.toDataURL('image/png');
     spPhotos[plateSlot] = out;
     $('spImg' + plateSlot).src = out;
