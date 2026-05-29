@@ -88,6 +88,7 @@ def generate():
 
 
 if __name__ == "__main__":
+    from waitress import serve
     port = int(os.environ.get("PORT", 5050))
     print(f"Image generator running at http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    serve(app, host="0.0.0.0", port=port, channel_timeout=300)
