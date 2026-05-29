@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script type="module">
   // in-browser background remover (no server/API needed). First use downloads a model.
@@ -181,28 +182,62 @@
   .sp-scaler { transform-origin: top left; }
   .sp {
     width: 1080px; height: 1920px; position: relative; overflow: hidden;
-    font-family: 'Poppins', sans-serif; color: #fff;
-    background: #050a12 url('background.png') center / cover no-repeat;
+    font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; color: #fff;
+    background: #05080d;
   }
-  .sp__inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0 60px; }
-  .sp__logo { padding-top: 72px; }
-  .sp__logo img { width: 430px; height: auto; display: block; }
-  .sp__badge {
-    margin-top: 44px; background: #2f7ff0; border-radius: 999px; padding: 18px 56px;
-    font-size: 56px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
-    box-shadow: 0 10px 30px rgba(47,127,240,.45); text-align: center;
+  /* simplified dark-luxury backdrop: blue glow + bottom vignette */
+  .sp__bg { position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 72% at 50% 120%, rgba(0,0,0,.62), rgba(0,0,0,0) 55%),
+      radial-gradient(78% 52% at 50% 15%, rgba(52,118,222,.40), rgba(8,16,30,0) 70%),
+      linear-gradient(180deg, #0b1626 0%, #070d18 55%, #04070c 100%);
   }
-  .sp__title { margin-top: 28px; font-size: 64px; font-weight: 700; line-height: 1.05; text-align: center; letter-spacing: -1px; }
-  .sp__photos { margin-top: 44px; margin-bottom: 130px; width: 100%; flex: 1; display: flex; gap: 22px; }
+  .sp__grid { position: absolute; inset: 0; opacity: .045;
+    background-image: linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
+    background-size: 92px 92px;
+    -webkit-mask-image: radial-gradient(72% 60% at 50% 42%, #000 25%, transparent 80%);
+            mask-image: radial-gradient(72% 60% at 50% 42%, #000 25%, transparent 80%);
+  }
+
+  /* top brand — small & clean */
+  .sp__top { position: absolute; top: 72px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .sp__logo img { width: 300px; height: auto; display: block; }
+  .sp__tagline { font-size: 22px; font-weight: 500; letter-spacing: 6px; text-transform: uppercase; color: rgba(255,255,255,.5); }
+
+  /* hero photos — the focal point */
+  .sp__hero { position: absolute; left: 72px; right: 72px; top: 268px; bottom: 462px; display: flex; gap: 22px; }
   .sp__photo {
-    flex: 1; border-radius: 30px; overflow: hidden; position: relative;
-    background: #0a1422; border: 1px solid rgba(255,255,255,0.12);
+    position: relative; border-radius: 26px; overflow: hidden; background: #0a1320;
+    border: 1px solid rgba(255,255,255,.09); box-shadow: 0 30px 70px rgba(0,0,0,.5);
   }
   .sp__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .sp__photo .ph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: rgba(255,255,255,.3); font-size: 30px; font-weight: 600; }
+  .sp__photo .ph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: rgba(255,255,255,.28); font-size: 28px; font-weight: 500; letter-spacing: 1px; }
   .sp__photo img[src=""] + .ph, .sp__photo img:not([src]) + .ph { display: flex; }
-  .sp__photos.one .sp__slot2 { display: none; }
-  .sp__footer { position: absolute; bottom: 52px; left: 0; right: 0; text-align: center; font-size: 32px; font-weight: 600; color: rgba(255,255,255,0.92); }
+  .sp__hero.one .sp__photo { flex: 1; }
+  .sp__hero.one .sp__slot2 { display: none; }
+  /* two photos = two squares stacked on top of one another */
+  .sp__hero.two { flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+  .sp__hero.two .sp__photo { flex: 0 0 auto; width: 584px; height: 584px; }
+
+  /* bottom luxury info panel */
+  .sp__panel { position: absolute; left: 78px; right: 78px; bottom: 88px; }
+  .sp__badge {
+    display: inline-block; font-size: 23px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+    color: #cfe1ff; padding: 11px 22px; border-radius: 7px;
+    background: rgba(64,124,236,.13); border: 1px solid rgba(126,172,255,.32);
+    box-shadow: 0 0 30px rgba(64,124,236,.20);
+  }
+  .sp__title { margin-top: 24px; font-size: 78px; font-weight: 700; line-height: 1.02; letter-spacing: -1.5px; }
+  .sp__footer { margin-top: 22px; font-size: 30px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: .3px; }
+
+  /* 4:5 feed format (1080x1350) — repositions the same elements for the shorter canvas */
+  .sp.r45 { height: 1350px; }
+  .sp.r45 .sp__top { top: 52px; }
+  .sp.r45 .sp__hero { top: 208px; bottom: 300px; }
+  .sp.r45 .sp__panel { bottom: 60px; }
+  .sp.r45 .sp__title { font-size: 66px; margin-top: 20px; }
+  .sp.r45 .sp__hero.two .sp__photo { width: 404px; height: 404px; }
 
   .seg { display: inline-flex; background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
   .seg button { padding: 9px 18px; background: transparent; color: #aaa; border: none; border-radius: 0; font-weight: 600; font-size: 0.85rem; }
@@ -304,6 +339,20 @@
       </div>
 
       <div class="panel">
+        <h2>Background</h2>
+        <div class="controls">
+          <select id="adBgStyle">
+            <option value="studio">Studio</option>
+            <option value="nova">Nova style</option>
+          </select>
+          <button class="btn-ghost" id="adBgBtn" onclick="generateBg('ad')">Generate new background</button>
+          <button class="btn-ghost" onclick="resetBg('ad')">Reset</button>
+        </div>
+        <p class="hint">Generates a fresh AI backdrop in the Nova style (~a few seconds). “Reset” restores the default.</p>
+        <div class="status" id="adBgStatus"></div>
+      </div>
+
+      <div class="panel">
         <h2>Or Upload Your Own Car Photo</h2>
         <p class="hint" style="margin-bottom:12px;">
           Upload a photo — the background is removed automatically and the car is dropped into the template.
@@ -398,9 +447,17 @@
               <select id="spBadgeSelect" onchange="spBadgeFromSelect()">
                 <option>JUST SOLD</option>
                 <option>SOLD</option>
-                <option>CONGRATULATIONS</option>
+                <option>LEASED</option>
                 <option>DELIVERED</option>
-                <option>ANOTHER ONE SOLD</option>
+                <option>HOME DELIVERY</option>
+                <option>CLIENT PICKUP</option>
+                <option>VIP CLIENT</option>
+                <option>RESERVED</option>
+                <option>JUST LANDED</option>
+                <option>INCOMING INVENTORY</option>
+                <option>CUSTOM BUILD</option>
+                <option>EXOTIC DELIVERY</option>
+                <option>CONGRATULATIONS</option>
                 <option>WELCOME TO THE FAMILY</option>
                 <option value="__custom">Custom…</option>
               </select>
@@ -429,12 +486,41 @@
 
             <div class="panel">
               <h2>Export</h2>
-              <div class="controls">
+              <label>Format</label>
+              <div class="seg" id="spFormatSeg">
+                <button class="active" data-f="9x16" onclick="setSoldFormat('9x16')">Story 9:16</button>
+                <button data-f="4x5" onclick="setSoldFormat('4x5')">Feed 4:5</button>
+              </div>
+              <div class="controls" style="margin-top:14px;">
                 <button class="btn-start" id="spDlBtn" onclick="downloadSold()">Download</button>
                 <button class="btn-ghost" id="spShareBtn" onclick="shareSold()">Share…</button>
               </div>
               <p class="hint">On a phone, <b>Share</b> opens your share sheet so you can send it straight to Instagram.</p>
               <div class="status" id="spStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Caption</h2>
+              <div class="controls">
+                <button class="btn-ghost" id="spCapBtn" onclick="generateCaption()">Generate caption</button>
+                <button class="btn-ghost" onclick="copyCaption()">Copy</button>
+              </div>
+              <textarea id="spCaption" style="min-height:96px; margin-top:10px;" placeholder="Click “Generate caption” to write an Instagram caption with hashtags…"></textarea>
+              <div class="status" id="spCapStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Background</h2>
+              <div class="controls">
+                <select id="spBgStyle">
+                  <option value="studio">Studio</option>
+                  <option value="nova">Nova style</option>
+                </select>
+                <button class="btn-ghost" id="spBgBtn" onclick="generateBg('sold')">Generate new background</button>
+                <button class="btn-ghost" onclick="resetBg('sold')">Reset</button>
+              </div>
+              <p class="hint">Generates a fresh AI backdrop (~a few seconds). “Reset” restores the default.</p>
+              <div class="status" id="spBgStatus"></div>
             </div>
           </div>
 
@@ -443,14 +529,18 @@
             <div class="sp-stage">
               <div class="sp-scaler" id="spScaler">
                 <div class="sp" id="sp">
-                  <div class="sp__inner">
+                  <div class="sp__bg"></div>
+                  <div class="sp__grid"></div>
+                  <div class="sp__top">
                     <div class="sp__logo"><img src="logo.png" alt="NovAuto" crossorigin="anonymous"></div>
+                  </div>
+                  <div class="sp__hero one" id="spPhotos">
+                    <div class="sp__photo sp__slot1"><img id="spImg1" alt=""><div class="ph">Add a photo</div></div>
+                    <div class="sp__photo sp__slot2" id="spSlot2"><img id="spImg2" alt=""><div class="ph">Add a photo</div></div>
+                  </div>
+                  <div class="sp__panel">
                     <span class="sp__badge" id="spBadgeEl">JUST SOLD</span>
                     <div class="sp__title" id="spTitleEl">2024 BMW M3 Competition</div>
-                    <div class="sp__photos one" id="spPhotos">
-                      <div class="sp__photo sp__slot1"><img id="spImg1" alt=""><div class="ph">Add a photo</div></div>
-                      <div class="sp__photo sp__slot2" id="spSlot2"><img id="spImg2" alt=""><div class="ph">Add a photo</div></div>
-                    </div>
                     <div class="sp__footer" id="spFooterEl"></div>
                   </div>
                 </div>
@@ -957,10 +1047,90 @@
     $('nav-' + name).classList.add('active');
   }
 
+  // ===================== BACKGROUND GENERATOR (ad + sold) =====================
+  const setS = (id, t, type='') => { const e = $(id); e.textContent = t; e.className = 'status ' + type; };
+  function preload(url) { return new Promise(res => { const im = new Image(); im.onload = im.onerror = () => res(); im.src = url; }); }
+
+  function applyBg(which, url) {
+    if (which === 'ad') {
+      $('ad').style.background = `#050a12 url("${url}") center / cover no-repeat`;
+    } else {
+      $('sp').querySelector('.sp__bg').style.background = `url("${url}") center / cover no-repeat`;
+      $('sp').querySelector('.sp__grid').style.display = 'none';   // hide grid over a photo backdrop
+    }
+  }
+  function resetBg(which) {
+    if (which === 'ad') {
+      $('ad').style.background = '';                 // revert to the CSS default (background.png)
+    } else {
+      $('sp').querySelector('.sp__bg').style.background = '';       // revert to the gradient
+      $('sp').querySelector('.sp__grid').style.display = '';
+    }
+  }
+  async function generateBg(which) {
+    const styleEl = which === 'ad' ? 'adBgStyle' : 'spBgStyle';
+    const statusEl = which === 'ad' ? 'adBgStatus' : 'spBgStatus';
+    const btnEl = which === 'ad' ? 'adBgBtn' : 'spBgBtn';
+    setS(statusEl, 'Generating a new background… (~a few seconds)', 'active');
+    $(btnEl).disabled = true;
+    try {
+      const r = await fetch('/generate-background', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style: $(styleEl).value }),
+      });
+      const d = await r.json();
+      if (d.error) { setS(statusEl, '✕ ' + (d.reason || d.error), 'error'); return; }
+      const url = '/images/' + d.filename;
+      await preload(url);
+      applyBg(which, url);
+      setS(statusEl, 'New background applied ✓', 'done');
+    } catch (e) {
+      setS(statusEl, '✕ ' + e.message, 'error');
+    } finally {
+      $(btnEl).disabled = false;
+    }
+  }
+
   // ===================== SOLD POSTS =====================
   let spLayout = 1;
+  let soldH = 1920;                 // export/canvas height: 1920 (9:16) or 1350 (4:5)
   const spPhotos = { 1: '', 2: '' };
   function setSpStatus(t, type='') { const el = $('spStatus'); el.textContent = t; el.className = 'status ' + type; }
+
+  function setSoldFormat(f) {
+    document.querySelectorAll('#spFormatSeg button').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+    const r45 = f === '4x5';
+    $('sp').classList.toggle('r45', r45);
+    soldH = r45 ? 1350 : 1920;
+    document.querySelector('.sp-stage').style.height = (soldH * SCALE) + 'px';   // keep preview aspect correct
+  }
+
+  // ---- auto-generated Instagram caption ----
+  async function generateCaption() {
+    setS('spCapStatus', 'Writing a caption…', 'active');
+    $('spCapBtn').disabled = true;
+    try {
+      const r = await fetch('/caption', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicle: $('spTitle').value.trim(), badge: $('spBadge').value.trim() }),
+      });
+      const d = await r.json();
+      if (d.error) { setS('spCapStatus', '✕ ' + (d.reason || d.error), 'error'); return; }
+      $('spCaption').value = d.caption || '';
+      setS('spCapStatus', 'Caption ready ✓', 'done');
+    } catch (e) {
+      setS('spCapStatus', '✕ ' + e.message, 'error');
+    } finally {
+      $('spCapBtn').disabled = false;
+    }
+  }
+  async function copyCaption() {
+    const t = $('spCaption').value;
+    if (!t.trim()) { setS('spCapStatus', 'Nothing to copy yet.', ''); return; }
+    try { await navigator.clipboard.writeText(t); }
+    catch { $('spCaption').select(); document.execCommand('copy'); }
+    setS('spCapStatus', 'Copied ✓', 'done');
+  }
 
   function spBadgeFromSelect() {
     const v = $('spBadgeSelect').value;
@@ -972,7 +1142,7 @@
   function spSetLayout(n) {
     spLayout = n;
     document.querySelectorAll('#spLayoutSeg button').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
-    $('spPhotos').className = 'sp__photos ' + (n === 1 ? 'one' : 'two');
+    $('spPhotos').className = 'sp__hero ' + (n === 1 ? 'one' : 'two');
     $('spPhoto2Wrap').style.display = n === 2 ? '' : 'none';
   }
 
@@ -1000,19 +1170,20 @@
     if (spPhotos[1]) await waitForImage($('spImg1'));
     if (spLayout === 2 && spPhotos[2]) await waitForImage($('spImg2'));
     const scaler = $('spScaler'), stage = scaler.parentElement;
-    const prevT = scaler.style.transform;
+    const prev = { t: scaler.style.transform, pos: stage.style.position, left: stage.style.left,
+                   top: stage.style.top, w: stage.style.width, h: stage.style.height };
     scaler.style.transform = 'none';
     stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0';
-    stage.style.width = '1080px'; stage.style.height = '1920px';
-    const canvas = await html2canvas($('sp'), { width: 1080, height: 1920, scale: 1, backgroundColor: null, useCORS: true, logging: false });
-    scaler.style.transform = prevT;
-    stage.style.position = ''; stage.style.left = ''; stage.style.top = ''; stage.style.width = ''; stage.style.height = '';
+    stage.style.width = '1080px'; stage.style.height = soldH + 'px';
+    const canvas = await html2canvas($('sp'), { width: 1080, height: soldH, scale: 1, backgroundColor: null, useCORS: true, logging: false });
+    scaler.style.transform = prev.t; stage.style.position = prev.pos; stage.style.left = prev.left;
+    stage.style.top = prev.top; stage.style.width = prev.w; stage.style.height = prev.h;
     return canvas;
   }
 
   function soldFilename() {
     const base = ($('spTitle').value || 'nova_sold').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'nova_sold';
-    return base + '_sold.png';
+    return base + '_sold' + (soldH === 1350 ? '_4x5' : '') + '.png';
   }
   const canvasToBlob = canvas => new Promise(res => canvas.toBlob(res, 'image/png'));
 

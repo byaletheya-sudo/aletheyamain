@@ -257,8 +257,88 @@ def serve_image(filename):
 @app.route("/images")
 def list_images():
     files = sorted(os.listdir(GENERATED_DIR), reverse=True)
-    files = [f for f in files if f.endswith(".png")]
+    # exclude generated backgrounds (bg_*) from the car gallery
+    files = [f for f in files if f.endswith(".png") and not f.startswith("bg_")]
     return jsonify(files)
+
+
+BG_PROMPTS = {
+    "studio": (
+        "A premium empty studio backdrop for a vertical 9:16 poster. Deep navy-to-black "
+        "gradient walls, a soft cool-blue glow rising from the bottom-center like stage "
+        "lighting, a subtle glossy reflective floor along the bottom, faint sharp geometric "
+        "panel seams on the side walls, dark, cinematic, high-end, minimal. Keep the upper-"
+        "middle area darker and clear for overlaying content. Absolutely no text, no logos, "
+        "no people, no cars, no products."
+    ),
+    "nova": (
+        "A premium vertical 9:16 poster backdrop in a bold geometric brand style. Dark navy "
+        "background with large angular triangular facets and paneling, crisp electric-blue "
+        "edge glow and accents, a cool-blue light beam rising from the bottom-center, a subtle "
+        "reflective floor, cinematic and modern. Keep the center clear and darker for overlaying "
+        "content. Absolutely no text, no logos, no people, no cars, no products."
+    ),
+}
+
+
+def bg_prompt(style):
+    base = BG_PROMPTS.get(style, BG_PROMPTS["studio"])
+    variants = ("", " cooler tones", " a tighter light beam", " a softer haze",
+                " a wider glow", " deeper shadows", " faint volumetric fog", " a brighter floor reflection")
+    return base + " Variation:" + variants[os.urandom(1)[0] % len(variants)] + "."
+
+
+@app.route("/caption", methods=["POST"])
+def caption():
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    data = request.json or {}
+    vehicle = data.get("vehicle", "").strip()
+    badge = data.get("badge", "").strip()
+    if not vehicle:
+        return jsonify({"error": "Add a make/model first."}), 400
+    try:
+        client = OpenAI(api_key=API_KEY)
+        prompt = (
+            "Write a short, punchy Instagram caption for a luxury car dealership called Nova Auto.\n"
+            f"Context: {badge or 'SOLD'} — {vehicle}.\n"
+            "Tone: upscale, celebratory, confident, concise. 1-2 sentences, then a new line with "
+            "4-7 relevant hashtags. Include 1-2 tasteful emojis. No quotation marks around the caption. "
+            "Vary the wording each time and keep it authentic to a high-end dealership."
+        )
+        resp = client.responses.create(model="gpt-4.1-mini", input=prompt)
+        text = (getattr(resp, "output_text", "") or "").strip()
+        return jsonify({"success": True, "caption": text})
+    except Exception as e:
+        info = classify_error(e)
+        print(f"[caption] error: {info['reason']} | {info['detail']}")
+        return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
+@app.route("/generate-background", methods=["POST"])
+def generate_background():
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    style = (request.json or {}).get("style", "studio")
+    try:
+        client = OpenAI(api_key=API_KEY)
+        result = client.images.generate(
+            model="gpt-image-1",
+            prompt=bg_prompt(style),
+            n=1,
+            size="1024x1536",
+            quality="high",
+            output_format="png",
+        )
+        image_bytes = base64.b64decode(result.data[0].b64_json)
+        filename = f"bg_{style}_{os.urandom(4).hex()}.png"
+        with open(os.path.join(GENERATED_DIR, filename), "wb") as f:
+            f.write(image_bytes)
+        return jsonify({"success": True, "filename": filename})
+    except Exception as e:
+        info = classify_error(e)
+        print(f"[background] error: {info['reason']} | {info['detail']}")
+        return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 
 @app.route("/delete", methods=["POST"])
