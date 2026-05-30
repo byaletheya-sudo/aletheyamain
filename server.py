@@ -428,13 +428,6 @@ def dedup(seq):
     return out
 
 
-def model_variants(model):
-    m = model.strip()
-    spaced = re.sub(r"([A-Za-z])(\d)", r"\1 \2", m)         # GLC300 -> GLC 300
-    nospace = m.replace(" ", "")                              # GLC 300 -> GLC300
-    return dedup([m, spaced, nospace])
-
-
 def model_spellings(model):
     """Best-first spellings to try directly. As-typed first (the user usually
     enters it the way the catalog spells it — 'X5', 'K5', 'GLC 300'), then the

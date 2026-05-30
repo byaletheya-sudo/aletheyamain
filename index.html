@@ -1671,7 +1671,7 @@
       body: JSON.stringify({ year, make, model, trim, skip_trim: !!skipTrim }),
     }).then(r => r.json());
   }
-  const vdbMsg = d => (d.vdb_message ? ` — VDB(${d.vdb_status}): ${d.vdb_message}` : '') + (d.requested ? `  [GET ${d.requested}]` : '') + (d.vdb_raw ? `\n${d.vdb_raw}` : '');
+  const vdbMsg = d => (d.vdb_message ? ` — VDB(${d.vdb_status}): ${d.vdb_message}` : '') + (d.requested ? `  [GET ${d.requested}]` : '');
   // trim-not-found dialog -> resolves {choice:'base'|'skip', all:bool}
   let _trimResolve = null;
   function askTrim(label, isBulk) {
