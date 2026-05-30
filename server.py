@@ -435,6 +435,17 @@ def model_variants(model):
     return dedup([m, spaced, nospace])
 
 
+def model_spellings(model):
+    """Best-first spellings to try directly. As-typed first (the user usually
+    enters it the way the catalog spells it — 'X5', 'K5', 'GLC 300'), then the
+    spaced variant as a fallback for glued inputs like 'GLC300' -> 'GLC 300'.
+    Capped at 2 so a direct lookup never costs more than two media calls."""
+    m = model.strip()
+    spaced = re.sub(r"([A-Za-z])(\d)", r"\1 \2", m)
+    nospace = re.sub(r"\s+", "", m)
+    return dedup([m, spaced, nospace])[:2]
+
+
 def _vdb_get(path):
     req = urllib.request.Request("https://api.vehicledatabases.com" + path,
                                  headers={"x-authkey": VDB_API_KEY})
@@ -573,54 +584,25 @@ def vdb_image():
         return urllib.parse.quote(s, safe="")
 
     use_trim = bool(trim) and not skip_trim
-    try:
-        # 1) Resolve the make against VDB's real make list for that year.
-        makes = _vdb_options(f"/vehicle-media/options/v3/make/{enc(year)}")
-        make_c = _resolve(make, makes, "make") or norm_make(make)
+    tried = set()   # remember media paths we've already fetched (don't pay twice)
 
-        # 2) Resolve the model against VDB's real model list for that make.
-        models = _vdb_options(f"/vehicle-media/options/v3/model/{enc(year)}/{enc(make_c)}")
-        model_c = _resolve(model, models, "model") or model.strip()
-
-        # 3) Resolve the trim against VDB's real trim list (only if a trim was given).
-        trim_c = None
-        avail_trims = []
-        if use_trim:
-            avail_trims = _vdb_options(f"/vehicle-media/options/v3/trim/{enc(year)}/{enc(make_c)}/{enc(model_c)}")
-            trim_c = _resolve(trim, avail_trims, "trim")
-            if not trim_c:
-                # the trim genuinely isn't in the catalog -> ask the user what to do,
-                # and hand them the real list of trims that DO exist.
-                return jsonify({
-                    "found": False, "trim_not_found": True,
-                    "resolved_make": make_c, "resolved_model": model_c,
-                    "available_trims": avail_trims,
-                    "vdb_message": "Trim not found in catalog.",
-                    "requested": f"{year} {make_c} {model_c} {trim}",
-                })
-
-        # 4) Fetch the media with the canonical strings.
-        path = f"/vehicle-media/v2/{enc(year)}/{enc(make_c)}/{enc(model_c)}"
-        if use_trim:
-            path += f"/{enc(trim_c)}"
+    def fetch_media(mk, md, tr):
+        """Hit vehicle-media/v2 for these exact strings. Returns
+        (photos, exterior, colors, body, code, raw, path) or None if already tried."""
+        path = f"/vehicle-media/v2/{enc(year)}/{enc(mk)}/{enc(md)}" + (f"/{enc(tr)}" if tr else "")
+        if path in tried:
+            return None
+        tried.add(path)
         code, body, raw = _vdb_get(path)
-        if code == 401:
-            return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
-
         imgs = ((body.get("data") or {}).get("images") or {})
-        exterior = imgs.get("exterior") or []
-        colors = imgs.get("colors") or []
-        photos = exterior or colors or (imgs.get("interior") or [])
+        ext = imgs.get("exterior") or []
+        col = imgs.get("colors") or []
+        photos = ext or col or (imgs.get("interior") or [])
+        return photos, ext, col, body, code, raw, path
 
-        if not photos:
-            msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
-            return jsonify({
-                "found": False, "trim_not_found": use_trim,
-                "resolved_make": make_c, "resolved_model": model_c, "resolved_trim": trim_c,
-                "available_trims": avail_trims,
-                "vdb_status": code, "vdb_message": msg, "requested": path,
-            })
-
+    def respond(res, mk, md, tr):
+        """Build the success payload (proxying the first photo) from a fetch result."""
+        photos, ext, col, body, code, raw, path = res
         img_url = photos[0]
         options = [{"url": u, "label": vdb_label(u)} for u in photos]
         ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -632,11 +614,69 @@ def vdb_image():
         return jsonify({
             "found": True, "success": True,
             "image_data": f"data:{ctype};base64,{b64}",
-            "image_url": img_url, "source": ("exterior" if exterior else "colors"),
+            "image_url": img_url, "source": ("exterior" if ext else "colors"),
             "options": options, "used_trim": use_trim,
-            "resolved_make": make_c, "resolved_model": model_c, "resolved_trim": trim_c,
+            "resolved_make": mk, "resolved_model": md, "resolved_trim": tr,
             "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),
             "matched_path": path,
+        })
+
+    try:
+        last = None   # (code, body, raw, path) of the most recent miss, for diagnostics
+
+        # FAST PATH — optimistic. Most inputs are close enough that a direct fetch
+        # with a normalized make + the canonical 'spaced' model hits on the first
+        # call: no options lookups, no GPT. Costs at most 2 media calls.
+        make_fast = norm_make(make)
+        for md in model_spellings(model):
+            res = fetch_media(make_fast, md, trim if use_trim else None)
+            if res is None:
+                continue
+            photos, ext, col, body, code, raw, path = res
+            if code == 401:
+                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+            last = (code, body, raw, path)
+            if photos:
+                return respond(res, make_fast, md, trim if use_trim else None)
+
+        # SLOW PATH — only when the optimistic fetch missed. Snap each field onto
+        # VDB's real catalog (options endpoints + local/GPT match), then fetch once.
+        makes = _vdb_options(f"/vehicle-media/options/v3/make/{enc(year)}")
+        make_c = _resolve(make, makes, "make") or make_fast
+        models = _vdb_options(f"/vehicle-media/options/v3/model/{enc(year)}/{enc(make_c)}")
+        model_c = _resolve(model, models, "model") or model.strip()
+
+        trim_c = None
+        avail_trims = []
+        if use_trim:
+            avail_trims = _vdb_options(f"/vehicle-media/options/v3/trim/{enc(year)}/{enc(make_c)}/{enc(model_c)}")
+            trim_c = _resolve(trim, avail_trims, "trim")
+            if not trim_c:
+                # trim genuinely isn't in the catalog -> ask the user, with the real list.
+                return jsonify({
+                    "found": False, "trim_not_found": True,
+                    "resolved_make": make_c, "resolved_model": model_c,
+                    "available_trims": avail_trims,
+                    "vdb_message": "Trim not found in catalog.",
+                    "requested": f"{year} {make_c} {model_c} {trim}",
+                })
+
+        res = fetch_media(make_c, model_c, trim_c if use_trim else None)
+        if res is not None:
+            photos, ext, col, body, code, raw, path = res
+            if code == 401:
+                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+            last = (code, body, raw, path)
+            if photos:
+                return respond(res, make_c, model_c, trim_c if use_trim else None)
+
+        code, body, raw, path = last if last else (None, {}, "", None)
+        msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
+        return jsonify({
+            "found": False, "trim_not_found": use_trim,
+            "resolved_make": make_c, "resolved_model": model_c, "resolved_trim": trim_c,
+            "available_trims": avail_trims,
+            "vdb_status": code, "vdb_message": msg, "requested": path,
         })
     except Exception as e:
         return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
