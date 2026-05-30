@@ -469,6 +469,7 @@ def _vdb_get(path):
 # user's free text onto the closest entry in that real list — locally when it's
 # obvious, GPT when it isn't. This is how the main Novauto app does it.
 _VDB_OPT_CACHE = {}      # in-process cache so we don't re-buy the same option list
+_VDB_COLOR_CACHE = {}    # exterior_colors (names + hex) per vehicle, cached
 _VDB_RESULT_CACHE = {}   # full resolved lookups, so duplicate rows skip the network
 _VDB_RESULT_MAX = 300    # bound memory (image data is base64) with simple FIFO eviction
 
@@ -556,6 +557,58 @@ def _resolve(user_text, options, kind="value"):
     # 3) anything ambiguous (0 or >1 candidates) -> let GPT choose from the real list
     pool = cont if len(cont) > 1 else options
     return _gpt_pick(user_text, pool, kind) or (cont[0] if cont else None)
+
+
+def _vdb_colors(year, make, model, trim):
+    """Manufacturer exterior color names + hex (from advanced-vin-decode), cached.
+    Lets the picker show real names/swatches even when a photo's filename is just
+    an opaque code. Needs a trim; returns [] if unavailable."""
+    if not trim:
+        return []
+    enc = lambda s: urllib.parse.quote(s, safe="")
+    path = f"/advanced-vin-decode/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}"
+    if path in _VDB_COLOR_CACHE:
+        return _VDB_COLOR_CACHE[path]
+    try:
+        code, body, raw = _vdb_get(path)
+    except Exception:
+        return []
+    out = []
+    for c in ((body.get("data") or {}).get("exterior_colors") or []):
+        name = (c.get("description") or c.get("generic_name") or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name": name.title() if name.islower() else name,
+            "key": _nrm(name),
+            "hex": (c.get("hex_value") or "").strip(),
+        })
+    if out:
+        _VDB_COLOR_CACHE[path] = out
+    return out
+
+
+def _label_photos(photos, color_meta):
+    """Build {url,label,hex} options. Real manufacturer name when the photo's
+    filename slug matches a known color, else the readable filename, else
+    'Color N'. (exterior/interior shots use coded filenames, so they fall
+    through to numbering; per-color images carry real name slugs.)"""
+    opts = []
+    for i, u in enumerate(photos):
+        fn = re.sub(r"\.\w+$", "", u.rstrip("/").split("/")[-1])
+        fn = re.sub(r"^(ext|int|colors?)[-_]", "", fn, flags=re.I)
+        key = _nrm(fn)
+        match = None
+        if key and not re.search(r"\d{3,}", fn):       # only name-like filenames can match
+            for c in color_meta:
+                if c["key"] and (c["key"] == key or key in c["key"] or c["key"] in key):
+                    match = c
+                    break
+        if match:
+            opts.append({"url": u, "label": match["name"], "hex": match["hex"]})
+        else:
+            opts.append({"url": u, "label": (vdb_label(u) or f"Color {i + 1}"), "hex": ""})
+    return opts
 
 
 @app.route("/vdb-proxy", methods=["POST"])
@@ -662,14 +715,20 @@ def vdb_image():
         imgs = ((body.get("data") or {}).get("images") or {})
         ext = imgs.get("exterior") or []
         col = imgs.get("colors") or []
-        photos = ext or col or (imgs.get("interior") or [])
+        # Prefer the per-color set (colors[]): one studio shot per factory color,
+        # filenames carry real color names. exterior[] is angle shots with coded
+        # filenames — only used when there's no per-color set.
+        photos = col or ext or (imgs.get("interior") or [])
         return photos, ext, col, body, code, raw, path
 
     def respond(res, mk, md, tr):
         """Build the success payload (proxying the first photo) from a fetch result."""
         photos, ext, col, body, code, raw, path = res
         img_url = photos[0]
-        options = [{"url": u, "label": (vdb_label(u) or f"Color {i + 1}")} for i, u in enumerate(photos)]
+        # Enrich the picker with manufacturer color names + hex (one cached extra
+        # call) only when there's actually a color set to label.
+        color_meta = _vdb_colors(year, mk, md, tr) if (tr and len(photos) > 1) else []
+        options = _label_photos(photos, color_meta)
         ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(ireq, timeout=30) as iresp:
             ctype = iresp.headers.get("Content-Type", "image/jpeg")
@@ -679,7 +738,7 @@ def vdb_image():
         payload = {
             "found": True, "success": True,
             "image_data": f"data:{ctype};base64,{b64}",
-            "image_url": img_url, "source": ("exterior" if ext else "colors"),
+            "image_url": img_url, "source": ("colors" if col else ("exterior" if ext else "interior")),
             "options": options, "used_trim": use_trim,
             "resolved_make": mk, "resolved_model": md, "resolved_trim": tr,
             "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),

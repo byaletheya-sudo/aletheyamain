@@ -626,7 +626,10 @@
               </div>
               <div id="t_colorWrap" style="display:none;">
                 <label for="t_color">Color (from the factory options)</label>
-                <select id="t_color" onchange="t_pickColor()"></select>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span id="t_swatch" style="width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.25);flex:0 0 auto;display:none;"></span>
+                  <select id="t_color" onchange="t_pickColor()" style="flex:1;"></select>
+                </div>
               </div>
               <div class="controls" style="margin-top:14px;">
                 <button class="btn-start" id="vdbBtn" onclick="vdbGenerate()">Get photo &amp; build ad</button>
@@ -1761,9 +1764,10 @@
       }
       // populate the color picker from the manufacturer's own options
       const sel = $('t_color'); sel.innerHTML = '';
-      (d.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; sel.appendChild(op); });
+      (d.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; if (o.hex) op.dataset.hex = o.hex; sel.appendChild(op); });
       if (d.image_url) sel.value = d.image_url;
       $('t_colorWrap').style.display = (d.options && d.options.length > 1) ? '' : 'none';
+      t_updateSwatch();
 
       let url = d.image_data;
       if ($('t_removeBg').checked && window.__removeBg) {
@@ -1783,7 +1787,13 @@
       $('vdbBtn').disabled = false;
     }
   }
+  function t_updateSwatch() {
+    const sel = $('t_color'), sw = $('t_swatch');
+    const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
+    if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
+  }
   async function t_pickColor() {
+    t_updateSwatch();
     const url = $('t_color').value; if (!url) return;
     setVdb('Loading that color…', 'active');
     try {
