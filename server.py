@@ -391,6 +391,35 @@ def caption():
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 
+def vdb_label(url):
+    """Turn a photo URL into a readable color/photo label (manufacturer-agnostic)."""
+    seg = url.rstrip("/").split("/")[-1]
+    seg = re.sub(r"\.\w+$", "", seg)
+    seg = re.sub(r"^manufaktur[-_]", "", seg)
+    seg = seg.replace("-", " ").replace("_", " ").strip()
+    return seg.title() if seg else "Photo"
+
+
+@app.route("/vdb-proxy", methods=["POST"])
+def vdb_proxy():
+    """Proxy a specific Vehicle Databases image URL (so a chosen color is same-origin
+    and can be background-removed)."""
+    url = (request.json or {}).get("url", "").strip()
+    if not url:
+        return jsonify({"error": "Missing url."}), 400
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if not (host.endswith("digitaloceanspaces.com") or host.endswith("vehicledatabases.com")):
+        return jsonify({"error": "URL not allowed."}), 400
+    try:
+        ireq = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(ireq, timeout=30) as r:
+            ctype = r.headers.get("Content-Type", "image/jpeg")
+            b = r.read()
+        return jsonify({"success": True, "image_data": f"data:{ctype};base64," + base64.b64encode(b).decode()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
 @app.route("/vdb-image", methods=["POST"])
 def vdb_image():
     """TEST tool: fetch the real factory photo from Vehicle Databases' vehicle image API
@@ -434,23 +463,13 @@ def vdb_image():
 
         imgs = ((body.get("data") or {}).get("images") or {})
         # Many vehicles have empty "exterior" but real photos under "colors" (the car in each
-        # factory color). Use exterior first, then colors (prefer a light, clean color so it
-        # stands out on the dark template), then interior as a last resort.
+        # factory color). Use exterior first, else colors, else interior. The client gets the
+        # full list so the user can pick any color (color naming varies by manufacturer).
         exterior = imgs.get("exterior") or []
         colors = imgs.get("colors") or []
-        img_url = None
-        if exterior:
-            img_url = exterior[0]
-        elif colors:
-            prefs = ("polar-white", "white", "silver", "cirrus", "grey", "gray", "black")
-            for p in prefs:
-                hit = next((u for u in colors if p in u.lower()), None)
-                if hit:
-                    img_url = hit
-                    break
-            img_url = img_url or colors[0]
-        elif imgs.get("interior"):
-            img_url = imgs["interior"][0]
+        photos = exterior or colors or (imgs.get("interior") or [])
+        img_url = photos[0] if photos else None
+        options = [{"url": u, "label": vdb_label(u)} for u in photos]
 
         if not img_url:
             # surface VDB's own message + raw body so we can see exactly what it wants
@@ -468,7 +487,7 @@ def vdb_image():
             "found": True, "success": True,
             "image_data": f"data:{ctype};base64,{b64}",
             "image_url": img_url, "source": ("exterior" if exterior else "colors"),
-            "options": (exterior or colors), "used_trim": use_trim,
+            "options": options, "used_trim": use_trim,
         })
     except Exception as e:
         return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
