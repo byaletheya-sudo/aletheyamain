@@ -666,6 +666,28 @@
               </div>
               <div class="status" id="t_status"></div>
             </div>
+
+            <div class="panel">
+              <h2>Bulk Import (one ad per line)</h2>
+              <p class="hint" style="margin-bottom:10px;">
+                Columns, separated by <b>Tab</b> or <b>|</b>:<br>
+                <code style="color:#7fb6ff;">Year | Make | Model | Trim | Per&nbsp;month | Due&nbsp;at&nbsp;signing | Term | Body&nbsp;style | Badge</code><br>
+                Year/Make/Model required; Trim optional. Prices accept $/commas/units. Badge per-row (blank = none).
+                If a trim isn't found it asks what to do (with a “do this for all” option).
+              </p>
+              <textarea id="t_bulkInput" oninput="t_bulkDone.clear()" style="min-height:140px;" placeholder="2025 | Mercedes-Benz | GLC 300 | 4MATIC SUV | 799 | 3,500 | 24 | SUV | Loaner Special
+2025 | BMW | X5 | xDrive40i | 899 | 4,000 | 36 | SUV
+2025 | Toyota | Camry | XSE | 419 | 2,500 | 24 | Sedan | none"></textarea>
+              <div class="controls" style="margin-top:14px;">
+                <button class="btn-start" id="t_bulkBtn" onclick="t_runBulk()">Generate All &amp; Download</button>
+                <button class="btn-ghost" id="t_bulkStopBtn" onclick="t_bulkAbort=true" disabled>Stop</button>
+              </div>
+              <div class="bulk-progress" id="t_bulkProgress">
+                <div class="bp-head"><span class="bp-label" id="t_bpLabel">Starting…</span><span class="bp-pct" id="t_bpPct">0%</span></div>
+                <div class="bp-track"><div class="bp-fill" id="t_bpFill"></div></div>
+              </div>
+              <div class="status" id="t_bulkStatus"></div>
+            </div>
           </div>
 
           <div class="preview-col">
@@ -741,6 +763,19 @@
       <button class="btn-start" onclick="applyEnhance()">Apply</button>
     </div>
     <div class="status" id="editStatus"></div>
+  </div>
+</div>
+
+<!-- trim-not-found dialog (TEST tool) -->
+<div class="plate-modal" id="trimModal">
+  <div class="plate-dialog" style="max-width:440px;">
+    <h3>Trim not found</h3>
+    <p id="trimMsg"></p>
+    <label class="checkbox" id="trimAllWrap" style="display:none; margin-top:4px;"><input type="checkbox" id="trimAll"> Do this for all remaining</label>
+    <div class="controls" style="margin-top:16px; justify-content:flex-end;">
+      <button class="btn-ghost" onclick="trimChoose('skip')">Skip</button>
+      <button class="btn-start" onclick="trimChoose('base')">Use base model</button>
+    </div>
   </div>
 </div>
 
@@ -1626,7 +1661,31 @@
     $('t_adPhone').textContent = `Text ${$('t_phone').value}`;
     $('t_adFine').innerHTML = boldify($('t_fine').value);
   }
-  async function vdbGenerate() {
+  function vdbFetch(year, make, model, trim, skipTrim) {
+    return fetch('/vdb-image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, make, model, trim, skip_trim: !!skipTrim }),
+    }).then(r => r.json());
+  }
+  // trim-not-found dialog -> resolves {choice:'base'|'skip', all:bool}
+  let _trimResolve = null;
+  function askTrim(label, isBulk) {
+    return new Promise(res => {
+      _trimResolve = res;
+      $('trimMsg').textContent = `No factory photo for the trim on “${label}”. Use the base-model photo instead, or skip this vehicle?`;
+      $('trimAllWrap').style.display = isBulk ? '' : 'none';
+      $('trimAll').checked = false;
+      $('trimModal').style.display = 'flex';
+    });
+  }
+  function trimChoose(choice) {
+    const all = $('trimAll').checked;
+    $('trimModal').style.display = 'none';
+    if (_trimResolve) { _trimResolve({ choice, all }); _trimResolve = null; }
+  }
+
+  async function vdbGenerate(opts) {
+    opts = opts || {};
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
     if (!(year && make && model)) { setVdb('Enter year, make, and model.', 'error'); return; }
     if (!t_titleEdited) $('t_title').value = t_vehName();
@@ -1634,12 +1693,16 @@
     $('vdbBtn').disabled = true;
     setVdb('Looking up the factory photo…', 'active');
     try {
-      const r = await fetch('/vdb-image', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, make, model, trim }),
-      });
-      const d = await r.json();
+      let d = await vdbFetch(year, make, model, trim, opts.skipTrim);
       if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return; }
+      if (d.found === false) {
+        if (d.trim_not_found) {
+          const ans = await askTrim(`${year} ${make} ${model} ${trim}`, false);
+          if (ans.choice !== 'base') { setVdb('Skipped.', ''); return; }
+          d = await vdbFetch(year, make, model, trim, true);
+          if (d.error || d.found === false) { setVdb('No factory photo for the base model either.', 'error'); return; }
+        } else { setVdb('No factory photo found for that vehicle.', 'error'); return; }
+      }
       let url = d.image_data;
       if ($('t_removeBg').checked && window.__removeBg) {
         setVdb('Removing background…', 'active');
@@ -1650,7 +1713,7 @@
       $('t_adCar').src = url;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓' + (trim && d.used_trim === false ? ' (no exact trim match — used base model)' : ''), 'done');
+      setVdb('Photo placed ✓', 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
@@ -1674,6 +1737,104 @@
       const a = document.createElement('a'); a.download = base + '_ad.png'; a.href = canvas.toDataURL('image/png'); a.click();
       setT('Ad downloaded ✓', 'done');
     } catch (e) { setT('Render failed: ' + e.message, 'error'); }
+  }
+
+  // ---- TEST bulk import (Vehicle Databases) ----
+  let t_bulkAbort = false;
+  let t_bulkDone = new Set();
+  let t_trimAllChoice = null;
+  const t_rowKey = r => JSON.stringify([r.year, r.make, r.model, r.trim, r.monthly, r.das, r.term, r.bodystyle, r.badge]);
+  function setTB(t, type = '') { const e = $('t_bulkStatus'); e.textContent = t; e.className = 'status ' + type; }
+  function t_startProg(total, done) {
+    $('t_bulkProgress').style.display = 'block';
+    const pct = Math.round((done / total) * 100);
+    $('t_bpFill').style.width = pct + '%'; $('t_bpPct').textContent = pct + '%';
+    $('t_bpLabel').textContent = done ? `Resuming — ${done} of ${total} done` : `Starting — 0 of ${total}`;
+  }
+  function t_upProg(c, total, label) {
+    const pct = Math.round((c / total) * 100);
+    $('t_bpFill').style.width = pct + '%'; $('t_bpPct').textContent = pct + '%';
+    if (label) $('t_bpLabel').textContent = label;
+  }
+  function t_finishProg(failures, aborted) {
+    $('t_bpFill').style.width = '100%'; $('t_bpPct').textContent = '100%';
+    $('t_bpLabel').textContent = aborted ? 'Stopped' : (failures ? 'Finished with some errors' : 'All done');
+  }
+  function t_parseBulk(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    if (/^year\b/i.test(lines[0])) lines.shift();
+    return lines.map(line => {
+      const c = line.split(/\t|\|/).map(s => s.trim());
+      const r = { year: c[0] || '', make: c[1] || '', model: c[2] || '', trim: c[3] || '' };
+      if (c[4]) r.monthly = parseMoney(c[4]);
+      if (c[5]) r.das = parseMoney(c[5]);
+      if (c[6]) r.term = parseTermNum(c[6]);
+      if (c[7]) r.bodystyle = c[7];
+      if (c[8]) r.badge = BADGE_OFF.has(c[8].toLowerCase()) ? null : c[8];
+      return r;
+    }).filter(r => r.year && r.make && r.model);
+  }
+  function t_applyRow(r, def) {
+    $('t_year').value = r.year; $('t_make').value = r.make; $('t_model').value = r.model; $('t_trim').value = r.trim || '';
+    $('t_title').value = `${r.year} ${r.make} ${r.model}`;
+    $('t_monthly').value = r.monthly ?? def.monthly;
+    $('t_das').value = r.das ?? def.das;
+    $('t_term').value = r.term ?? def.term;
+    $('t_bodystyle').value = r.bodystyle ?? def.bodystyle;
+    if (r.badge) { $('t_badge').value = r.badge; $('t_showBadge').checked = true; }
+    else { $('t_showBadge').checked = false; }
+    t_render();
+  }
+  async function t_runBulk() {
+    const rows = t_parseBulk($('t_bulkInput').value);
+    if (!rows.length) { setTB('No rows — add at least one vehicle.', 'error'); return; }
+    const def = { monthly: $('t_monthly').value, das: $('t_das').value, term: $('t_term').value, bodystyle: $('t_bodystyle').value };
+    t_bulkAbort = false; t_trimAllChoice = null;
+    $('t_bulkBtn').disabled = true; $('vdbBtn').disabled = true; $('t_bulkStopBtn').disabled = false;
+    setTB('', '');
+    const already = rows.filter(r => t_bulkDone.has(t_rowKey(r))).length;
+    t_startProg(rows.length, already);
+    let done = 0, skipped = 0; const failures = []; let fatal = false;
+    for (let i = 0; i < rows.length; i++) {
+      if (t_bulkAbort) break;
+      const r = rows[i], key = t_rowKey(r), name = `${r.year} ${r.make} ${r.model}`;
+      if (t_bulkDone.has(key)) { skipped++; t_upProg(i + 1, rows.length, `${i + 1}/${rows.length} — ${name} (done)`); continue; }
+      t_upProg(i, rows.length, `${i + 1} of ${rows.length} — ${name}`);
+      try {
+        t_applyRow(r, def);
+        let d = await vdbFetch(r.year, r.make, r.model, r.trim, false);
+        if (d.error) { failures.push({ v: name, reason: d.reason || d.error }); if ((d.reason || '').toLowerCase().includes('key')) { fatal = true; break; } t_upProg(i + 1, rows.length); await sleep(200); continue; }
+        if (d.found === false && d.trim_not_found) {
+          let choice = t_trimAllChoice;
+          if (!choice) { const ans = await askTrim(`${name} ${r.trim}`, true); choice = ans.choice; if (ans.all) t_trimAllChoice = ans.choice; }
+          if (choice === 'base') d = await vdbFetch(r.year, r.make, r.model, r.trim, true);
+          else { failures.push({ v: name, reason: 'skipped (trim not found)' }); t_upProg(i + 1, rows.length); await sleep(120); continue; }
+        }
+        if (d.error || d.found === false) { failures.push({ v: name, reason: d.error || 'no factory photo' }); t_upProg(i + 1, rows.length); await sleep(150); continue; }
+        let url = d.image_data;
+        if ($('t_removeBg').checked && window.__removeBg) { try { const blob = await window.__removeBg(url); url = await blobToDataURL(blob); } catch (e) { } }
+        $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = url; await waitForImage($('t_adCar'));
+        await t_download();
+        t_bulkDone.add(key); done++; t_upProg(i + 1, rows.length); await sleep(500);
+      } catch (e) {
+        failures.push({ v: name, reason: 'Network: ' + e.message }); t_upProg(i + 1, rows.length); await sleep(200);
+      }
+    }
+    $('t_bulkBtn').disabled = false; $('vdbBtn').disabled = false; $('t_bulkStopBtn').disabled = true;
+    const incomplete = fatal || t_bulkAbort || failures.length > 0;
+    if (!incomplete) t_bulkDone.clear();
+    t_finishProg(failures.length, t_bulkAbort);
+    const finished = done + skipped;
+    let head;
+    if (fatal) head = `<span style="color:#ff6b6b;font-weight:700;">Stopped — API key problem.</span>`;
+    else if (t_bulkAbort) head = `<span style="color:#bbb;font-weight:700;">Stopped. ${finished}/${rows.length} done.</span>`;
+    else if (!failures.length) head = `<span style="color:#4aff7b;font-weight:700;">All ${rows.length} ads built &amp; downloaded!</span>`;
+    else head = `<span style="color:#ffd166;font-weight:700;">${finished}/${rows.length} done, ${failures.length} skipped/failed.</span>`;
+    const list = failures.length ? `<ul style="margin:8px 0 0 18px;color:#ffb4b4;font-size:.82rem;line-height:1.5;">`
+      + failures.map(f => `<li><b>${escapeHtml(f.v)}</b> — ${escapeHtml(f.reason)}</li>`).join('') + `</ul>` : '';
+    const hint = incomplete ? `<div style="color:#7b9cff;margin-top:8px;font-size:.82rem;">Click <b>Generate All &amp; Download</b> again to resume from the rest.</div>` : '';
+    $('t_bulkStatus').className = 'status'; $('t_bulkStatus').innerHTML = head + list + hint;
   }
   t_render();
 

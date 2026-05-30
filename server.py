@@ -403,50 +403,50 @@ def vdb_image():
     make = data.get("make", "").strip()
     model = data.get("model", "").strip()
     trim = data.get("trim", "").strip()
+    skip_trim = bool(data.get("skip_trim", False))
     if not (year and make and model):
         return jsonify({"error": "Enter year, make, and model."}), 400
 
     def enc(s):
         return urllib.parse.quote(s, safe="")
 
-    paths = []
-    if trim:
-        paths.append(f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}")
-    paths.append(f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")   # fallback without trim
+    use_trim = bool(trim) and not skip_trim
+    path = (f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}"
+            if use_trim else f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")
 
-    last_err = None
-    for p in paths:
+    try:
         try:
-            req = urllib.request.Request("https://api.vehicledatabases.com" + p,
+            req = urllib.request.Request("https://api.vehicledatabases.com" + path,
                                          headers={"x-authkey": VDB_API_KEY})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 body = json.loads(resp.read().decode("utf-8", "ignore"))
-            images = (body.get("data") or {}).get("images") or {}
-            exterior = images.get("exterior") or []
-            if not exterior:
-                last_err = "no exterior images"
-                continue
-            img_url = exterior[0]
-            ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(ireq, timeout=30) as iresp:
-                ctype = iresp.headers.get("Content-Type", "image/jpeg")
-                img_bytes = iresp.read()
-            b64 = base64.b64encode(img_bytes).decode()
-            return jsonify({
-                "success": True,
-                "image_data": f"data:{ctype};base64,{b64}",
-                "exterior": exterior,
-                "used_trim": (p == paths[0] and bool(trim)),
-            })
+            exterior = ((body.get("data") or {}).get("images") or {}).get("exterior") or []
         except urllib.error.HTTPError as e:
             if e.code == 401:
                 return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
-            last_err = f"HTTP {e.code}"
-            continue
-        except Exception as e:
-            last_err = str(e)
-            continue
-    return jsonify({"error": f"No factory image found for that vehicle ({last_err or 'no records'})."}), 404
+            if e.code in (400, 404):   # no record for this exact path
+                exterior = []
+            else:
+                raise
+
+        if not exterior:
+            # not an error: tell the client whether the TRIM was the thing not found,
+            # so it can ask the user whether to fall back to the base model
+            return jsonify({"found": False, "trim_not_found": use_trim})
+
+        img_url = exterior[0]
+        ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(ireq, timeout=30) as iresp:
+            ctype = iresp.headers.get("Content-Type", "image/jpeg")
+            img_bytes = iresp.read()
+        b64 = base64.b64encode(img_bytes).decode()
+        return jsonify({
+            "found": True, "success": True,
+            "image_data": f"data:{ctype};base64,{b64}",
+            "exterior": exterior, "used_trim": use_trim,
+        })
+    except Exception as e:
+        return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
 
 
 @app.route("/detect-plate", methods=["POST"])
