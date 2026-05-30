@@ -1289,14 +1289,28 @@
     $('sidebar').classList.remove('open');
     $('scrim').classList.remove('show');
   }
-  function showView(name) {
+  // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
+  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test' };
+  const PATH_VIEW = { '/': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test' };
+  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST' };
+  function showView(name, opts) {
+    opts = opts || {};
+    if (!$('view-' + name)) name = 'ads';
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     $('view-' + name).classList.add('active');
     $('nav-' + name).classList.add('active');
     closeSidebar();                                          // auto-close after selecting
     if (typeof fitPreviews === 'function') fitPreviews();    // re-fit the now-visible preview
+    document.title = (VIEW_TITLE[name] || 'nova') + ' — nova.byAletheya';
+    if (!opts.noPush) {                                      // keep the URL in sync
+      const path = VIEW_PATH[name] || '/';
+      if (location.pathname !== path) history.pushState({ view: name }, '', path);
+    }
   }
+  window.addEventListener('popstate', e => {                 // back/forward
+    showView((e.state && e.state.view) || PATH_VIEW[location.pathname] || 'ads', { noPush: true });
+  });
 
   // ===================== BACKGROUND GENERATOR (ad + sold) =====================
   const setS = (id, t, type='') => { const e = $(id); e.textContent = t; e.className = 'status ' + type; };
@@ -1930,6 +1944,12 @@
   t_render();
 
   renderSold();
+  // open the view that matches the URL the page was loaded at (deep-link support)
+  (function () {
+    const name = PATH_VIEW[location.pathname] || 'ads';
+    history.replaceState({ view: name }, '', location.pathname);
+    showView(name, { noPush: true });
+  })();
   fitPreviews();
   setTimeout(fitPreviews, 200);   // re-fit once fonts/images settle
 </script>

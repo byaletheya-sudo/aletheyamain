@@ -211,7 +211,13 @@ def car_slug(vehicle, bodystyle, color):
     return re.sub(r'[^\w\s-]', '', key).strip().replace(' ', '_')[:90]
 
 
+# Each tool has its own clean URL. They all serve the same single-page app; the
+# client reads the path on load to open the right view (and pushState keeps the
+# URL in sync as you switch tools). Deep-linkable and bookmarkable.
 @app.route("/")
+@app.route("/lease")
+@app.route("/sold")
+@app.route("/leasead-test")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
