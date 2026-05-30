@@ -301,6 +301,10 @@
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg></span>
       Sold Posts
     </div>
+    <div class="nav-item" id="nav-test" onclick="showView('test')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 3h8"/></svg></span>
+      Lease Ad — TEST
+    </div>
   </aside>
 
   <main class="main">
@@ -604,6 +608,91 @@
       </div>
     </section><!-- /#view-sold -->
 
+    <section class="view" id="view-test">
+      <div class="view-inner">
+        <h1>Lease Ad — TEST</h1>
+        <p class="subtitle">Pulls the real factory photo from Vehicle Databases (by year / make / model) instead of generating one with AI. Background is removed so it drops onto the template.</p>
+        <div class="layout">
+          <div>
+            <div class="panel">
+              <h2>Vehicle (Vehicle Databases lookup)</h2>
+              <div class="row">
+                <div><label for="t_year">Year</label><input type="text" id="t_year" placeholder="2025" oninput="t_syncTitle()"></div>
+                <div><label for="t_make">Make</label><input type="text" id="t_make" placeholder="Mercedes-Benz" oninput="t_syncTitle()"></div>
+              </div>
+              <div class="row">
+                <div><label for="t_model">Model</label><input type="text" id="t_model" placeholder="GLC 300" oninput="t_syncTitle()"></div>
+                <div><label for="t_trim">Trim (optional)</label><input type="text" id="t_trim" placeholder="4MATIC SUV"></div>
+              </div>
+              <div class="controls" style="margin-top:14px;">
+                <button class="btn-start" id="vdbBtn" onclick="vdbGenerate()">Get photo &amp; build ad</button>
+                <label class="checkbox"><input type="checkbox" id="t_removeBg" checked> Remove background</label>
+                <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
+              </div>
+              <p class="hint">Uses one Vehicle Databases credit per lookup. If a trim isn't found, it retries without it.</p>
+              <div class="status" id="vdbStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Pricing</h2>
+              <div class="row">
+                <div>
+                  <label for="t_badge">Badge</label>
+                  <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
+                  <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
+                </div>
+                <div>
+                  <label for="t_bodystyle">Body style</label>
+                  <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
+                </div>
+              </div>
+              <label for="t_title">Headline (auto-fills, editable)</label>
+              <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
+              <div class="row3">
+                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
+                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
+                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
+              </div>
+              <label for="t_phone">Phone</label>
+              <input type="text" id="t_phone" value="(818) 873 - 3697" oninput="t_render()">
+              <label for="t_fine">Fine print</label>
+              <textarea id="t_fine" oninput="t_render()">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
+            </div>
+
+            <div class="panel">
+              <h2>Export</h2>
+              <div class="controls">
+                <button class="btn-start" id="t_dlBtn" onclick="t_download()" disabled>Download Ad</button>
+              </div>
+              <div class="status" id="t_status"></div>
+            </div>
+          </div>
+
+          <div class="preview-col">
+            <div class="ad-stage">
+              <div class="ad-scaler" id="t_adScaler">
+                <div class="ad" id="t_ad">
+                  <div class="ad__inner">
+                    <div class="ad__logo"><img src="logo.png" alt="NovAuto" crossorigin="anonymous"></div>
+                    <div class="ad__body">
+                      <span class="ad__badge" id="t_adBadge">Loaner Special</span>
+                      <div class="ad__title" id="t_adTitle">2025 Mercedes-Benz GLC 300</div>
+                      <div class="ad__sub" id="t_adSub">SUV</div>
+                      <div class="ad__price" id="t_adPrice">$799 Per Month</div>
+                      <div class="ad__terms" id="t_adTerms">$3,500 Due at Signing • 24 Month Lease</div>
+                    </div>
+                    <div class="ad__car"><img id="t_adCar" alt="" /></div>
+                    <div class="ad__phone" id="t_adPhone">Text (818) 873 - 3697</div>
+                    <div class="ad__fine" id="t_adFine"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section><!-- /#view-test -->
+
   </main>
 </div>
 
@@ -665,15 +754,16 @@
   // ---- scale the 1080x1920 ad down to fit the 380px-wide stage ----
   // Previews are fluid: each stage is min(456px, 100%) wide; scale + height derive from
   // its actual rendered width so it works on desktop and mobile.
-  function fitStage(stageSel, scalerId, h) {
-    const stage = document.querySelector(stageSel); if (!stage) return;
+  function fitStageEl(stage, scalerId, h) {
+    if (!stage) return;
     const w = stage.clientWidth; if (!w) return;
     stage.style.height = (w * h / 1080) + 'px';
     $(scalerId).style.transform = `scale(${w / 1080})`;
   }
   function fitPreviews() {
-    fitStage('.ad-stage', 'adScaler', 1920);
-    fitStage('.sp-stage', 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
+    fitStageEl(document.querySelector('#view-ads .ad-stage'), 'adScaler', 1920);
+    fitStageEl(document.querySelector('#view-sold .sp-stage'), 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
+    fitStageEl(document.querySelector('#view-test .ad-stage'), 't_adScaler', 1920);
   }
   window.addEventListener('resize', fitPreviews);
 
@@ -1517,6 +1607,75 @@
       else setSpStatus('Share failed: ' + e.message, 'error');
     }
   }
+
+  // ===================== TEST: lease ad from Vehicle Databases photos =====================
+  let t_titleEdited = false;
+  function setVdb(t, type = '') { const e = $('vdbStatus'); e.textContent = t; e.className = 'status ' + type; }
+  function setT(t, type = '') { const e = $('t_status'); e.textContent = t; e.className = 'status ' + type; }
+  function t_vehName() { return [$('t_year').value, $('t_make').value, $('t_model').value].map(s => s.trim()).filter(Boolean).join(' '); }
+  function t_syncTitle() { if (!t_titleEdited) $('t_title').value = t_vehName(); t_render(); }
+  function t_render() {
+    const showBadge = $('t_showBadge').checked && $('t_badge').value.trim() !== '';
+    $('t_adBadge').textContent = $('t_badge').value || '';
+    $('t_adBadge').style.visibility = showBadge ? 'visible' : 'hidden';
+    $('t_adTitle').textContent = $('t_title').value || t_vehName();
+    const sub = $('t_bodystyle').value.trim();
+    $('t_adSub').textContent = sub; $('t_adSub').style.display = sub ? '' : 'none';
+    $('t_adPrice').textContent = `$${money($('t_monthly').value)} Per Month`;
+    $('t_adTerms').textContent = `$${money($('t_das').value)} Due at Signing • ${$('t_term').value} Month Lease`;
+    $('t_adPhone').textContent = `Text ${$('t_phone').value}`;
+    $('t_adFine').innerHTML = boldify($('t_fine').value);
+  }
+  async function vdbGenerate() {
+    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
+    if (!(year && make && model)) { setVdb('Enter year, make, and model.', 'error'); return; }
+    if (!t_titleEdited) $('t_title').value = t_vehName();
+    t_render();
+    $('vdbBtn').disabled = true;
+    setVdb('Looking up the factory photo…', 'active');
+    try {
+      const r = await fetch('/vdb-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, make, model, trim }),
+      });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return; }
+      let url = d.image_data;
+      if ($('t_removeBg').checked && window.__removeBg) {
+        setVdb('Removing background…', 'active');
+        try { const blob = await window.__removeBg(url); url = await blobToDataURL(blob); }
+        catch (e) { /* keep original photo if removal fails */ }
+      }
+      $('t_adCar').removeAttribute('crossorigin');
+      $('t_adCar').src = url;
+      await waitForImage($('t_adCar'));
+      $('t_dlBtn').disabled = false;
+      setVdb('Photo placed ✓' + (trim && d.used_trim === false ? ' (no exact trim match — used base model)' : ''), 'done');
+      if ($('t_autoDl').checked) await t_download();
+    } catch (e) {
+      setVdb('✕ ' + e.message, 'error');
+    } finally {
+      $('vdbBtn').disabled = false;
+    }
+  }
+  async function t_download() {
+    if (!$('t_adCar').src) { setT('Get a photo first.', 'error'); return; }
+    setT('Rendering ad…', 'active');
+    try {
+      await document.fonts.ready; await waitForImage($('t_adCar'));
+      const scaler = $('t_adScaler'), stage = scaler.parentElement;
+      const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width };
+      scaler.style.transform = 'none';
+      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0';
+      stage.style.width = '1080px'; stage.style.height = '1920px';
+      const canvas = await html2canvas($('t_ad'), { width: 1080, height: 1920, scale: 1, backgroundColor: null, useCORS: true, logging: false });
+      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
+      const base = t_vehName().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'nova_ad';
+      const a = document.createElement('a'); a.download = base + '_ad.png'; a.href = canvas.toDataURL('image/png'); a.click();
+      setT('Ad downloaded ✓', 'done');
+    } catch (e) { setT('Render failed: ' + e.message, 'error'); }
+  }
+  t_render();
 
   renderSold();
   fitPreviews();

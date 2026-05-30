@@ -4,6 +4,9 @@ import base64
 import os
 import re
 import json
+import urllib.request
+import urllib.parse
+import urllib.error
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nova-aletheya-3f9a2c7e-change-in-prod")
@@ -89,6 +92,9 @@ def load_api_key():
 
 
 API_KEY = load_api_key()
+
+# Vehicle Databases (vehicle image API) — set VDB_API_KEY in the host env to enable the TEST tool.
+VDB_API_KEY = os.environ.get("VDB_API_KEY", "").strip()
 
 # Art-directed render rules: locked framing/scale/lighting for a consistent campaign look,
 # rendered on a TRANSPARENT background so each car drops cleanly onto the ad template.
@@ -383,6 +389,64 @@ def caption():
         info = classify_error(e)
         print(f"[caption] error: {info['reason']} | {info['detail']}")
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
+@app.route("/vdb-image", methods=["POST"])
+def vdb_image():
+    """TEST tool: fetch the real factory photo from Vehicle Databases' vehicle image API
+    (by year/make/model[/trim]) and proxy the first exterior image back as a data URL so
+    the client can background-remove it without CORS issues."""
+    if not VDB_API_KEY:
+        return jsonify({"error": "VDB_API_KEY is not set on the server. Add it in Railway → Variables."}), 500
+    data = request.json or {}
+    year = str(data.get("year", "")).strip()
+    make = data.get("make", "").strip()
+    model = data.get("model", "").strip()
+    trim = data.get("trim", "").strip()
+    if not (year and make and model):
+        return jsonify({"error": "Enter year, make, and model."}), 400
+
+    def enc(s):
+        return urllib.parse.quote(s, safe="")
+
+    paths = []
+    if trim:
+        paths.append(f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}")
+    paths.append(f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")   # fallback without trim
+
+    last_err = None
+    for p in paths:
+        try:
+            req = urllib.request.Request("https://api.vehicledatabases.com" + p,
+                                         headers={"x-authkey": VDB_API_KEY})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read().decode("utf-8", "ignore"))
+            images = (body.get("data") or {}).get("images") or {}
+            exterior = images.get("exterior") or []
+            if not exterior:
+                last_err = "no exterior images"
+                continue
+            img_url = exterior[0]
+            ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(ireq, timeout=30) as iresp:
+                ctype = iresp.headers.get("Content-Type", "image/jpeg")
+                img_bytes = iresp.read()
+            b64 = base64.b64encode(img_bytes).decode()
+            return jsonify({
+                "success": True,
+                "image_data": f"data:{ctype};base64,{b64}",
+                "exterior": exterior,
+                "used_trim": (p == paths[0] and bool(trim)),
+            })
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+            last_err = f"HTTP {e.code}"
+            continue
+        except Exception as e:
+            last_err = str(e)
+            continue
+    return jsonify({"error": f"No factory image found for that vehicle ({last_err or 'no records'})."}), 404
 
 
 @app.route("/detect-plate", methods=["POST"])
