@@ -617,12 +617,12 @@
             <div class="panel">
               <h2>Vehicle (Vehicle Databases lookup)</h2>
               <div class="row">
-                <div><label for="t_year">Year</label><input type="text" id="t_year" placeholder="2025" oninput="t_syncTitle()"></div>
-                <div><label for="t_make">Make</label><input type="text" id="t_make" placeholder="Mercedes-Benz" oninput="t_syncTitle()"></div>
+                <div><label for="t_year">Year</label><select id="t_year" onchange="t_onYear()"></select></div>
+                <div><label for="t_make">Make</label><select id="t_make" onchange="t_onMake()" disabled><option value="">Pick a year first</option></select></div>
               </div>
               <div class="row">
-                <div><label for="t_model">Model</label><input type="text" id="t_model" placeholder="GLC 300" oninput="t_syncTitle()"></div>
-                <div><label for="t_trim">Trim (optional)</label><input type="text" id="t_trim" placeholder="4MATIC SUV"></div>
+                <div><label for="t_model">Model</label><select id="t_model" onchange="t_onModel()" disabled><option value="">Pick a make first</option></select></div>
+                <div><label for="t_trim">Trim</label><select id="t_trim" onchange="t_syncTitle()" disabled><option value="">Pick a model first</option></select></div>
               </div>
               <div id="t_colorWrap" style="display:none;">
                 <label for="t_color">Color (from the factory options)</label>
@@ -633,7 +633,7 @@
                 <label class="checkbox"><input type="checkbox" id="t_removeBg" checked> Remove background</label>
                 <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
               </div>
-              <p class="hint">Uses one Vehicle Databases credit per lookup. If a trim isn't found, it retries without it.</p>
+              <p class="hint">Pick year → make → model → trim from the real catalog, then Get photo. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
               <div class="status" id="vdbStatus"></div>
             </div>
 
@@ -1665,6 +1665,57 @@
     $('t_adPhone').textContent = `Text ${$('t_phone').value}`;
     $('t_adFine').innerHTML = boldify($('t_fine').value);
   }
+  // ---- cascading dropdowns sourced from the real Vehicle Databases catalog ----
+  function t_fillYears() {
+    const sel = $('t_year');
+    const next = new Date().getFullYear() + 1;
+    sel.innerHTML = '<option value="">Select year</option>';
+    for (let y = next; y >= 2000; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
+  }
+  function t_setSelect(sel, items, placeholder) {
+    sel.innerHTML = '';
+    const ph = document.createElement('option'); ph.value = ''; ph.textContent = placeholder; sel.appendChild(ph);
+    (items || []).forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    sel.disabled = !(items && items.length);
+  }
+  async function t_fetchOpts(level, params) {
+    try {
+      const r = await fetch('/vdb-options', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level, ...params }) });
+      let d;
+      try { d = await r.json(); }
+      catch (_) { setVdb('✕ Couldn’t reach the catalog (try reloading / signing in again).', 'error'); return null; }
+      if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return null; }
+      if ((!d.options || !d.options.length) && d.vdb_message) {
+        setVdb(`✕ ${d.vdb_message}` + (d.vdb_status ? ` (VDB ${d.vdb_status})` : ''), 'error'); return [];
+      }
+      return d.options || [];
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); return null; }
+  }
+  async function t_onYear() {
+    t_setSelect($('t_make'), [], 'Pick a make first'); t_setSelect($('t_model'), [], 'Pick a make first'); t_setSelect($('t_trim'), [], 'Pick a model first');
+    t_syncTitle();
+    const year = $('t_year').value; if (!year) { setVdb('', ''); return; }
+    setVdb('Loading makes…', 'active');
+    const makes = await t_fetchOpts('make', { year });
+    if (makes) { t_setSelect($('t_make'), makes, 'Select make'); if (makes.length) setVdb(`${makes.length} makes — pick one`, 'done'); }
+  }
+  async function t_onMake() {
+    t_setSelect($('t_model'), [], 'Loading…'); t_setSelect($('t_trim'), [], 'Pick a model first'); t_syncTitle();
+    const year = $('t_year').value, make = $('t_make').value; if (!(year && make)) return;
+    setVdb('Loading models…', 'active');
+    const models = await t_fetchOpts('model', { year, make });
+    if (models) { t_setSelect($('t_model'), models, 'Select model'); if (models.length) setVdb(`${models.length} models — pick one`, 'done'); }
+  }
+  async function t_onModel() {
+    t_setSelect($('t_trim'), [], 'Loading…'); t_syncTitle();
+    const year = $('t_year').value, make = $('t_make').value, model = $('t_model').value; if (!(year && make && model)) return;
+    setVdb('Loading trims…', 'active');
+    const trims = await t_fetchOpts('trim', { year, make, model });
+    if (trims) {
+      t_setSelect($('t_trim'), trims, trims.length ? 'Select trim' : 'No trims listed — use model');
+      setVdb(trims.length ? `${trims.length} trims — pick one, then Get photo` : 'Ready — click Get photo', 'done');
+    }
+  }
   function vdbFetch(year, make, model, trim, skipTrim) {
     return fetch('/vdb-image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1865,6 +1916,7 @@
     const hint = incomplete ? `<div style="color:#7b9cff;margin-top:8px;font-size:.82rem;">Click <b>Generate All &amp; Download</b> again to resume from the rest.</div>` : '';
     $('t_bulkStatus').className = 'status'; $('t_bulkStatus').innerHTML = head + list + hint;
   }
+  t_fillYears();
   t_render();
 
   renderSold();

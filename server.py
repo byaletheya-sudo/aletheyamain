@@ -572,6 +572,49 @@ def vdb_proxy():
         return jsonify({"error": str(e)}), 502
 
 
+@app.route("/vdb-options", methods=["POST"])
+def vdb_options_route():
+    """Cascading dropdown source: return VDB's real make/model/trim lists so the
+    user picks exact catalog values (the final photo call then hits on the first
+    try — no guessing, no GPT, no wasted credits). Lists are cached in-process,
+    and quota/no-record messages are surfaced verbatim."""
+    if not VDB_API_KEY:
+        return jsonify({"error": "VDB_API_KEY is not set on the server. Add it in Railway → Variables."}), 500
+    data = request.json or {}
+    level = (data.get("level") or "").strip()
+    year = str(data.get("year", "")).strip()
+    make = (data.get("make") or "").strip()
+    model = (data.get("model") or "").strip()
+    enc = lambda s: urllib.parse.quote(s, safe="")
+
+    if level == "make" and year:
+        path = f"/vehicle-media/options/v3/make/{enc(year)}"
+    elif level == "model" and year and make:
+        path = f"/vehicle-media/options/v3/model/{enc(year)}/{enc(make)}"
+    elif level == "trim" and year and make and model:
+        path = f"/vehicle-media/options/v3/trim/{enc(year)}/{enc(make)}/{enc(model)}"
+    else:
+        return jsonify({"error": "Missing parameters for that level."}), 400
+
+    if path in _VDB_OPT_CACHE:                      # already paid for this list
+        return jsonify({"options": _VDB_OPT_CACHE[path], "cached": True})
+
+    try:
+        code, body, raw = _vdb_get(path)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+    if code == 401:
+        return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+
+    opts = [x.strip() for x in (body.get("data") or []) if isinstance(x, str) and x.strip()]
+    if opts:
+        _VDB_OPT_CACHE[path] = opts
+        return jsonify({"options": opts})
+    # empty -> surface VDB's own reason (quota exhausted, no records, etc.)
+    msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
+    return jsonify({"options": [], "vdb_status": code, "vdb_message": msg, "requested": path})
+
+
 @app.route("/vdb-image", methods=["POST"])
 def vdb_image():
     """TEST tool: fetch the real factory photo from Vehicle Databases' vehicle image API
