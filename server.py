@@ -4,15 +4,44 @@ import base64
 import os
 import re
 import json
+import hmac
+import time
+import secrets
 import urllib.request
 import urllib.parse
 import urllib.error
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "nova-aletheya-3f9a2c7e-change-in-prod")
 
-# Simple password gate for the whole app (page + API). Override via APP_PASSWORD env.
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "novaagents")
+# Session signing key. NEVER hardcode a real one — this repo is public, and a known
+# key lets anyone forge a "logged-in" cookie and skip the password entirely. Use the
+# SECRET_KEY env var in production; otherwise fall back to a random per-process key
+# (sessions simply won't survive a restart, which just means logging in again).
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+
+# Harden the session cookie.
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,    # not readable by JS (an XSS can't steal the session)
+    SESSION_COOKIE_SECURE=True,      # only sent over HTTPS (Railway/custom domains are HTTPS)
+    SESSION_COOKIE_SAMESITE="Lax",   # basic CSRF mitigation
+)
+
+# Password gate for the whole app. Env-only in practice: the fallback is random, so
+# the value that used to be committed here no longer opens the door. Set APP_PASSWORD
+# in Railway → Variables.
+APP_PASSWORD = os.environ.get("APP_PASSWORD") or secrets.token_urlsafe(24)
+if not os.environ.get("APP_PASSWORD"):
+    print("[security] APP_PASSWORD is not set — using a random password. Set it in Railway to log in.")
+
+# Tiny in-memory brute-force throttle: max attempts per IP per window.
+_LOGIN_FAILS = {}
+_LOGIN_MAX = 8
+_LOGIN_WINDOW = 300   # seconds
+
+
+def _client_ip():
+    xff = request.headers.get("X-Forwarded-For", "")
+    return (xff.split(",")[0].strip() if xff else (request.remote_addr or "?"))
 
 
 def login_page(message=""):
@@ -48,9 +77,19 @@ def login_page(message=""):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if request.form.get("password", "") == APP_PASSWORD:
+        ip = _client_ip()
+        cnt, t0 = _LOGIN_FAILS.get(ip, (0, time.time()))
+        if time.time() - t0 > _LOGIN_WINDOW:        # reset the window
+            cnt, t0 = 0, time.time()
+        if cnt >= _LOGIN_MAX:                        # too many tries -> back off
+            return login_page("Too many attempts — wait a few minutes and try again."), 429
+        # constant-time compare avoids leaking the password via timing
+        if hmac.compare_digest(request.form.get("password", ""), APP_PASSWORD):
+            session.clear()                          # new session id on login (anti-fixation)
             session["ok"] = True
+            _LOGIN_FAILS.pop(ip, None)
             return redirect("/")
+        _LOGIN_FAILS[ip] = (cnt + 1, t0)
         return login_page("Incorrect password — try again."), 401
     return login_page()
 
@@ -68,6 +107,15 @@ def require_login():
     if session.get("ok"):
         return None
     return redirect("/login")
+
+
+@app.after_request
+def security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"            # no MIME sniffing
+    resp.headers["X-Frame-Options"] = "DENY"                       # no clickjacking/embedding
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return resp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Saved cars live here. Set GENERATED_DIR to a persistent disk/volume path on the
