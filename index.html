@@ -615,6 +615,28 @@
         <div class="layout">
           <div>
             <div class="panel">
+              <h2>Options</h2>
+              <div class="row">
+                <div>
+                  <label for="t_badge">Badge</label>
+                  <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
+                  <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
+                </div>
+                <div>
+                  <label for="t_bodystyle">Body style (auto-fills from trim)</label>
+                  <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
+                </div>
+              </div>
+              <label for="t_title">Headline (auto-fills, editable)</label>
+              <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
+              <div class="row3">
+                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
+                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
+                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
+              </div>
+            </div>
+
+            <div class="panel">
               <h2>Vehicle (Vehicle Databases lookup)</h2>
               <div class="row">
                 <div><label for="t_year">Year</label><select id="t_year" onchange="t_onYear()"></select></div>
@@ -622,7 +644,7 @@
               </div>
               <div class="row">
                 <div><label for="t_model">Model</label><select id="t_model" onchange="t_onModel()" disabled><option value="">Pick a make first</option></select></div>
-                <div><label for="t_trim">Trim</label><select id="t_trim" onchange="t_syncTitle()" disabled><option value="">Pick a model first</option></select></div>
+                <div><label for="t_trim">Trim</label><select id="t_trim" onchange="t_onTrim()" disabled><option value="">Pick a model first</option></select></div>
               </div>
               <div id="t_colorWrap" style="display:none;">
                 <label for="t_color">Color (from the factory options)</label>
@@ -636,34 +658,16 @@
                 <label class="checkbox"><input type="checkbox" id="t_removeBg" checked> Remove background</label>
                 <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
               </div>
-              <p class="hint">Pick year → make → model → trim from the real catalog, then Get photo. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
+              <p class="hint">Pick year → make → model. The first trim is selected and the ad builds automatically. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
               <div class="status" id="vdbStatus"></div>
             </div>
 
             <div class="panel">
-              <h2>Pricing</h2>
-              <div class="row">
-                <div>
-                  <label for="t_badge">Badge</label>
-                  <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
-                  <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
-                </div>
-                <div>
-                  <label for="t_bodystyle">Body style</label>
-                  <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
-                </div>
-              </div>
-              <label for="t_title">Headline (auto-fills, editable)</label>
-              <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
-              <div class="row3">
-                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
-                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
-                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
-              </div>
+              <h2>Contact &amp; Disclaimer <span style="font-weight:400;opacity:.6;font-size:.8rem;">(fixed)</span></h2>
               <label for="t_phone">Phone</label>
-              <input type="text" id="t_phone" value="(818) 873 - 3697" oninput="t_render()">
+              <input type="text" id="t_phone" value="(818) 873 - 3697" readonly style="opacity:.7;cursor:not-allowed;">
               <label for="t_fine">Fine print</label>
-              <textarea id="t_fine" oninput="t_render()">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
+              <textarea id="t_fine" readonly style="opacity:.7;cursor:not-allowed;">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
             </div>
 
             <div class="panel">
@@ -1728,10 +1732,21 @@
     const year = $('t_year').value, make = $('t_make').value, model = $('t_model').value; if (!(year && make && model)) return;
     setVdb('Loading trims…', 'active');
     const trims = await t_fetchOpts('trim', { year, make, model });
-    if (trims) {
-      t_setSelect($('t_trim'), trims, trims.length ? 'Select trim' : 'No trims listed — use model');
-      setVdb(trims.length ? `${trims.length} trims — pick one, then Get photo` : 'Ready — click Get photo', 'done');
+    if (!trims) return;
+    t_setSelect($('t_trim'), trims, trims.length ? 'Select trim' : 'No trims listed — use model');
+    if (trims.length) {
+      $('t_trim').value = trims[0];   // auto-select the first trim…
+      t_onTrim();                     // …set body style + headline, then auto-build the ad
+    } else {
+      setVdb('Ready — click Get photo', 'done');
     }
+  }
+  // trim changed (or auto-selected): mirror it into body style, refresh title, and build
+  function t_onTrim() {
+    const trim = $('t_trim').value;
+    if (trim) $('t_bodystyle').value = trim;   // body style follows the trim
+    t_syncTitle();
+    if (trim) vdbGenerate();                    // auto-generate the image
   }
   function vdbFetch(year, make, model, trim, skipTrim) {
     return fetch('/vdb-image', {
@@ -1783,17 +1798,17 @@
       $('t_colorWrap').style.display = (d.options && d.options.length > 1) ? '' : 'none';
       t_updateSwatch();
 
-      let url = d.image_data;
-      if ($('t_removeBg').checked && window.__removeBg) {
+      let url = d.image_data, bgWarn = '';
+      if ($('t_removeBg').checked) {
         setVdb('Removing background…', 'active');
-        try { const blob = await window.__removeBg(url); url = await blobToDataURL(blob); }
-        catch (e) { /* keep original photo if removal fails */ }
+        try { url = await t_removeBgFrom(url); }
+        catch (e) { bgWarn = ' (bg not removed — ' + e.message + ')'; console.error('bg removal failed', e); }
       }
       $('t_adCar').removeAttribute('crossorigin');
       $('t_adCar').src = url;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓' + (d.options && d.options.length > 1 ? ' — pick a color below if you like' : ''), 'done');
+      setVdb('Photo placed ✓' + bgWarn + (d.options && d.options.length > 1 ? ' — pick a color below if you like' : ''), bgWarn ? 'error' : 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
@@ -1806,6 +1821,17 @@
     const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
     if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
   }
+  // Remove the background from a data-URL photo. imgly is reliable with a Blob
+  // (the upload flow's working path) but flaky with a raw data-URL string, so
+  // convert to a Blob first. Throws if the remover isn't loaded.
+  async function t_removeBgFrom(dataUrl) {
+    if (!window.__removeBg) {
+      throw new Error(window.__removeBgError ? 'remover failed to load' : 'remover still loading');
+    }
+    const inBlob = await (await fetch(dataUrl)).blob();
+    const outBlob = await window.__removeBg(inBlob);
+    return await blobToDataURL(outBlob);
+  }
   async function t_pickColor() {
     t_updateSwatch();
     const url = $('t_color').value; if (!url) return;
@@ -1814,15 +1840,16 @@
       const r = await fetch('/vdb-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       const d = await r.json();
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      let img = d.image_data;
-      if ($('t_removeBg').checked && window.__removeBg) {
+      let img = d.image_data, bgWarn = '';
+      if ($('t_removeBg').checked) {
         setVdb('Removing background…', 'active');
-        try { const blob = await window.__removeBg(img); img = await blobToDataURL(blob); } catch (e) { }
+        try { img = await t_removeBgFrom(img); }
+        catch (e) { bgWarn = ' (bg not removed)'; console.error('bg removal failed', e); }
       }
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = img;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Color updated ✓', 'done');
+      setVdb('Color updated ✓' + bgWarn, bgWarn ? 'error' : 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   async function t_download() {
@@ -1917,7 +1944,7 @@
         }
         if (d.error || d.found === false) { failures.push({ v: name, reason: d.error || 'no factory photo' }); t_upProg(i + 1, rows.length); await sleep(150); continue; }
         let url = d.image_data;
-        if ($('t_removeBg').checked && window.__removeBg) { try { const blob = await window.__removeBg(url); url = await blobToDataURL(blob); } catch (e) { } }
+        if ($('t_removeBg').checked) { try { url = await t_removeBgFrom(url); } catch (e) { console.error('bg removal failed', e); } }
         $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = url; await waitForImage($('t_adCar'));
         await t_download();
         t_bulkDone.add(key); done++; t_upProg(i + 1, rows.length); await sleep(500);
