@@ -452,6 +452,87 @@ def _vdb_get(path):
     return code, body, raw
 
 
+# --- catalog-driven resolution (the proven approach) -----------------------
+# The media API stores make/model/trim under its OWN canonical spellings, which
+# rarely match what a user types. So instead of guessing spellings, we ask VDB
+# for the exact list of valid values (its "options" endpoints), then snap the
+# user's free text onto the closest entry in that real list — locally when it's
+# obvious, GPT when it isn't. This is how the main Novauto app does it.
+_VDB_OPT_CACHE = {}   # in-process cache so we don't re-buy the same option list
+
+
+def _vdb_options(path):
+    """GET a vehicle-media options endpoint -> list of canonical strings (cached)."""
+    if path in _VDB_OPT_CACHE:
+        return _VDB_OPT_CACHE[path]
+    try:
+        code, body, raw = _vdb_get(path)
+    except Exception:
+        return []
+    data = body.get("data") or []
+    opts = [x.strip() for x in data if isinstance(x, str) and x.strip()]
+    if opts:
+        _VDB_OPT_CACHE[path] = opts   # only cache real hits (don't cache rate-limits)
+    return opts
+
+
+def _nrm(s):
+    """Aggressive normalize for matching: lowercase, alphanumerics only."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _gpt_pick(user_text, options, kind="value"):
+    """Let the model choose the single closest entry from a fixed list (enum-locked
+    so it can't invent a value). Returns None if unavailable."""
+    if not options or not API_KEY or API_KEY == "sk-your-key-here":
+        return None
+    try:
+        client = OpenAI(api_key=API_KEY)
+        schema = {
+            "type": "object", "additionalProperties": False, "required": [kind],
+            "properties": {kind: {
+                "type": "string", "enum": options,
+                "description": f"The {kind} from the list that best matches the input. "
+                               "If there's no exact match, choose the closest by meaning or wording.",
+            }},
+        }
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": "You are an automotive data analyst. Map the user's "
+                 "vehicle description onto the single closest option from the allowed list. Always pick from the list."},
+                {"role": "user", "content": f"Vehicle input: {user_text!r}\n"
+                 f"Choose the {kind} that best matches, using only the allowed list."},
+            ],
+            response_format={"type": "json_schema",
+                             "json_schema": {"name": "pick", "strict": True, "schema": schema}},
+        )
+        return json.loads(resp.choices[0].message.content).get(kind)
+    except Exception:
+        return None
+
+
+def _resolve(user_text, options, kind="value"):
+    """Snap free text onto the closest canonical option. Local match first
+    (free, instant), GPT fallback for the genuinely ambiguous cases."""
+    if not options:
+        return None
+    nu = _nrm(user_text)
+    if not nu:
+        return None
+    # 1) exact (normalized) — "GLC300" == "GLC 300", "mercedes-benz" == "Mercedes-Benz"
+    for o in options:
+        if _nrm(o) == nu:
+            return o
+    # 2) containment — "GLC300" inside "GLC 300 4MATIC SUV"; prefer the most specific
+    cont = [o for o in options if nu in _nrm(o) or _nrm(o) in nu]
+    if len(cont) == 1:
+        return cont[0]
+    # 3) anything ambiguous (0 or >1 candidates) -> let GPT choose from the real list
+    pool = cont if len(cont) > 1 else options
+    return _gpt_pick(user_text, pool, kind) or (cont[0] if cont else None)
+
+
 @app.route("/vdb-proxy", methods=["POST"])
 def vdb_proxy():
     """Proxy a specific Vehicle Databases image URL (so a chosen color is same-origin
@@ -492,58 +573,70 @@ def vdb_image():
         return urllib.parse.quote(s, safe="")
 
     use_trim = bool(trim) and not skip_trim
-    # Build forgiving candidate paths (best-first) so minor input differences still match.
-    make_cands = dedup([norm_make(make), make.strip()])
-    model_cands = model_variants(model)
-    candidates = []
-    for mk in make_cands:
-        for md in model_cands:
-            seg = f"/vehicle-media/v2/{enc(year)}/{enc(mk)}/{enc(md)}"
-            if use_trim:
-                seg += f"/{enc(trim)}"
-            if seg not in candidates:
-                candidates.append(seg)
-    candidates = candidates[:5]   # cap API calls per lookup to protect credits
-
     try:
-        last_code = last_msg = last_path = None
-        for path in candidates:
-            code, body, raw = _vdb_get(path)
-            if code == 401:
-                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
-            last_code = code
-            last_msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
-            last_path = path
+        # 1) Resolve the make against VDB's real make list for that year.
+        makes = _vdb_options(f"/vehicle-media/options/v3/make/{enc(year)}")
+        make_c = _resolve(make, makes, "make") or norm_make(make)
 
-            imgs = ((body.get("data") or {}).get("images") or {})
-            exterior = imgs.get("exterior") or []
-            colors = imgs.get("colors") or []
-            photos = exterior or colors or (imgs.get("interior") or [])
-            if not photos:
-                continue   # try the next spelling
+        # 2) Resolve the model against VDB's real model list for that make.
+        models = _vdb_options(f"/vehicle-media/options/v3/model/{enc(year)}/{enc(make_c)}")
+        model_c = _resolve(model, models, "model") or model.strip()
 
-            img_url = photos[0]
-            options = [{"url": u, "label": vdb_label(u)} for u in photos]
-            ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(ireq, timeout=30) as iresp:
-                ctype = iresp.headers.get("Content-Type", "image/jpeg")
-                img_bytes = iresp.read()
-            b64 = base64.b64encode(img_bytes).decode()
-            d = body.get("data") or {}
+        # 3) Resolve the trim against VDB's real trim list (only if a trim was given).
+        trim_c = None
+        avail_trims = []
+        if use_trim:
+            avail_trims = _vdb_options(f"/vehicle-media/options/v3/trim/{enc(year)}/{enc(make_c)}/{enc(model_c)}")
+            trim_c = _resolve(trim, avail_trims, "trim")
+            if not trim_c:
+                # the trim genuinely isn't in the catalog -> ask the user what to do,
+                # and hand them the real list of trims that DO exist.
+                return jsonify({
+                    "found": False, "trim_not_found": True,
+                    "resolved_make": make_c, "resolved_model": model_c,
+                    "available_trims": avail_trims,
+                    "vdb_message": "Trim not found in catalog.",
+                    "requested": f"{year} {make_c} {model_c} {trim}",
+                })
+
+        # 4) Fetch the media with the canonical strings.
+        path = f"/vehicle-media/v2/{enc(year)}/{enc(make_c)}/{enc(model_c)}"
+        if use_trim:
+            path += f"/{enc(trim_c)}"
+        code, body, raw = _vdb_get(path)
+        if code == 401:
+            return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+
+        imgs = ((body.get("data") or {}).get("images") or {})
+        exterior = imgs.get("exterior") or []
+        colors = imgs.get("colors") or []
+        photos = exterior or colors or (imgs.get("interior") or [])
+
+        if not photos:
+            msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
             return jsonify({
-                "found": True, "success": True,
-                "image_data": f"data:{ctype};base64,{b64}",
-                "image_url": img_url, "source": ("exterior" if exterior else "colors"),
-                "options": options, "used_trim": use_trim,
-                "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),
-                "matched_path": path,
+                "found": False, "trim_not_found": use_trim,
+                "resolved_make": make_c, "resolved_model": model_c, "resolved_trim": trim_c,
+                "available_trims": avail_trims,
+                "vdb_status": code, "vdb_message": msg, "requested": path,
             })
 
-        # nothing matched any spelling
+        img_url = photos[0]
+        options = [{"url": u, "label": vdb_label(u)} for u in photos]
+        ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(ireq, timeout=30) as iresp:
+            ctype = iresp.headers.get("Content-Type", "image/jpeg")
+            img_bytes = iresp.read()
+        b64 = base64.b64encode(img_bytes).decode()
+        d = body.get("data") or {}
         return jsonify({
-            "found": False, "trim_not_found": use_trim,
-            "vdb_status": last_code, "vdb_message": last_msg, "requested": last_path,
-            "tried": candidates,
+            "found": True, "success": True,
+            "image_data": f"data:{ctype};base64,{b64}",
+            "image_url": img_url, "source": ("exterior" if exterior else "colors"),
+            "options": options, "used_trim": use_trim,
+            "resolved_make": make_c, "resolved_model": model_c, "resolved_trim": trim_c,
+            "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),
+            "matched_path": path,
         })
     except Exception as e:
         return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
