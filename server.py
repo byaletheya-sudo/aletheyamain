@@ -432,16 +432,33 @@ def vdb_image():
         if code == 401:
             return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
 
-        exterior = ((body.get("data") or {}).get("images") or {}).get("exterior") or []
-        if not exterior:
+        imgs = ((body.get("data") or {}).get("images") or {})
+        # Many vehicles have empty "exterior" but real photos under "colors" (the car in each
+        # factory color). Use exterior first, then colors (prefer a light, clean color so it
+        # stands out on the dark template), then interior as a last resort.
+        exterior = imgs.get("exterior") or []
+        colors = imgs.get("colors") or []
+        img_url = None
+        if exterior:
+            img_url = exterior[0]
+        elif colors:
+            prefs = ("polar-white", "white", "silver", "cirrus", "grey", "gray", "black")
+            for p in prefs:
+                hit = next((u for u in colors if p in u.lower()), None)
+                if hit:
+                    img_url = hit
+                    break
+            img_url = img_url or colors[0]
+        elif imgs.get("interior"):
+            img_url = imgs["interior"][0]
+
+        if not img_url:
             # surface VDB's own message + raw body so we can see exactly what it wants
             msg = body.get("message") or body.get("status") or (raw[:300] if raw else f"HTTP {code}")
             return jsonify({
                 "found": False, "trim_not_found": use_trim,
                 "vdb_status": code, "vdb_message": msg, "vdb_raw": raw[:500], "requested": path,
             })
-
-        img_url = exterior[0]
         ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(ireq, timeout=30) as iresp:
             ctype = iresp.headers.get("Content-Type", "image/jpeg")
@@ -450,7 +467,8 @@ def vdb_image():
         return jsonify({
             "found": True, "success": True,
             "image_data": f"data:{ctype};base64,{b64}",
-            "exterior": exterior, "used_trim": use_trim,
+            "image_url": img_url, "source": ("exterior" if exterior else "colors"),
+            "options": (exterior or colors), "used_trim": use_trim,
         })
     except Exception as e:
         return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
