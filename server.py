@@ -400,6 +400,58 @@ def vdb_label(url):
     return seg.title() if seg else "Photo"
 
 
+# --- forgiving make/model resolution (the catalog wants exact strings) ---
+MAKE_ALIASES = {
+    "mercedes": "Mercedes-Benz", "mercedes benz": "Mercedes-Benz", "merc": "Mercedes-Benz", "benz": "Mercedes-Benz",
+    "chevy": "Chevrolet", "chevrolet": "Chevrolet", "vw": "Volkswagen", "volkswagon": "Volkswagen",
+    "land rover": "Land Rover", "range rover": "Land Rover", "rover": "Land Rover",
+    "alfa": "Alfa Romeo", "mini": "MINI", "mini cooper": "MINI", "rolls": "Rolls-Royce", "rolls royce": "Rolls-Royce",
+}
+MAKE_UPPER = {"bmw", "gmc", "ram", "gm"}
+
+
+def norm_make(m):
+    low = re.sub(r"\s+", " ", m.strip().lower())
+    if low in MAKE_ALIASES:
+        return MAKE_ALIASES[low]
+    if low in MAKE_UPPER:
+        return low.upper()
+    return m.strip().title()
+
+
+def dedup(seq):
+    seen, out = set(), []
+    for x in seq:
+        k = x.lower()
+        if x and k not in seen:
+            seen.add(k); out.append(x)
+    return out
+
+
+def model_variants(model):
+    m = model.strip()
+    spaced = re.sub(r"([A-Za-z])(\d)", r"\1 \2", m)         # GLC300 -> GLC 300
+    nospace = m.replace(" ", "")                              # GLC 300 -> GLC300
+    return dedup([m, spaced, nospace])
+
+
+def _vdb_get(path):
+    req = urllib.request.Request("https://api.vehicledatabases.com" + path,
+                                 headers={"x-authkey": VDB_API_KEY})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            code = getattr(r, "status", 200)
+            raw = r.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        code = e.code
+        raw = e.read().decode("utf-8", "ignore")
+    try:
+        body = json.loads(raw)
+    except Exception:
+        body = {}
+    return code, body, raw
+
+
 @app.route("/vdb-proxy", methods=["POST"])
 def vdb_proxy():
     """Proxy a specific Vehicle Databases image URL (so a chosen color is same-origin
@@ -440,54 +492,58 @@ def vdb_image():
         return urllib.parse.quote(s, safe="")
 
     use_trim = bool(trim) and not skip_trim
-    path = (f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}"
-            if use_trim else f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")
+    # Build forgiving candidate paths (best-first) so minor input differences still match.
+    make_cands = dedup([norm_make(make), make.strip()])
+    model_cands = model_variants(model)
+    candidates = []
+    for mk in make_cands:
+        for md in model_cands:
+            seg = f"/vehicle-media/v2/{enc(year)}/{enc(mk)}/{enc(md)}"
+            if use_trim:
+                seg += f"/{enc(trim)}"
+            if seg not in candidates:
+                candidates.append(seg)
+    candidates = candidates[:5]   # cap API calls per lookup to protect credits
 
-    url = "https://api.vehicledatabases.com" + path
     try:
-        req = urllib.request.Request(url, headers={"x-authkey": VDB_API_KEY})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                code = getattr(resp, "status", 200)
-                raw = resp.read().decode("utf-8", "ignore")
-        except urllib.error.HTTPError as e:
-            code = e.code
-            raw = e.read().decode("utf-8", "ignore")
-        try:
-            body = json.loads(raw)
-        except Exception:
-            body = {}
+        last_code = last_msg = last_path = None
+        for path in candidates:
+            code, body, raw = _vdb_get(path)
+            if code == 401:
+                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+            last_code = code
+            last_msg = body.get("message") or body.get("status") or (raw[:200] if raw else f"HTTP {code}")
+            last_path = path
 
-        if code == 401:
-            return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+            imgs = ((body.get("data") or {}).get("images") or {})
+            exterior = imgs.get("exterior") or []
+            colors = imgs.get("colors") or []
+            photos = exterior or colors or (imgs.get("interior") or [])
+            if not photos:
+                continue   # try the next spelling
 
-        imgs = ((body.get("data") or {}).get("images") or {})
-        # Many vehicles have empty "exterior" but real photos under "colors" (the car in each
-        # factory color). Use exterior first, else colors, else interior. The client gets the
-        # full list so the user can pick any color (color naming varies by manufacturer).
-        exterior = imgs.get("exterior") or []
-        colors = imgs.get("colors") or []
-        photos = exterior or colors or (imgs.get("interior") or [])
-        img_url = photos[0] if photos else None
-        options = [{"url": u, "label": vdb_label(u)} for u in photos]
-
-        if not img_url:
-            # surface VDB's own message + raw body so we can see exactly what it wants
-            msg = body.get("message") or body.get("status") or (raw[:300] if raw else f"HTTP {code}")
+            img_url = photos[0]
+            options = [{"url": u, "label": vdb_label(u)} for u in photos]
+            ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(ireq, timeout=30) as iresp:
+                ctype = iresp.headers.get("Content-Type", "image/jpeg")
+                img_bytes = iresp.read()
+            b64 = base64.b64encode(img_bytes).decode()
+            d = body.get("data") or {}
             return jsonify({
-                "found": False, "trim_not_found": use_trim,
-                "vdb_status": code, "vdb_message": msg, "vdb_raw": raw[:500], "requested": path,
+                "found": True, "success": True,
+                "image_data": f"data:{ctype};base64,{b64}",
+                "image_url": img_url, "source": ("exterior" if exterior else "colors"),
+                "options": options, "used_trim": use_trim,
+                "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),
+                "matched_path": path,
             })
-        ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(ireq, timeout=30) as iresp:
-            ctype = iresp.headers.get("Content-Type", "image/jpeg")
-            img_bytes = iresp.read()
-        b64 = base64.b64encode(img_bytes).decode()
+
+        # nothing matched any spelling
         return jsonify({
-            "found": True, "success": True,
-            "image_data": f"data:{ctype};base64,{b64}",
-            "image_url": img_url, "source": ("exterior" if exterior else "colors"),
-            "options": options, "used_trim": use_trim,
+            "found": False, "trim_not_found": use_trim,
+            "vdb_status": last_code, "vdb_message": last_msg, "requested": last_path,
+            "tried": candidates,
         })
     except Exception as e:
         return jsonify({"error": f"Vehicle Databases lookup failed: {e}"}), 502
