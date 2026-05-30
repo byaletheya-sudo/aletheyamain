@@ -469,7 +469,22 @@ def _vdb_get(path):
 # for the exact list of valid values (its "options" endpoints), then snap the
 # user's free text onto the closest entry in that real list — locally when it's
 # obvious, GPT when it isn't. This is how the main Novauto app does it.
-_VDB_OPT_CACHE = {}   # in-process cache so we don't re-buy the same option list
+_VDB_OPT_CACHE = {}      # in-process cache so we don't re-buy the same option list
+_VDB_RESULT_CACHE = {}   # full resolved lookups, so duplicate rows skip the network
+_VDB_RESULT_MAX = 300    # bound memory (image data is base64) with simple FIFO eviction
+
+
+def _result_key(year, make, model, trim, use_trim):
+    """Normalized cache key so 'GLC300' and 'GLC 300' (etc.) share one entry."""
+    return "|".join([year, _nrm(make), _nrm(model), _nrm(trim) if use_trim else "", "T" if use_trim else "F"])
+
+
+def _result_cache_put(key, payload):
+    if key in _VDB_RESULT_CACHE:
+        return
+    if len(_VDB_RESULT_CACHE) >= _VDB_RESULT_MAX:
+        _VDB_RESULT_CACHE.pop(next(iter(_VDB_RESULT_CACHE)))   # evict oldest
+    _VDB_RESULT_CACHE[key] = payload
 
 
 def _vdb_options(path):
@@ -584,6 +599,14 @@ def vdb_image():
         return urllib.parse.quote(s, safe="")
 
     use_trim = bool(trim) and not skip_trim
+
+    # Duplicate rows (common in bulk imports) return instantly — no VDB, no GPT,
+    # no image fetch. Keyed on normalized fields so spelling variants share a hit.
+    cache_key = _result_key(year, make, model, trim, use_trim)
+    cached = _VDB_RESULT_CACHE.get(cache_key)
+    if cached is not None:
+        return jsonify({**cached, "cached": True})
+
     tried = set()   # remember media paths we've already fetched (don't pay twice)
 
     def fetch_media(mk, md, tr):
@@ -611,7 +634,7 @@ def vdb_image():
             img_bytes = iresp.read()
         b64 = base64.b64encode(img_bytes).decode()
         d = body.get("data") or {}
-        return jsonify({
+        payload = {
             "found": True, "success": True,
             "image_data": f"data:{ctype};base64,{b64}",
             "image_url": img_url, "source": ("exterior" if ext else "colors"),
@@ -619,7 +642,9 @@ def vdb_image():
             "resolved_make": mk, "resolved_model": md, "resolved_trim": tr,
             "matched_make": d.get("make"), "matched_model": d.get("model"), "matched_trim": d.get("trim"),
             "matched_path": path,
-        })
+        }
+        _result_cache_put(cache_key, payload)
+        return jsonify(payload)
 
     try:
         last = None   # (code, body, raw, path) of the most recent miss, for diagnostics
