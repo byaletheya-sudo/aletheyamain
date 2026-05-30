@@ -399,40 +399,53 @@ def vdb_image():
     if not VDB_API_KEY:
         return jsonify({"error": "VDB_API_KEY is not set on the server. Add it in Railway → Variables."}), 500
     data = request.json or {}
+    vin = data.get("vin", "").strip()
     year = str(data.get("year", "")).strip()
     make = data.get("make", "").strip()
     model = data.get("model", "").strip()
     trim = data.get("trim", "").strip()
     skip_trim = bool(data.get("skip_trim", False))
-    if not (year and make and model):
-        return jsonify({"error": "Enter year, make, and model."}), 400
 
     def enc(s):
         return urllib.parse.quote(s, safe="")
 
-    use_trim = bool(trim) and not skip_trim
-    path = (f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}"
-            if use_trim else f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")
+    # Build the request path: VIN is the most reliable lookup; otherwise year/make/model[/trim].
+    use_trim = False
+    if vin:
+        path = f"/vehicle-media/v2/{enc(vin)}"
+    else:
+        if not (year and make and model):
+            return jsonify({"error": "Enter a VIN, or year/make/model."}), 400
+        use_trim = bool(trim) and not skip_trim
+        path = (f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}/{enc(trim)}"
+                if use_trim else f"/vehicle-media/v2/{enc(year)}/{enc(make)}/{enc(model)}")
 
+    url = "https://api.vehicledatabases.com" + path
     try:
+        req = urllib.request.Request(url, headers={"x-authkey": VDB_API_KEY})
         try:
-            req = urllib.request.Request("https://api.vehicledatabases.com" + path,
-                                         headers={"x-authkey": VDB_API_KEY})
             with urllib.request.urlopen(req, timeout=30) as resp:
-                body = json.loads(resp.read().decode("utf-8", "ignore"))
-            exterior = ((body.get("data") or {}).get("images") or {}).get("exterior") or []
+                code = getattr(resp, "status", 200)
+                raw = resp.read().decode("utf-8", "ignore")
         except urllib.error.HTTPError as e:
-            if e.code == 401:
-                return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
-            if e.code in (400, 404):   # no record for this exact path
-                exterior = []
-            else:
-                raise
+            code = e.code
+            raw = e.read().decode("utf-8", "ignore")
+        try:
+            body = json.loads(raw)
+        except Exception:
+            body = {}
 
+        if code == 401:
+            return jsonify({"error": "Invalid Vehicle Databases API key.", "reason": "Invalid VDB key"}), 401
+
+        exterior = ((body.get("data") or {}).get("images") or {}).get("exterior") or []
         if not exterior:
-            # not an error: tell the client whether the TRIM was the thing not found,
-            # so it can ask the user whether to fall back to the base model
-            return jsonify({"found": False, "trim_not_found": use_trim})
+            # surface VDB's own message so we can see exactly what it wants (400 = "No Record's Found")
+            msg = body.get("message") or body.get("status") or (raw[:300] if raw else f"HTTP {code}")
+            return jsonify({
+                "found": False, "trim_not_found": use_trim,
+                "vdb_status": code, "vdb_message": msg, "requested": path,
+            })
 
         img_url = exterior[0]
         ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})

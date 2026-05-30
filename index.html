@@ -616,6 +616,9 @@
           <div>
             <div class="panel">
               <h2>Vehicle (Vehicle Databases lookup)</h2>
+              <label for="t_vin">VIN (most reliable — overrides the fields below)</label>
+              <input type="text" id="t_vin" placeholder="17-char VIN (optional)">
+              <p class="hint" style="margin-bottom:14px;">If a VIN is filled in, it's used. Otherwise it looks up by year / make / model / trim.</p>
               <div class="row">
                 <div><label for="t_year">Year</label><input type="text" id="t_year" placeholder="2025" oninput="t_syncTitle()"></div>
                 <div><label for="t_make">Make</label><input type="text" id="t_make" placeholder="Mercedes-Benz" oninput="t_syncTitle()"></div>
@@ -1661,12 +1664,13 @@
     $('t_adPhone').textContent = `Text ${$('t_phone').value}`;
     $('t_adFine').innerHTML = boldify($('t_fine').value);
   }
-  function vdbFetch(year, make, model, trim, skipTrim) {
+  function vdbFetch(year, make, model, trim, skipTrim, vin) {
     return fetch('/vdb-image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year, make, model, trim, skip_trim: !!skipTrim }),
+      body: JSON.stringify({ vin: vin || '', year, make, model, trim, skip_trim: !!skipTrim }),
     }).then(r => r.json());
   }
+  const vdbMsg = d => (d.vdb_message ? ` — VDB(${d.vdb_status}): ${d.vdb_message}` : '') + (d.requested ? `  [${d.requested}]` : '');
   // trim-not-found dialog -> resolves {choice:'base'|'skip', all:bool}
   let _trimResolve = null;
   function askTrim(label, isBulk) {
@@ -1686,22 +1690,23 @@
 
   async function vdbGenerate(opts) {
     opts = opts || {};
+    const vin = $('t_vin').value.trim();
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
-    if (!(year && make && model)) { setVdb('Enter year, make, and model.', 'error'); return; }
-    if (!t_titleEdited) $('t_title').value = t_vehName();
+    if (!vin && !(year && make && model)) { setVdb('Enter a VIN, or year/make/model.', 'error'); return; }
+    if (!t_titleEdited && !vin) $('t_title').value = t_vehName();
     t_render();
     $('vdbBtn').disabled = true;
     setVdb('Looking up the factory photo…', 'active');
     try {
-      let d = await vdbFetch(year, make, model, trim, opts.skipTrim);
+      let d = await vdbFetch(year, make, model, trim, opts.skipTrim, vin);
       if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return; }
       if (d.found === false) {
         if (d.trim_not_found) {
           const ans = await askTrim(`${year} ${make} ${model} ${trim}`, false);
           if (ans.choice !== 'base') { setVdb('Skipped.', ''); return; }
-          d = await vdbFetch(year, make, model, trim, true);
-          if (d.error || d.found === false) { setVdb('No factory photo for the base model either.', 'error'); return; }
-        } else { setVdb('No factory photo found for that vehicle.', 'error'); return; }
+          d = await vdbFetch(year, make, model, trim, true, vin);
+          if (d.error || d.found === false) { setVdb('No factory photo for the base model either.' + vdbMsg(d), 'error'); return; }
+        } else { setVdb('No factory photo found.' + vdbMsg(d), 'error'); return; }
       }
       let url = d.image_data;
       if ($('t_removeBg').checked && window.__removeBg) {
