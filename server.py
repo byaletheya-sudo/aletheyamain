@@ -392,12 +392,18 @@ def caption():
 
 
 def vdb_label(url):
-    """Turn a photo URL into a readable color/photo label (manufacturer-agnostic)."""
+    """Turn a photo URL into a readable color label (manufacturer-agnostic).
+    Some makes (e.g. Mercedes) name the file by color — 'selenite-grey.jpg' —
+    while others (e.g. BMW) use an opaque code — 'ext-34305F3031.jpg'. Return a
+    clean name when there is one, else '' so the caller can number it instead."""
     seg = url.rstrip("/").split("/")[-1]
-    seg = re.sub(r"\.\w+$", "", seg)
-    seg = re.sub(r"^manufaktur[-_]", "", seg)
+    seg = re.sub(r"\.\w+$", "", seg)                          # drop extension
+    seg = re.sub(r"^manufaktur[-_]", "", seg, flags=re.I)     # MB prefix
     seg = seg.replace("-", " ").replace("_", " ").strip()
-    return seg.title() if seg else "Photo"
+    seg = re.sub(r"^(ext(erior)?|int(erior)?)\s+", "", seg, flags=re.I).strip()  # drop ext/int tag
+    if not seg or re.search(r"\d{3,}", seg):                  # code-like -> not a real name
+        return ""
+    return seg.title()
 
 
 # --- forgiving make/model resolution (the catalog wants exact strings) ---
@@ -663,7 +669,7 @@ def vdb_image():
         """Build the success payload (proxying the first photo) from a fetch result."""
         photos, ext, col, body, code, raw, path = res
         img_url = photos[0]
-        options = [{"url": u, "label": vdb_label(u)} for u in photos]
+        options = [{"url": u, "label": (vdb_label(u) or f"Color {i + 1}")} for i, u in enumerate(photos)]
         ireq = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(ireq, timeout=30) as iresp:
             ctype = iresp.headers.get("Content-Type", "image/jpeg")
