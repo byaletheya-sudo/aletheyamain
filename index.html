@@ -107,6 +107,22 @@
   @keyframes fieldIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
   .field-anim { animation: fieldIn .24s ease; }
   .fld-dim label { color: #5f656e; }   /* secondary finance fields */
+  /* badge preset chips */
+  .badge-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+  .chip { padding: 5px 11px; font-size: 0.74rem; font-weight: 600; border-radius: 999px; cursor: pointer; color: #aab1bc; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); transition: background .15s, color .15s, border-color .15s; }
+  .chip:hover { color: #eaeef4; background: rgba(120,150,200,0.14); border-color: rgba(140,170,220,0.3); }
+  /* smart bulk grid */
+  .bulk-row { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 10px; background: rgba(255,255,255,0.018); border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px; }
+  .bulk-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .bulk-line { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bulk-line input, .bulk-line select { padding: 6px 8px; font-size: 0.78rem; border-radius: 7px; flex: 1 1 64px; min-width: 0; }
+  .bulk-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .bulk-dl { padding: 8px 13px; background: rgba(255,255,255,0.06); color: #e6e7ea; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; font-size: 1rem; }
+  .bulk-dl:hover { background: rgba(120,150,200,0.18); }
+  .bulk-dot { width: 9px; height: 9px; border-radius: 50%; background: #3a3f48; }
+  .bulk-dot.loading { background: #ffd166; animation: btnpulse 1s infinite; }
+  .bulk-dot.done { background: #4aff7b; }
+  .bulk-dot.error { background: #ff6b6b; }
   .ph-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .ph-thumb { position: relative; width: 94px; height: 64px; border-radius: 9px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; transition: border-color .15s, transform .1s; }
   .ph-thumb:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
@@ -700,6 +716,7 @@
               </div>
               <label for="t_badge">Badge</label>
               <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
+              <div class="badge-chips" id="t_badgeChips"></div>
               <label class="toggle" style="margin-top:10px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"><span class="tg-track"></span> Show badge pill</label>
             </div>
 
@@ -724,7 +741,7 @@
             </div>
 
             <div class="panel">
-              <h2>Contact &amp; Disclaimer <span style="font-weight:400;opacity:.6;font-size:.8rem;">(fixed — triple-click to edit)</span></h2>
+              <h2>Contact &amp; Disclaimer <span style="font-weight:400;opacity:.6;font-size:.8rem;">(fixed)</span></h2>
               <label for="t_phone">Phone</label>
               <input type="text" id="t_phone" value="(818) 873 - 3697" readonly style="opacity:.7;" onclick="t_tripleUnlock(this, event)" oninput="t_render()">
               <label for="t_fine">Fine print</label>
@@ -742,25 +759,25 @@
 
             <div id="t_bulkPanels" style="display:none;">
             <div class="panel">
-              <h2>Bulk Import (one ad per line)</h2>
-              <p class="hint" style="margin-bottom:10px;">
-                Columns, separated by <b>Tab</b> or <b>|</b>:<br>
-                <code style="color:#7fb6ff;">Year | Make | Model | Trim | Per&nbsp;month | Due&nbsp;at&nbsp;signing | Term | Body&nbsp;style | Badge</code><br>
-                Year/Make/Model required; Trim optional. Prices accept $/commas/units. Badge per-row (blank = none).
-                Photos come from CarsXE (transparent) per row.
-              </p>
-              <textarea id="t_bulkInput" oninput="t_bulkDone.clear()" style="min-height:140px;" placeholder="2025 | Mercedes-Benz | GLC 300 | 4MATIC SUV | 799 | 3,500 | 24 | SUV | Loaner Special
-2025 | BMW | X5 | xDrive40i | 899 | 4,000 | 36 | SUV
-2025 | Toyota | Camry | XSE | 419 | 2,500 | 24 | Sedan | none"></textarea>
-              <div class="controls" style="margin-top:14px;">
-                <button class="btn-start" id="t_bulkBtn" onclick="t_runBulk()">Generate All &amp; Download</button>
-                <button class="btn-ghost" id="t_bulkStopBtn" onclick="t_bulkAbort=true" disabled>Stop</button>
-              </div>
-              <div class="bulk-progress" id="t_bulkProgress">
-                <div class="bp-head"><span class="bp-label" id="t_bpLabel">Starting…</span><span class="bp-pct" id="t_bpPct">0%</span></div>
-                <div class="bp-track"><div class="bp-fill" id="t_bpFill"></div></div>
+              <h2>Smart Bulk Import</h2>
+              <textarea id="t_bulkInput" style="min-height:120px;" placeholder="Paste anything — a list, an email, a spreadsheet dump… the AI figures out each vehicle &amp; the pricing.
+
+e.g.
+2025 BMW X5 xDrive40i — $899/mo, $4,000 down, 36mo, Loaner Special
+Mercedes C300 lease 599 a month 3500 das 24 months
+Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
+              <div class="controls" style="margin-top:12px;">
+                <button class="btn-start" id="t_parseBtn" onclick="t_bulkParse()">✨ Parse with AI</button>
               </div>
               <div class="status" id="t_bulkStatus"></div>
+            </div>
+            <div class="panel" id="t_bulkResultPanel" style="display:none;">
+              <h2>Review &amp; Download <span id="t_bulkCount" style="font-weight:400;opacity:.55;"></span></h2>
+              <div id="t_bulkGrid"></div>
+              <div class="controls" style="margin-top:14px;">
+                <button class="btn-start" id="t_dlAllBtn" onclick="t_bulkDownloadAll()">⬇ Download All</button>
+                <button class="btn-ghost" id="t_bulkStopBtn" onclick="t_bulkAbort=true" disabled>Stop</button>
+              </div>
             </div>
             </div><!-- /t_bulkPanels -->
           </div>
@@ -1794,7 +1811,24 @@
       if (vis) { el.classList.remove('field-anim'); void el.offsetWidth; el.classList.add('field-anim'); }   // micro-motion
     });
     $('t_dasLabel').textContent = type === 'onepay' ? 'One Pay total ($)' : 'Due at signing ($)';
+    t_renderBadgeChips();
     t_render();
+  }
+  // smart badge presets per deal type
+  const T_BADGES = {
+    lease: ['Loaner Special', 'End of Month', 'Lease Pull-Ahead', 'Demo Special', '1 of 1'],
+    finance: ['Low APR', '0% APR', 'End of Month', 'Year-End Clearance', '1 of 1'],
+    onepay: ['One Pay Special', 'Single Payment', 'Pre-Paid Lease', 'End of Month'],
+  };
+  function t_renderBadgeChips() {
+    const wrap = $('t_badgeChips'); if (!wrap) return;
+    wrap.innerHTML = '';
+    (T_BADGES[t_dealType] || []).forEach(b => {
+      const c = document.createElement('button');
+      c.type = 'button'; c.className = 'chip'; c.textContent = b;
+      c.onclick = () => { $('t_badge').value = b; $('t_showBadge').checked = true; t_render(); };
+      wrap.appendChild(c);
+    });
   }
 
   // ---- Background picker (thumbnails) ----
@@ -2007,98 +2041,112 @@
     } catch (e) { setT('Render failed: ' + e.message, 'error'); }
   }
 
-  // ---- TEST bulk import (CarsXE) ----
+  // ---- Smart Bulk Import (AI parse -> editable grid -> download) ----
+  let t_bulkRows = [];
   let t_bulkAbort = false;
-  let t_bulkDone = new Set();
-  let t_trimAllChoice = null;
-  const t_rowKey = r => JSON.stringify([r.year, r.make, r.model, r.trim, r.monthly, r.das, r.term, r.bodystyle, r.badge]);
   function setTB(t, type = '') { const e = $('t_bulkStatus'); e.textContent = t; e.className = 'status ' + type; }
-  function t_startProg(total, done) {
-    $('t_bulkProgress').style.display = 'block';
-    const pct = Math.round((done / total) * 100);
-    $('t_bpFill').style.width = pct + '%'; $('t_bpPct').textContent = pct + '%';
-    $('t_bpLabel').textContent = done ? `Resuming — ${done} of ${total} done` : `Starting — 0 of ${total}`;
+  async function t_bulkParse() {
+    const text = $('t_bulkInput').value.trim();
+    if (!text) { setTB('Paste some vehicles first.', 'error'); return; }
+    const btn = $('t_parseBtn');
+    btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Parsing…';
+    setTB('AI is reading your list…', 'active');
+    try {
+      const r = await fetch('/bulk-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      let d; try { d = await r.json(); } catch (_) { setTB('✕ Couldn’t reach the server.', 'error'); return; }
+      if (d.error) { setTB('✕ ' + d.error, 'error'); return; }
+      t_bulkRows = (d.rows || []).map(x => ({
+        year: x.year || '', make: x.make || '', model: x.model || '', trim: x.trim || '',
+        dealType: x.deal_type || 'lease', monthly: x.monthly || '', das: x.das || '', down: x.down || '',
+        apr: x.apr || '', term: x.term || '', badge: x.badge || '',
+      })).filter(row => row.make && row.model);
+      if (!t_bulkRows.length) { setTB('No vehicles found in that text.', 'error'); $('t_bulkResultPanel').style.display = 'none'; return; }
+      t_renderBulkGrid();
+      $('t_bulkResultPanel').style.display = '';
+      setTB('Found ' + t_bulkRows.length + ' vehicle(s) — review & download.', 'done');
+    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse with AI'; }
   }
-  function t_upProg(c, total, label) {
-    const pct = Math.round((c / total) * 100);
-    $('t_bpFill').style.width = pct + '%'; $('t_bpPct').textContent = pct + '%';
-    if (label) $('t_bpLabel').textContent = label;
+  function t_renderBulkGrid() {
+    const grid = $('t_bulkGrid'); grid.innerHTML = '';
+    $('t_bulkCount').textContent = '(' + t_bulkRows.length + ')';
+    t_bulkRows.forEach((row, i) => {
+      const card = document.createElement('div'); card.className = 'bulk-row';
+      const fin = row.dealType === 'finance', one = row.dealType === 'onepay';
+      const esc = s => (s || '').replace(/"/g, '&quot;');
+      const inp = (k, ph) => '<input type="text" data-i="' + i + '" data-k="' + k + '" value="' + esc(row[k]) + '" placeholder="' + ph + '" oninput="t_bulkEdit(this)">';
+      card.innerHTML =
+        '<div class="bulk-fields">' +
+          '<div class="bulk-line">' + inp('year', 'Year') + inp('make', 'Make') + inp('model', 'Model') + inp('trim', 'Trim') + '</div>' +
+          '<div class="bulk-line">' +
+            '<select data-i="' + i + '" data-k="dealType" onchange="t_bulkEdit(this)">' +
+              '<option value="lease"' + (row.dealType === 'lease' ? ' selected' : '') + '>Lease</option>' +
+              '<option value="finance"' + (fin ? ' selected' : '') + '>Finance</option>' +
+              '<option value="onepay"' + (one ? ' selected' : '') + '>One Pay</option>' +
+            '</select>' +
+            (one ? '' : inp('monthly', '$/mo')) +
+            inp(fin ? 'down' : 'das', one ? 'One-pay $' : (fin ? 'Down $' : 'DAS $')) +
+            inp('term', 'Term') +
+            (fin ? inp('apr', 'APR%') : '') +
+            inp('badge', 'Badge') +
+          '</div>' +
+        '</div>' +
+        '<div class="bulk-actions"><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
+      grid.appendChild(card);
+    });
   }
-  function t_finishProg(failures, aborted) {
-    $('t_bpFill').style.width = '100%'; $('t_bpPct').textContent = '100%';
-    $('t_bpLabel').textContent = aborted ? 'Stopped' : (failures ? 'Finished with some errors' : 'All done');
+  function t_bulkEdit(el) {
+    const i = +el.dataset.i, k = el.dataset.k;
+    t_bulkRows[i][k] = el.value;
+    if (k === 'dealType') t_renderBulkGrid();   // swap DAS / Down / APR fields for the new type
   }
-  function t_parseBulk(text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!lines.length) return [];
-    if (/^year\b/i.test(lines[0])) lines.shift();
-    return lines.map(line => {
-      const c = line.split(/\t|\|/).map(s => s.trim());
-      const r = { year: c[0] || '', make: c[1] || '', model: c[2] || '', trim: c[3] || '' };
-      if (c[4]) r.monthly = parseMoney(c[4]);
-      if (c[5]) r.das = parseMoney(c[5]);
-      if (c[6]) r.term = parseTermNum(c[6]);
-      if (c[7]) r.bodystyle = c[7];
-      if (c[8]) r.badge = BADGE_OFF.has(c[8].toLowerCase()) ? null : c[8];
-      return r;
-    }).filter(r => r.year && r.make && r.model);
-  }
-  function t_applyRow(r, def) {
-    $('t_year').value = r.year; $('t_make').value = r.make; $('t_model').value = r.model; $('t_trim').value = r.trim || '';
-    $('t_title').value = `${r.year} ${r.make} ${r.model}`;
-    $('t_monthly').value = r.monthly ?? def.monthly;
-    $('t_das').value = r.das ?? def.das;
-    $('t_term').value = r.term ?? def.term;
-    $('t_bodystyle').value = r.bodystyle ?? def.bodystyle;
-    if (r.badge) { $('t_badge').value = r.badge; $('t_showBadge').checked = true; }
+  function t_bulkDot(i, state) { const d = $('bdot-' + i); if (d) d.className = 'bulk-dot ' + (state || ''); }
+  function t_applyBulkRow(row) {
+    $('t_year').value = row.year || '2026';
+    $('t_make').value = row.make || '';
+    $('t_model').value = row.model || '';
+    $('t_trim').value = row.trim || '';
+    t_subEdited = false; $('t_bodystyle').value = t_cleanTrim(row.trim || '');
+    t_titleEdited = true;
+    $('t_title').value = [row.year, T_MAKE_SHORT[row.make] || row.make, row.model].map(s => (s || '').trim()).filter(Boolean).join(' ');
+    t_setDeal(row.dealType || 'lease');
+    $('t_monthly').value = row.monthly || '';
+    $('t_das').value = row.das || '';
+    $('t_down').value = row.down || '';
+    $('t_apr').value = row.apr || '';
+    $('t_term').value = row.term || '';
+    if (row.badge) { $('t_badge').value = row.badge; $('t_showBadge').checked = true; }
     else { $('t_showBadge').checked = false; }
     t_render();
   }
-  async function t_runBulk() {
-    const rows = t_parseBulk($('t_bulkInput').value);
-    if (!rows.length) { setTB('No rows — add at least one vehicle.', 'error'); return; }
-    t_setDeal('lease');   // bulk columns are lease-format (monthly | DAS | term)
-    const def = { monthly: $('t_monthly').value, das: $('t_das').value, term: $('t_term').value, bodystyle: $('t_bodystyle').value };
-    t_bulkAbort = false; t_trimAllChoice = null;
-    $('t_bulkBtn').disabled = true; $('vdbBtn').disabled = true; $('t_bulkStopBtn').disabled = false;
-    setTB('', '');
-    const already = rows.filter(r => t_bulkDone.has(t_rowKey(r))).length;
-    t_startProg(rows.length, already);
-    let done = 0, skipped = 0; const failures = []; let fatal = false;
-    for (let i = 0; i < rows.length; i++) {
+  async function t_bulkDownloadOne(i) {
+    const row = t_bulkRows[i];
+    if (!(row.make && row.model)) { t_bulkDot(i, 'error'); return false; }
+    t_applyBulkRow(row); t_bulkDot(i, 'loading');
+    try {
+      const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: '' });
+      if (d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
+      await t_download();
+      t_bulkDot(i, 'done'); return true;
+    } catch (e) { t_bulkDot(i, 'error'); return false; }
+  }
+  async function t_bulkDownloadAll() {
+    if (!t_bulkRows.length) return;
+    t_bulkAbort = false; $('t_dlAllBtn').disabled = true; $('vdbBtn').disabled = true; $('t_bulkStopBtn').disabled = false;
+    let ok = 0, fail = 0;
+    for (let i = 0; i < t_bulkRows.length; i++) {
       if (t_bulkAbort) break;
-      const r = rows[i], key = t_rowKey(r), name = `${r.year} ${r.make} ${r.model}`;
-      if (t_bulkDone.has(key)) { skipped++; t_upProg(i + 1, rows.length, `${i + 1}/${rows.length} — ${name} (done)`); continue; }
-      t_upProg(i, rows.length, `${i + 1} of ${rows.length} — ${name}`);
-      try {
-        t_applyRow(r, def);
-        const d = await t_fetchPhoto({ year: r.year, make: r.make, model: r.model, trim: r.trim, color: '' });
-        if (d.error) { failures.push({ v: name, reason: d.error }); if (d.error.toLowerCase().includes('key')) { fatal = true; break; } t_upProg(i + 1, rows.length); await sleep(200); continue; }
-        if (d.found === false || !d.image_data) { failures.push({ v: name, reason: d.message || 'no photo found' }); t_upProg(i + 1, rows.length); await sleep(150); continue; }
-        $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
-        await t_download();
-        t_bulkDone.add(key); done++; t_upProg(i + 1, rows.length); await sleep(500);
-      } catch (e) {
-        failures.push({ v: name, reason: 'Network: ' + e.message }); t_upProg(i + 1, rows.length); await sleep(200);
-      }
+      setTB('Downloading ' + (i + 1) + ' of ' + t_bulkRows.length + '…', 'active');
+      const r = await t_bulkDownloadOne(i); r ? ok++ : fail++;
+      await sleep(450);
     }
-    $('t_bulkBtn').disabled = false; $('vdbBtn').disabled = false; $('t_bulkStopBtn').disabled = true;
-    const incomplete = fatal || t_bulkAbort || failures.length > 0;
-    if (!incomplete) t_bulkDone.clear();
-    t_finishProg(failures.length, t_bulkAbort);
-    const finished = done + skipped;
-    let head;
-    if (fatal) head = `<span style="color:#ff6b6b;font-weight:700;">Stopped — API key problem.</span>`;
-    else if (t_bulkAbort) head = `<span style="color:#bbb;font-weight:700;">Stopped. ${finished}/${rows.length} done.</span>`;
-    else if (!failures.length) head = `<span style="color:#4aff7b;font-weight:700;">All ${rows.length} ads built &amp; downloaded!</span>`;
-    else head = `<span style="color:#ffd166;font-weight:700;">${finished}/${rows.length} done, ${failures.length} skipped/failed.</span>`;
-    const list = failures.length ? `<ul style="margin:8px 0 0 18px;color:#ffb4b4;font-size:.82rem;line-height:1.5;">`
-      + failures.map(f => `<li><b>${escapeHtml(f.v)}</b> — ${escapeHtml(f.reason)}</li>`).join('') + `</ul>` : '';
-    const hint = incomplete ? `<div style="color:#7b9cff;margin-top:8px;font-size:.82rem;">Click <b>Generate All &amp; Download</b> again to resume from the rest.</div>` : '';
-    $('t_bulkStatus').className = 'status'; $('t_bulkStatus').innerHTML = head + list + hint;
+    $('t_dlAllBtn').disabled = false; $('vdbBtn').disabled = false; $('t_bulkStopBtn').disabled = true;
+    setTB(t_bulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + '.'), fail ? 'error' : 'done');
   }
   t_fillYears();
   t_fillMakes();
+  t_renderBadgeChips();
   t_render();
 
   renderSold();

@@ -856,6 +856,49 @@ def carsxe_proxy():
         return jsonify({"error": str(e)}), 502
 
 
+@app.route("/bulk-parse", methods=["POST"])
+def bulk_parse():
+    """Smart bulk: an LLM turns ANY pasted text (list, email, spreadsheet dump)
+    into structured ad rows the user can review and download."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    text = (request.json or {}).get("text", "").strip()
+    if not text:
+        return jsonify({"error": "Paste some vehicles first."}), 400
+    schema = {
+        "type": "object", "additionalProperties": False, "required": ["rows"],
+        "properties": {"rows": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["year", "make", "model", "trim", "deal_type", "monthly", "das", "down", "apr", "term", "badge"],
+            "properties": {
+                "year": {"type": "string"}, "make": {"type": "string"}, "model": {"type": "string"},
+                "trim": {"type": "string"},
+                "deal_type": {"type": "string", "enum": ["lease", "finance", "onepay"]},
+                "monthly": {"type": "string"}, "das": {"type": "string"}, "down": {"type": "string"},
+                "apr": {"type": "string"}, "term": {"type": "string"}, "badge": {"type": "string"},
+            }}}},
+    }
+    system = (
+        "You extract vehicle lease/finance offers from messy pasted text into ad rows. "
+        "For each vehicle fill: year; make (FULL make, e.g. 'Mercedes-Benz', 'BMW'); model; trim; "
+        "deal_type (lease | finance | onepay); monthly (monthly payment); das (due-at-signing, lease); "
+        "down (down payment, finance); apr (finance APR percent); term (months); badge (promo label if any). "
+        "Use '' for anything not present. Numbers only — no $, no commas. If it says one-pay/single-pay, "
+        "deal_type=onepay and put the up-front total in das. Default deal_type=lease when unclear."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "bulk", "strict": True, "schema": schema}},
+        )
+        rows = json.loads(resp.choices[0].message.content).get("rows", [])
+        return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't parse that: {e}"}), 502
+
+
 @app.route("/remove-bg", methods=["POST"])
 def remove_bg():
     """Deterministic background removal for studio/factory photos. The catalog
