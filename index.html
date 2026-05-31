@@ -146,9 +146,23 @@
   .dh-chip:hover { color: #eaeef4; }
   .dh-chip.active { color: #eef2f8; background: rgba(120,150,200,0.20); border-color: rgba(140,170,220,0.4); }
   .dh-make { margin-bottom: 22px; }
-  .dh-make-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .dh-make-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.07); cursor: pointer; user-select: none; }
+  .dh-make-head:hover .dh-make-name { color: #fff; }
+  .dh-make-caret { color: #6b7280; font-size: 0.7rem; transition: transform .18s; align-self: center; }
+  .dh-make.collapsed .dh-make-caret { transform: rotate(-90deg); }
+  .dh-make.collapsed .dh-make-body { display: none; }
   .dh-make-name { font-weight: 800; font-size: 0.96rem; letter-spacing: 0.01em; color: #eef2f8; }
   .dh-make-meta { color: #6b7280; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .dh-sort { background: rgba(255,255,255,0.03); color: #c7ccd4; border: 1px solid rgba(255,255,255,0.09); border-radius: 9px; padding: 7px 10px; font-size: 0.78rem; cursor: pointer; }
+  .dh-sort:focus { outline: none; border-color: rgba(120,160,220,0.5); }
+  .dh-best { position: relative; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(74,255,123,0.10), rgba(74,158,255,0.05)); border: 1px solid rgba(74,255,123,0.30); box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+  .dh-best-tag { width: 100%; font-size: 0.64rem; letter-spacing: 0.09em; text-transform: uppercase; color: #4aff7b; font-weight: 800; }
+  .dh-best-main { flex: 1; min-width: 0; }
+  .dh-best-car { font-weight: 800; font-size: 1.05rem; color: #fff; }
+  .dh-best-meta { color: #8b919b; font-size: 0.78rem; margin-top: 2px; }
+  .dh-best-price { text-align: right; white-space: nowrap; }
+  .dh-best-price b { color: #4aff7b; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+  .dh-best-price small { display: block; color: #6b7280; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
   .dh-car { border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; margin-bottom: 8px; overflow: hidden; background: rgba(255,255,255,0.012); }
   .dh-car-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
   .dh-car-head:hover { background: rgba(255,255,255,0.022); }
@@ -878,18 +892,15 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
         <p class="subtitle">Paste any messy deal list — the AI reads it, applies your rules, and files it in the sheet. Everything you add is saved.</p>
         <div class="panel">
           <h2>Import &amp; Update Deals</h2>
-          <label for="dh_from">From — dealer / contact <span style="opacity:.55;font-weight:400;">(updates this person's existing deals; leaves others alone)</span></label>
-          <input type="text" id="dh_from" list="dh_dealerList" placeholder="e.g. Diana Santa Monica">
+          <label for="dh_input">Paste anything <span style="opacity:.55;font-weight:400;">— a flyer, a text, a list. The AI figures out the contact, the terms, and any adjustments you mention.</span></label>
           <datalist id="dh_dealerList"></datalist>
-          <label for="dh_input">Paste deals</label>
-          <textarea id="dh_input" style="min-height:120px;" placeholder="Paste a flyer's text, a message, a list… global terms + per-line deals.
+          <textarea id="dh_input" style="min-height:150px;" placeholder="Paste a flyer's text, a message, a list… the AI reads it all.
 
 e.g.
+From Diana Santa Monica — do pre-tax (÷1.0975), drop $15/mo
 $2000 Down · 36 Month · 10k Miles · $1000 BF
 26 K4 LXS — $289
 26 K5 GT Line — $389"></textarea>
-          <label for="dh_rules">Rules / adjustments <span style="opacity:.55;font-weight:400;">(optional, plain English)</span></label>
-          <input type="text" id="dh_rules" placeholder="e.g. do pre-tax (÷1.0975) and subtract $15 from each monthly">
           <div class="controls" style="margin-top:12px;">
             <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Sync</button>
           </div>
@@ -908,10 +919,16 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
             </div>
           </div>
           <div id="dh_byCar">
+            <div id="dh_bestDeal"></div>
             <div class="dh-filters">
               <input type="text" id="dh_search" placeholder="Search car…" oninput="dh_renderByCar()" style="max-width:240px;">
               <div class="dh-chips" id="dh_termChips"></div>
               <div class="dh-chips" id="dh_mileChips"></div>
+              <select id="dh_sort" class="dh-sort" onchange="dh_setSort(this.value)" title="Sort cars">
+                <option value="best">Cheapest first</option>
+                <option value="newest">Newest first</option>
+                <option value="dealers">Most dealers</option>
+              </select>
             </div>
             <div id="dh_carList"></div>
           </div>
@@ -2455,20 +2472,19 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   async function dh_parse() {
     const text = $('dh_input').value.trim();
     if (!text) { dh_status('Paste some deals first.', 'error'); return; }
-    const rules = $('dh_rules').value.trim();
-    const fromContact = $('dh_from').value.trim();
     const btn = $('dh_parseBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Reading…';
     dh_status('AI is reading the deals…', 'active');
     try {
-      const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, rules }) });
+      const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       let d; try { d = await r.json(); } catch (_) { dh_status('✕ Couldn’t reach the server.', 'error'); return; }
       if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
       const parsed = d.deals || [];
       if (!parsed.length) { dh_status('No deals found in that text.', 'error'); return; }
-      const { updated, added, removed } = dh_sync(parsed, fromContact);
+      const contact = (d.contact || '').trim();   // the AI pulls "who sent this" straight from the paste
+      const { updated, added, removed } = dh_sync(parsed, contact);
       dh_refresh(); dh_save();
       $('dh_input').value = '';
-      dh_status('Synced' + (fromContact ? (' for ' + fromContact) : '') + ': ' + updated + ' updated, ' + added + ' added' + (removed ? (', ' + removed + ' removed') : '') + ' ✓', 'done');
+      dh_status('Synced' + (contact ? (' for ' + contact) : '') + ': ' + updated + ' updated, ' + added + ' added' + (removed ? (', ' + removed + ' removed') : '') + ' ✓', 'done');
     } catch (e) { dh_status('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Sync'; }
   }
@@ -2481,12 +2497,28 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
   }
   // ---- By Car view ----
-  let dh_mode = 'car', dh_fTerm = '', dh_fMiles = '';
+  let dh_mode = 'car', dh_fTerm = '', dh_fMiles = '', dh_sort = 'best';
+  function dh_setSort(v) { dh_sort = v; dh_renderByCar(); }
   function dh_refresh() {
     $('dh_count').textContent = dh_deals.length ? ('(' + dh_deals.length + ' deals)') : '';
     const dl = $('dh_dealerList');
     if (dl) { const ds = [...new Set(dh_deals.map(d => (d.dealer || '').trim()).filter(Boolean))].sort(); dl.innerHTML = ds.map(x => '<option value="' + x.replace(/"/g, '&quot;') + '">').join(''); }
+    dh_renderBest();
     if (dh_mode === 'car') dh_renderByCar(); else dh_render();
+  }
+  function dh_renderBest() {
+    const el = $('dh_bestDeal'); if (!el) return;
+    const valid = dh_deals.filter(d => dh_zeroOf(d) != null);
+    if (!valid.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const best = valid.reduce((a, b) => dh_zeroOf(b) < dh_zeroOf(a) ? b : a);
+    const tm = [best.term ? best.term + 'mo' : '', best.miles ? (dh_num(best.miles) / 1000) + 'k mi' : ''].filter(Boolean).join(' / ');
+    const meta = [best.dealer, tm, dh_money(best.orig_mo || best.tax_in_mo) + '/mo' + (dh_num(best.das) ? ' + ' + dh_money(best.das) + ' DAS' : '')].filter(Boolean).join('  ·  ');
+    el.style.display = '';
+    el.innerHTML = `<div class="dh-best">
+      <div class="dh-best-tag">🏆 Best Deal of the Month</div>
+      <div class="dh-best-main"><div class="dh-best-car">${dh_carLabel(best)}</div><div class="dh-best-meta">${meta}</div></div>
+      <div class="dh-best-price"><b>${dh_money(dh_zeroOf(best))}</b><small>0-down / mo</small></div>
+    </div>`;
   }
   function dh_setMode(m) {
     dh_mode = m;
@@ -2578,12 +2610,25 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       </div>`;
     };
 
+    // sort cars inside each make by the chosen key (deals[0] is already the cheapest deal)
+    const dealersOf = g => new Set(g.deals.map(d => (d.dealer || '').trim().toLowerCase()).filter(Boolean)).size;
+    const newestOf = g => Math.max(...g.deals.map(d => { const t = new Date(dh_lastDate(d)).getTime(); return isFinite(t) ? t : 0; }), 0);
+    const sortCars = cars => {
+      if (dh_sort === 'newest') return cars.sort((a, b) => newestOf(b) - newestOf(a) || cardLabel(a).localeCompare(cardLabel(b)));
+      if (dh_sort === 'dealers') return cars.sort((a, b) => dealersOf(b) - dealersOf(a) || (dh_zeroOf(a.deals[0]) ?? 1e9) - (dh_zeroOf(b.deals[0]) ?? 1e9));
+      return cars.sort((a, b) => (dh_zeroOf(a.deals[0]) ?? 1e9) - (dh_zeroOf(b.deals[0]) ?? 1e9)); // best price
+    };
+
     el.innerHTML = makeNames.map(mk => {
-      const cars = byMake[mk].sort((a, b) => cardLabel(a).localeCompare(cardLabel(b)));
+      const cars = sortCars(byMake[mk]);
       const dealCount = cars.reduce((n, g) => n + g.deals.length, 0);
       return `<section class="dh-make">
-        <div class="dh-make-head"><span class="dh-make-name">${mk}</span><span class="dh-make-meta">${cars.length} car${cars.length > 1 ? 's' : ''} · ${dealCount} deal${dealCount > 1 ? 's' : ''}</span></div>
-        ${cars.map(carCard).join('')}
+        <div class="dh-make-head" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span class="dh-make-caret">▾</span>
+          <span class="dh-make-name">${mk}</span>
+          <span class="dh-make-meta">${cars.length} car${cars.length > 1 ? 's' : ''} · ${dealCount} deal${dealCount > 1 ? 's' : ''}</span>
+        </div>
+        <div class="dh-make-body">${cars.map(carCard).join('')}</div>
       </section>`;
     }).join('');
   }

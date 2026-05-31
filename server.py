@@ -869,15 +869,19 @@ def deal_parse():
         return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
     body = request.json or {}
     text = (body.get("text") or "").strip()
+    # rules used to be a separate field; now the AI also picks adjustments out of the
+    # paste itself. Still honored if a caller passes it explicitly.
     rules = (body.get("rules") or "").strip()
     if not text:
         return jsonify({"error": "Paste some deals first."}), 400
     props = {k: {"type": "string"} for k in DEAL_FIELDS}
     schema = {
-        "type": "object", "additionalProperties": False, "required": ["deals"],
-        "properties": {"deals": {"type": "array", "items": {
-            "type": "object", "additionalProperties": False,
-            "required": DEAL_FIELDS, "properties": props}}},
+        "type": "object", "additionalProperties": False, "required": ["deals", "contact"],
+        "properties": {
+            "contact": {"type": "string"},
+            "deals": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "required": DEAL_FIELDS, "properties": props}}},
     }
     system = (
         "You convert messy car lease/finance deal text into structured rows. For EACH "
@@ -886,16 +890,21 @@ def deal_parse():
         "tax_in_mo (monthly WITH tax, if that's how it's quoted), broker_fee, dealer, "
         "notes (loyalty / conquest / credit tier / tax handling / any other terms), and "
         "source (a short label for where the deal came from — dealer, flyer title, or sender).\n"
+        "ALSO output a top-level 'contact': the single person/broker/dealer this whole paste "
+        "is from (the sender updating their deals), e.g. 'Diana Santa Monica'. Look for a "
+        "name/sender at the top, a signature, or a 'from X' line. If you truly can't tell, "
+        "use ''. Put that same name in each row's 'dealer' field too.\n"
         "RULES:\n"
         "- A list usually has GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, "
-        "$1000 BF', or 'Diana Santa Monica, 1k fee included') that apply to EVERY line below "
-        "— copy them into each row.\n"
+        "$1000 BF') that apply to EVERY line below — copy them into each row.\n"
+        "- The paste may also contain plain-English ADJUSTMENT INSTRUCTIONS mixed in (e.g. "
+        "'do pre-tax ÷1.0975', 'subtract $15 from each monthly', 'add my $500 fee'). Detect "
+        "these, do the arithmetic on every affected row, and do NOT treat them as a vehicle.\n"
         "- Normalize shorthand to plain numbers (no $ or commas): '3k'->3000, '7.5k'->7500, "
         "'$51k MSRP'->51000, '$289'->289. '13/7500' means term=13, miles=7500.\n"
         "- A payment quoted 'tax inc'/'tax in' goes in tax_in_mo; otherwise orig_mo.\n"
-        "- After extracting, APPLY the user's adjustment rules below and do the arithmetic.\n"
         "- Leave a field '' if it isn't present.\n"
-        f"ADJUSTMENT RULES TO APPLY TO EVERY ROW: {rules or '(none)'}"
+        f"EXTRA ADJUSTMENT RULES (if any) TO APPLY TO EVERY ROW: {rules or '(none)'}"
     )
     try:
         client = OpenAI(api_key=API_KEY)
@@ -904,9 +913,9 @@ def deal_parse():
             messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
             response_format={"type": "json_schema", "json_schema": {"name": "deals", "strict": True, "schema": schema}},
         )
-        deals = json.loads(resp.choices[0].message.content).get("deals", [])
-        deals = [_derive_zero_down(d) for d in deals]
-        return jsonify({"deals": deals})
+        out = json.loads(resp.choices[0].message.content)
+        deals = [_derive_zero_down(d) for d in out.get("deals", [])]
+        return jsonify({"deals": deals, "contact": (out.get("contact") or "").strip()})
     except Exception as e:
         return jsonify({"error": f"Couldn't parse those deals: {e}"}), 502
 
