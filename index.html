@@ -873,18 +873,21 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
         <h1>Deal Hub</h1>
         <p class="subtitle">Paste any messy deal list — the AI reads it, applies your rules, and files it in the sheet. Everything you add is saved.</p>
         <div class="panel">
-          <h2>Import Deals</h2>
+          <h2>Import &amp; Update Deals</h2>
+          <label for="dh_from">From — dealer / contact <span style="opacity:.55;font-weight:400;">(updates this person's existing deals; leaves others alone)</span></label>
+          <input type="text" id="dh_from" list="dh_dealerList" placeholder="e.g. Diana Santa Monica">
+          <datalist id="dh_dealerList"></datalist>
           <label for="dh_input">Paste deals</label>
           <textarea id="dh_input" style="min-height:120px;" placeholder="Paste a flyer's text, a message, a list… global terms + per-line deals.
 
 e.g.
-$2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
+$2000 Down · 36 Month · 10k Miles · $1000 BF
 26 K4 LXS — $289
 26 K5 GT Line — $389"></textarea>
           <label for="dh_rules">Rules / adjustments <span style="opacity:.55;font-weight:400;">(optional, plain English)</span></label>
           <input type="text" id="dh_rules" placeholder="e.g. do pre-tax (÷1.0975) and subtract $15 from each monthly">
           <div class="controls" style="margin-top:12px;">
-            <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Add</button>
+            <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Sync</button>
           </div>
           <div class="status" id="dh_status"></div>
         </div>
@@ -2410,25 +2413,46 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
   function dh_addRow() { dh_deals.unshift({ _added: new Date().toLocaleDateString() }); dh_setMode('sheet'); dh_saveSoon(); }
   function dh_delRow(i) { dh_deals.splice(i, 1); dh_refresh(); dh_saveSoon(); }
   function dh_clear() { if (!dh_deals.length) return; if (!confirm('Clear all ' + dh_deals.length + ' deals?')) return; dh_deals = []; dh_refresh(); dh_save(); }
+  // Upsert by (contact + car): a dealer's new list updates their existing deals,
+  // adds new ones, and never touches another dealer's deals.
+  function dh_dealerNorm(s) { return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' '); }
+  function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d); }
+  function dh_sync(parsed, fromContact) {
+    const today = new Date().toLocaleDateString();
+    let updated = 0, added = 0;
+    parsed.forEach(p => {
+      if (fromContact) p.dealer = fromContact;                 // attribute the whole batch to the contact
+      if (!dh_dealerNorm(p.dealer)) { p._added = today; dh_deals.unshift(p); added++; return; }
+      const k = dh_dealerCarKey(p);
+      const idx = dh_deals.findIndex(d => dh_dealerCarKey(d) === k);
+      if (idx >= 0) {
+        const merged = { ...dh_deals[idx] };                   // refresh: new non-empty values win, empties keep old
+        Object.keys(p).forEach(key => { if (p[key] !== '' && p[key] != null) merged[key] = p[key]; });
+        merged._added = dh_deals[idx]._added || today; merged._updated = today;
+        dh_deals[idx] = merged; updated++;
+      } else { p._added = today; dh_deals.unshift(p); added++; }
+    });
+    return { updated, added };
+  }
   async function dh_parse() {
     const text = $('dh_input').value.trim();
     if (!text) { dh_status('Paste some deals first.', 'error'); return; }
     const rules = $('dh_rules').value.trim();
+    const fromContact = $('dh_from').value.trim();
     const btn = $('dh_parseBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Reading…';
     dh_status('AI is reading the deals…', 'active');
     try {
       const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, rules }) });
       let d; try { d = await r.json(); } catch (_) { dh_status('✕ Couldn’t reach the server.', 'error'); return; }
       if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
-      const today = new Date().toLocaleDateString();
-      const added = (d.deals || []).map(x => ({ ...x, _added: today }));
-      if (!added.length) { dh_status('No deals found in that text.', 'error'); return; }
-      dh_deals = added.concat(dh_deals);
+      const parsed = d.deals || [];
+      if (!parsed.length) { dh_status('No deals found in that text.', 'error'); return; }
+      const { updated, added } = dh_sync(parsed, fromContact);
       dh_refresh(); dh_save();
       $('dh_input').value = '';
-      dh_status('Added ' + added.length + ' deal(s) ✓', 'done');
+      dh_status('Synced' + (fromContact ? (' for ' + fromContact) : '') + ': ' + updated + ' updated, ' + added + ' added ✓', 'done');
     } catch (e) { dh_status('✕ ' + e.message, 'error'); }
-    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Add'; }
+    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Sync'; }
   }
   function dh_export() {
     if (!dh_deals.length) return;
@@ -2442,6 +2466,8 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
   let dh_mode = 'car', dh_fTerm = '', dh_fMiles = '';
   function dh_refresh() {
     $('dh_count').textContent = dh_deals.length ? ('(' + dh_deals.length + ' deals)') : '';
+    const dl = $('dh_dealerList');
+    if (dl) { const ds = [...new Set(dh_deals.map(d => (d.dealer || '').trim()).filter(Boolean))].sort(); dl.innerHTML = ds.map(x => '<option value="' + x.replace(/"/g, '&quot;') + '">').join(''); }
     if (dh_mode === 'car') dh_renderByCar(); else dh_render();
   }
   function dh_setMode(m) {
@@ -2462,13 +2488,14 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
   }
   function dh_carKey(d) { return ['year', 'make', 'model', 'trim'].map(k => (d[k] || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ')).join('|'); }
   function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
+  function dh_lastDate(d) { return d._updated || d._added || ''; }
   function dh_age(d) {
-    if (!d._added) return '';
-    const t = new Date(d._added); if (isNaN(t)) return '';
+    const s = dh_lastDate(d); if (!s) return '';
+    const t = new Date(s); if (isNaN(t)) return '';
     const days = Math.floor((Date.now() - t.getTime()) / 86400000);
     return days <= 0 ? 'today' : days === 1 ? '1d ago' : days + 'd ago';
   }
-  function dh_isStale(d) { const t = new Date(d._added); return !isNaN(t) && (Date.now() - t.getTime()) > 30 * 86400000; }
+  function dh_isStale(d) { const t = new Date(dh_lastDate(d)); return !isNaN(t) && (Date.now() - t.getTime()) > 30 * 86400000; }
   function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
   function dh_chips(elId, vals, active, onPick, suffix) {
     const w = $(elId); w.innerHTML = '';
