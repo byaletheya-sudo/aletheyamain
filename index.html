@@ -179,6 +179,8 @@
   .dh-note:hover .dh-note-pop { display: block; }
   .dh-deals-tbl td .dh-note-pop { left: 0; transform: none; }
   .dh-badge-fin { font-size: 0.58rem; padding: 1px 5px; border-radius: 5px; background: rgba(230,180,90,0.14); color: #f0c987; margin-left: 4px; }
+  .dh-tag.pkg { color: #c7b6e8; background: rgba(150,110,220,0.12); border-color: rgba(150,110,220,0.22); }
+  .dh-badge-pkg { font-size: 0.58rem; padding: 1px 5px; border-radius: 5px; background: rgba(150,110,220,0.14); color: #c7b6e8; margin-left: 4px; }
   .dh-car-best { text-align: right; white-space: nowrap; }
   .dh-car-best b { color: var(--dh-price); font-size: 1.06rem; font-weight: 800; }
   .dh-car-best small { display: block; color: #767c86; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -234,6 +236,21 @@
   .dh-cust-field input { flex: 1; }
   .dh-cust-note { color: #767c86; font-size: 0.74rem; line-height: 1.5; margin-top: 12px; }
   .dh-cust-note b { color: #c7ccd4; }
+  /* floating import agent */
+  .dh-agent-fab { position: fixed; right: 22px; bottom: 22px; z-index: 95; width: 58px; height: 58px; border-radius: 50%; border: 1px solid rgba(150,200,255,0.4); background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 58%, #1b3a86); color: #fff; font-size: 1.45rem; cursor: pointer; display: none; align-items: center; justify-content: center; box-shadow: 0 12px 32px rgba(40,90,200,0.5); animation: dhPulse 2.8s ease-out infinite; transition: transform .15s ease; }
+  .dh-agent-fab:hover { transform: scale(1.07); }
+  .dh-agent-orb { filter: drop-shadow(0 0 7px rgba(255,255,255,0.7)); }
+  @keyframes dhPulse { 0% { box-shadow: 0 12px 32px rgba(40,90,200,0.5), 0 0 0 0 rgba(90,166,255,0.45); } 70% { box-shadow: 0 12px 32px rgba(40,90,200,0.5), 0 0 0 15px rgba(90,166,255,0); } 100% { box-shadow: 0 12px 32px rgba(40,90,200,0.5), 0 0 0 0 rgba(90,166,255,0); } }
+  .dh-agent-panel { position: fixed; right: 22px; bottom: 22px; z-index: 96; width: min(440px, calc(100vw - 32px)); max-height: min(82vh, 660px); display: none; flex-direction: column; background: linear-gradient(180deg,#161719,#121214); border: 1px solid rgba(150,200,255,0.20); border-radius: 16px; box-shadow: 0 26px 70px rgba(0,0,0,0.62), 0 0 0 1px rgba(74,158,255,0.06); overflow: hidden; }
+  .dh-agent-panel.open { display: flex; animation: dhAgentIn .18s ease-out; }
+  @keyframes dhAgentIn { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+  .dh-agent-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(74,158,255,0.08), transparent); }
+  .dh-agent-title { font-weight: 700; font-size: 0.9rem; color: #eef1f5; letter-spacing: 0.01em; }
+  .dh-agent-x { background: none; border: none; color: #8a909b; font-size: 1rem; cursor: pointer; padding: 2px 7px; border-radius: 6px; }
+  .dh-agent-x:hover { color: #fff; background: rgba(255,255,255,0.06); }
+  .dh-agent-body { padding: 14px 16px 16px; overflow-y: auto; }
+  .dh-agent-body textarea { width: 100%; }
+  .dh-agent-hint { color: #8a909b; font-size: 0.78rem; line-height: 1.4; margin: 0 0 10px; }
   .dh-modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
   /* smart-search chip */
   .dh-search-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; color: #b9c2cc; background: rgba(150,200,255,0.08); border: 1px solid rgba(150,200,255,0.16); border-radius: 999px; padding: 4px 10px; }
@@ -973,26 +990,36 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     <section class="view" id="view-deals">
       <div class="view-inner" style="max-width:1400px;">
         <h1>Deal Hub</h1>
-        <p class="subtitle">Paste any messy deal list — the AI reads it, applies your rules, and files it in the sheet. Everything you add is saved.</p>
-        <div class="panel">
-          <h2>Import &amp; Update Deals</h2>
-          <label for="dh_input">Paste anything <span style="opacity:.55;font-weight:400;">— text, a flyer screenshot, or a PDF. The AI reads the contact, terms, and any adjustments.</span></label>
-          <textarea id="dh_input" style="min-height:150px;" placeholder="Paste a flyer's text, a message, a list… or drop a screenshot / PDF below.
+        <p class="subtitle">Every deal you collect — ranked by the best effective price per car. Tap the Nova orb to import or update.</p>
+
+        <!-- floating Nova import agent -->
+        <button type="button" id="dhAgentFab" class="dh-agent-fab" onclick="dh_toggleAgent()" title="Import &amp; update deals" aria-label="Import deals">
+          <span class="dh-agent-orb">✦</span>
+        </button>
+        <div id="dhAgentPanel" class="dh-agent-panel">
+          <div class="dh-agent-head">
+            <span class="dh-agent-title">✦ Nova · Import &amp; Update</span>
+            <button type="button" class="dh-agent-x" onclick="dh_toggleAgent()" aria-label="Close">✕</button>
+          </div>
+          <div class="dh-agent-body">
+            <p class="dh-agent-hint">Paste text, a flyer screenshot, or a PDF — I'll read the contact, terms, and any adjustments.</p>
+            <textarea id="dh_input" style="min-height:140px;" placeholder="Paste a flyer's text, a message, a list… or drop a screenshot / PDF below.
 
 e.g.
 From Diana Santa Monica — do pre-tax (÷1.0975), drop $15/mo
 $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 26 K4 LXS — $289
 26 K5 GT Line — $389"></textarea>
-          <div id="dh_drop" class="dh-drop" onclick="$('dh_file').click()">
-            <span>📎 Drop a flyer screenshot or PDF here, or <u>browse</u></span>
-            <input type="file" id="dh_file" accept="image/*,application/pdf" multiple style="display:none;" onchange="dh_onFiles(this.files); this.value='';">
+            <div id="dh_drop" class="dh-drop" onclick="$('dh_file').click()">
+              <span>📎 Drop a flyer screenshot or PDF here, or <u>browse</u></span>
+              <input type="file" id="dh_file" accept="image/*,application/pdf" multiple style="display:none;" onchange="dh_onFiles(this.files); this.value='';">
+            </div>
+            <div id="dh_attachChip" style="display:none;margin-top:8px;"></div>
+            <div class="controls" style="margin-top:12px;">
+              <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Sync</button>
+            </div>
+            <div class="status" id="dh_status"></div>
           </div>
-          <div id="dh_attachChip" style="display:none;margin-top:8px;"></div>
-          <div class="controls" style="margin-top:12px;">
-            <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Sync</button>
-          </div>
-          <div class="status" id="dh_status"></div>
         </div>
         <div class="panel">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
@@ -1729,6 +1756,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (typeof slideAllSegs === 'function') requestAnimationFrame(slideAllSegs);   // position seg thumbs once visible
     document.title = (VIEW_TITLE[name] || 'nova') + ' — nova.byAletheya';
     if (typeof dh_cmpBar === 'function') dh_cmpBar();        // float the compare tray only on the Deal Hub
+    if (typeof dh_agentSync === 'function') dh_agentSync();  // float the import orb only on the Deal Hub
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -2568,7 +2596,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     { k: '_added', label: 'Added', w: 78 },
     { k: 'active_from', label: 'Active From', w: 124, type: 'date' }, { k: 'active_to', label: 'Active To', w: 124, type: 'date' },
     { k: 'year', label: 'Year', w: 50 }, { k: 'make', label: 'Make', w: 78 },
-    { k: 'model', label: 'Model', w: 90 }, { k: 'trim', label: 'Trim', w: 110 }, { k: 'msrp', label: 'MSRP', w: 66 },
+    { k: 'model', label: 'Model', w: 90 }, { k: 'trim', label: 'Trim', w: 110 }, { k: 'package', label: 'Package', w: 120 }, { k: 'msrp', label: 'MSRP', w: 66 },
     { k: 'deal_type', label: 'Type', w: 64 }, { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: 'Effective', w: 72 },
     { k: 'das', label: 'DAS/Down', w: 70 }, { k: 'apr', label: 'APR', w: 48 },
     { k: 'term', label: 'Term', w: 48 }, { k: 'miles', label: 'Miles', w: 56 }, { k: 'tax_in_mo', label: 'Tax Mo', w: 60 },
@@ -2659,7 +2687,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_dealerNorm(s) { return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' '); }
   // include the special tag so a loaner / one-off stays a STANDALONE deal and never merges with the normal one
   function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d) + (d.special ? '||s:' + dh_dealerNorm(d.special) : ''); }
-  const DH_DIFF_FIELDS = ['orig_mo', 'tax_in_mo', 'das', 'apr', 'term', 'miles', 'broker_fee', 'msrp', 'deal_type', 'special', 'notes'];   // the active-window refresh is mechanical, not shown as a "change"
+  const DH_DIFF_FIELDS = ['orig_mo', 'tax_in_mo', 'das', 'apr', 'term', 'miles', 'broker_fee', 'msrp', 'deal_type', 'special', 'package', 'notes'];   // the active-window refresh is mechanical, not shown as a "change"
   // build a preview of what an import will do (add vs update + the field diffs) WITHOUT applying it.
   // A contact's paste UPDATES the cars it mentions and ADDS new ones; it never touches their other cars.
   function dh_planSync(parsed, contact) {
@@ -2687,7 +2715,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dh_syncPlans = plans;
     const adds = plans.filter(p => p.type === 'add').length, ups = plans.length - adds;
     $('dhSyncSummary').textContent = adds + ' new · ' + ups + ' updated' + (contact ? ' · ' + contact : '');
-    const fmtV = (f, v) => ['notes', 'special', 'deal_type', 'active_from', 'active_to'].includes(f) ? (v || '(none)') : (dh_money(v) || v || '—');
+    const fmtV = (f, v) => ['notes', 'special', 'deal_type', 'package', 'active_from', 'active_to'].includes(f) ? (v || '(none)') : (dh_money(v) || v || '—');
     $('dhSyncList').innerHTML = plans.map((p, i) => {
       if (p.type === 'add') {
         const d = p.deal, finD = dh_isFinance(d);
@@ -2717,7 +2745,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // apply a plain-English instruction ("decrease Diana's payments $15", "9.75% tax included")
   // to deals ALREADY saved — find & edit, never delete.
-  const DH_FIELD_LABEL = { orig_mo: 'Monthly', tax_in_mo: 'Tax-in monthly', das: 'Down / DAS', broker_fee: 'Broker fee', term: 'Term', miles: 'Miles/yr', msrp: 'MSRP', apr: 'APR', notes: 'Notes' };
+  const DH_FIELD_LABEL = { orig_mo: 'Monthly', tax_in_mo: 'Tax-in monthly', das: 'Down / DAS', broker_fee: 'Broker fee', term: 'Term', miles: 'Miles/yr', msrp: 'MSRP', apr: 'APR', package: 'Package', notes: 'Notes' };
   const DH_ADJ_RAW = ['orig_mo', 'tax_in_mo', 'das', 'broker_fee', 'term', 'miles', 'msrp', 'apr'];
   function dh_numSigned(v) { const s = (v == null ? '' : String(v)).replace(/[^0-9.\-]/g, ''); return (s === '' || s === '-' || s === '.') ? null : parseFloat(s); }
   function dh_adjScopeLabel(adj) { const m = adj.match || {}; return [m.contact, [m.year, m.make, m.model, m.trim].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || 'all deals'; }
@@ -2877,6 +2905,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   let dh_mode = 'car', dh_sort = 'best', dh_showExpired = false, dh_searchKeys = null;
   const dh_compare = new Set();
   function dh_toggleExpired() { dh_showExpired = !dh_showExpired; dh_renderByCar(); }
+  // floating import agent: orb in the corner -> popup
+  function dh_agentSync() {
+    const fab = $('dhAgentFab'), p = $('dhAgentPanel'); if (!fab || !p) return;
+    const onDeals = $('view-deals') && getComputedStyle($('view-deals')).display !== 'none';
+    if (!onDeals) p.classList.remove('open');
+    fab.style.display = (onDeals && !p.classList.contains('open')) ? 'flex' : 'none';
+  }
+  function dh_toggleAgent() { const p = $('dhAgentPanel'); p.classList.toggle('open'); dh_agentSync(); if (p.classList.contains('open')) setTimeout(() => $('dh_input').focus(), 80); }
   // ---- natural-language smart search ----
   function dh_onSearchInput() { if (dh_searchKeys) { dh_searchKeys = null; $('dh_searchChip').style.display = 'none'; } dh_renderByCar(); }
   function dh_searchCandidates() {
@@ -3073,6 +3109,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const fin = dh_isFinance(best);
       const tags = [];
       if (fin) tags.push(`<span class="dh-tag fin">Finance</span>`);
+      if ((best.package || '').trim()) tags.push(`<span class="dh-tag pkg">${escapeHtml(best.package.trim())}</span>`);
       if (best.dealer) tags.push(`<button class="dh-tag lead" onclick="dh_openContact('${best.dealer.replace(/'/g, "\\'").replace(/</g, '&lt;')}', event)">${best.dealer}${dh_hasContactInfo(best.dealer) ? ' 📞' : ''}</button>`);
       const eff = dh_zeroOf(best); if (eff != null) tags.push(`<span class="dh-tag">${dh_money(eff)} eff</span>`);
       if (fin && dh_num(best.apr) != null) tags.push(`<span class="dh-tag">${dh_num(best.apr)}% APR</span>`);
@@ -3089,7 +3126,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         const fin = dh_isFinance(d);
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_noteIcon(d.notes)}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${(d.package || '').trim() ? ' <span class="dh-badge-pkg">' + escapeHtml(d.package.trim()) + '</span>' : ''}${dh_noteIcon(d.notes)}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
           <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
           <td><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;

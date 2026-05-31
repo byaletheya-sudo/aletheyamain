@@ -830,7 +830,7 @@ def bulk_parse():
 
 # ----------------------- Deal Hub -----------------------
 DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
-DEAL_FIELDS = ["year", "make", "model", "trim", "msrp", "orig_mo", "das", "term",
+DEAL_FIELDS = ["year", "make", "model", "trim", "package", "msrp", "orig_mo", "das", "term",
                "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source",
                "active_from", "active_to", "special", "deal_type", "apr"]
 
@@ -963,7 +963,8 @@ def deal_parse():
         "with no rate -> '9.75'; else '').\n"
         "  e.g. 'decrease all GLA 250 das by $1000' -> match:{model:'GLA 250'}, ops:[{field:'das',op:'add',value:'-1000'}].\n"
         "  e.g. 'lower Diana's monthlies $15' -> match:{contact:'Diana'}, ops:[{field:'monthly',op:'add',value:'-15'}].\n"
-        "For EACH vehicle (kind='deals') output: year, make, model, trim, msrp, orig_mo (base "
+        "For EACH vehicle (kind='deals') output: year, make, model, trim, package (equipment "
+        "PACKAGES / options — see rule below), msrp, orig_mo (base "
         "monthly payment), das (due at signing / cash to dealer), term (months), miles (annual "
         "mileage), tax_in_mo (monthly WITH tax, if quoted that way), broker_fee, dealer, notes "
         "(loyalty / conquest / credit tier / any other terms), source (short label for where it "
@@ -981,6 +982,12 @@ def deal_parse():
         "email for that contact appears anywhere in the text (else '').\n"
         "RULES:\n"
         "- If a vehicle's YEAR isn't stated, use '2026' (most of our cars are new leases).\n"
+        "- PACKAGES / OPTIONS are NOT part of the car. Keep equipment packages and options "
+        "('Convenience Package', 'Premium Package', 'Technology Package', 'Cold Weather Package', "
+        "'Shadowline', etc.) in 'package' and OUT of model and trim. model+trim identify the actual "
+        "vehicle; trim is the variant/trim level (e.g. 'M Sport', 'xDrive', 'GT-Line', 'Luxury'). "
+        "e.g. '2026 BMW 330i Convenience Package' -> make 'BMW', model '330i', trim '', package "
+        "'Convenience Package'.\n"
         + make_rule + date_rule +
         "- GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, $1000 BF') apply to EVERY "
         "line below — copy them into each row.\n"
