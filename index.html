@@ -361,16 +361,17 @@
   .rv { width: 1080px; height: 1350px; position: relative; overflow: hidden; display: flex; flex-direction: column;
         font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
         --rv-bg: radial-gradient(125% 90% at 50% 0%, #16243f, #0a0e17 70%); --rv-fg: #fff; --rv-muted: #aeb7c6; --rv-star: #ffc83d; --rv-accent: #4a9eff; --rv-line: rgba(255,255,255,0.12); }
-  .rv.theme-light { --rv-bg: #f4f6fa; --rv-fg: #11151c; --rv-muted: #5d6675; --rv-star: #f5a623; --rv-accent: #2563eb; --rv-line: rgba(0,0,0,0.1); }
   .rv.theme-brand { --rv-bg: linear-gradient(158deg, #1b3a86, #0c1830 78%); --rv-fg: #fff; --rv-muted: #b9c6e0; --rv-star: #ffd166; --rv-accent: #6db3ff; --rv-line: rgba(255,255,255,0.14); }
   .rv.theme-mono  { --rv-bg: linear-gradient(165deg, #1c1c1f, #050506 82%); --rv-fg: #fff; --rv-muted: #9aa0aa; --rv-star: #ffffff; --rv-accent: #c9a14a; --rv-line: rgba(255,255,255,0.12); }
   .rv { background: var(--rv-bg); color: var(--rv-fg); }
   .rv.fmt-story { height: 1920px; }
   .rv.fmt-story .rv-body { padding-top: 150px; }
-  .rv.fmt-story.layout-hero .rv-photo { height: 760px; }
+  .rv.fmt-story.layout-hero .rv-photo { height: 720px; }
   .rv.fmt-story.layout-hero .rv-body { padding-top: 70px; }
-  .rv-photo { display: none; }
-  .rv.layout-hero .rv-photo { display: block; height: 560px; flex: 0 0 auto; background-size: cover; background-position: center; background-color: #0a0e17; }
+  .rv-photo { display: none; position: relative; overflow: hidden; }
+  .rv.layout-hero .rv-photo { display: block; flex: 0 0 auto; height: 520px; margin: 46px 58px 0; border-radius: 28px; background: #0a0e17; cursor: grab; }
+  .rv-photo.dragging { cursor: grabbing; }
+  .rv-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-drag: none; }
   .rv-body { flex: 1; display: flex; flex-direction: column; padding: 88px 90px 44px; position: relative; min-height: 0; }
   .rv.layout-hero .rv-body { padding: 60px 90px 44px; }
   .rv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 44px; flex: 0 0 auto; }
@@ -383,7 +384,8 @@
   .rv-avatar { width: 96px; height: 96px; border-radius: 50%; background: var(--rv-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; flex: 0 0 auto; background-size: cover; background-position: center; }
   .rv-byname { font-size: 40px; font-weight: 800; }
   .rv-bysrc { font-size: 29px; color: var(--rv-muted); margin-top: 4px; }
-  .rv-foot { text-align: center; padding: 0 0 58px; font-size: 25px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--rv-muted); flex: 0 0 auto; }
+  .rv-foot { display: flex; align-items: center; justify-content: center; gap: 13px; padding: 0 0 58px; font-size: 30px; font-weight: 700; letter-spacing: 0.04em; color: var(--rv-fg); flex: 0 0 auto; }
+  .rv-ig { width: 34px; height: 34px; color: var(--rv-fg); flex: 0 0 auto; }
   /* form controls */
   .rv-starpick { display: flex; gap: 7px; font-size: 1.7rem; }
   .rv-starpick span { color: #3a3f49; cursor: pointer; transition: color .1s, transform .1s; }
@@ -1181,6 +1183,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                 <input type="file" id="rv_file" accept="image/*" style="display:none;" onchange="rv_onPhoto(this.files[0]); this.value='';">
               </div>
               <div id="rv_photoBar" style="display:none;margin-top:8px;"></div>
+              <div id="rv_cropCtl" style="display:none;margin-top:10px;">
+                <label style="font-size:.72rem;">Zoom — then drag the photo in the preview to reposition</label>
+                <input type="range" id="rv_zoom" class="dh-cust-slider" min="1" max="2.6" step="0.02" value="1" oninput="rv_setZoom(this.value)">
+                <button class="btn-ghost" onclick="rv_resetCrop()">Reset photo position</button>
+              </div>
               <label style="margin-top:14px;">Format</label>
               <div class="seg" id="rv_fmtSeg">
                 <button type="button" class="seg-btn active" onclick="rv_setFormat('post')">4:5 Post</button>
@@ -1213,7 +1220,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="rv-stage">
               <div class="rv-scaler" id="rvScaler">
                 <div class="rv layout-card theme-dark" id="rv">
-                  <div class="rv-photo" id="rv_photo"></div>
+                  <div class="rv-photo" id="rv_photo"><img id="rv_photoImg" alt="" crossorigin="anonymous"></div>
                   <div class="rv-body">
                     <div class="rv-top">
                       <img class="rv-logo" src="logo.png" alt="Nova" crossorigin="anonymous">
@@ -1230,7 +1237,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                       </div>
                     </div>
                   </div>
-                  <div class="rv-foot">Nova Auto Pros</div>
+                  <div class="rv-foot"><svg class="rv-ig" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor" stroke="none"/></svg>@NovAutoUSA</div>
                 </div>
               </div>
             </div>
@@ -3490,11 +3497,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
   // ===================== REVIEW GENERATOR =====================
   let rv_rating = 5, rv_layout = 'card', rv_theme = 'dark', rv_photoData = null, rv_format = 'post';
+  let rv_photoZoom = 1, rv_photoX = 0, rv_photoY = 0;
+  function rv_applyPhoto() { const img = $('rv_photoImg'); if (img) img.style.transform = `translate(${rv_photoX}px, ${rv_photoY}px) scale(${rv_photoZoom})`; }
+  function rv_setZoom(v) { rv_photoZoom = parseFloat(v) || 1; rv_applyPhoto(); }
+  function rv_resetCrop() { rv_photoZoom = 1; rv_photoX = 0; rv_photoY = 0; const z = $('rv_zoom'); if (z) z.value = 1; rv_applyPhoto(); }
   function rv_h() { return rv_format === 'story' ? 1920 : 1350; }
   function rv_setFormat(f) { rv_format = f; const b = $('rv_fmtSeg').querySelectorAll('.seg-btn'); b[0].classList.toggle('active', f === 'post'); b[1].classList.toggle('active', f === 'story'); if (typeof slideSeg === 'function') slideSeg($('rv_fmtSeg')); const cp = $('rv_captionPanel'); if (cp) cp.style.display = f === 'post' ? '' : 'none'; fitPreviews(); rv_render(); }
   const RV_THEMES = [
     { k: 'dark', bg: 'radial-gradient(125% 90% at 50% 0%, #16243f, #0a0e17 70%)' },
-    { k: 'light', bg: '#f4f6fa' },
     { k: 'brand', bg: 'linear-gradient(158deg,#1b3a86,#0c1830)' },
     { k: 'mono', bg: 'linear-gradient(165deg,#1c1c1f,#050506)' },
   ];
@@ -3510,7 +3520,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     RV_THEMES.forEach(t => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rv-theme' + (t.k === rv_theme ? ' active' : ''); b.style.background = t.bg; b.title = t.k; b.onclick = () => { rv_theme = t.k; rv_renderThemes(); rv_render(); }; w.appendChild(b); });
   }
   function rv_setLayout(l) { rv_layout = l; const b = $('rv_layoutSeg').querySelectorAll('.seg-btn'); b[0].classList.toggle('active', l === 'card'); b[1].classList.toggle('active', l === 'hero'); if (typeof slideSeg === 'function') slideSeg($('rv_layoutSeg')); rv_render(); }
-  function rv_onPhoto(file) { if (!file) return; const r = new FileReader(); r.onload = () => { rv_photoData = r.result; rv_renderPhotoBar(); if (rv_layout === 'card') rv_setLayout('hero'); else rv_render(); }; r.readAsDataURL(file); }
+  function rv_onPhoto(file) { if (!file) return; const r = new FileReader(); r.onload = () => { rv_photoData = r.result; rv_resetCrop(); rv_renderPhotoBar(); if (rv_layout === 'card') rv_setLayout('hero'); else rv_render(); }; r.readAsDataURL(file); }
   function rv_renderPhotoBar() { const el = $('rv_photoBar'); if (!el) return; if (!rv_photoData) { el.style.display = 'none'; el.innerHTML = ''; return; } el.style.display = ''; el.innerHTML = '<span class="dh-search-chip">📷 photo attached <button onclick="rv_clearPhoto()" title="Remove">✕</button></span>'; }
   function rv_clearPhoto() { rv_photoData = null; rv_renderPhotoBar(); rv_render(); }
   function rv_fitText(el, base, min) { el.style.fontSize = base + 'px'; if (!el.clientHeight) return; let s = base; while (el.scrollHeight > el.clientHeight && s > min) { s -= 2; el.style.fontSize = s + 'px'; } }
@@ -3526,7 +3536,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const av = $('rv_avatar');
     if (rv_photoData && rv_layout === 'card') { av.style.backgroundImage = 'url(' + rv_photoData + ')'; av.textContent = ''; }
     else { av.style.backgroundImage = ''; av.textContent = rv_initials(name); }
-    $('rv_photo').style.backgroundImage = (rv_photoData && rv_layout === 'hero') ? 'url(' + rv_photoData + ')' : '';
+    const img = $('rv_photoImg'), heroPhoto = rv_photoData && rv_layout === 'hero';
+    if (heroPhoto) { if (img.getAttribute('src') !== rv_photoData) img.src = rv_photoData; } else { img.removeAttribute('src'); }
+    rv_applyPhoto();
+    const crop = $('rv_cropCtl'); if (crop) crop.style.display = heroPhoto ? '' : 'none';
     rv_fitText($('rv_revtext'), 52, 26);
   }
   async function rv_smartFill() {
@@ -3588,6 +3601,20 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
   renderSold();
   rv_renderStarPick(); rv_renderThemes(); rv_render();
+  (function rvWirePhotoDrag() {                              // drag the hero photo to reposition it in the frame
+    const ph = $('rv_photo'); if (!ph) return;
+    let dragging = false, lastX = 0, lastY = 0;
+    const scaleOf = () => { const st = document.querySelector('#view-review .rv-stage'); return st && st.clientWidth ? st.clientWidth / 1080 : 1; };
+    const start = (x, y) => { if (!rv_photoData || rv_layout !== 'hero') return; dragging = true; lastX = x; lastY = y; ph.classList.add('dragging'); };
+    const move = (x, y) => { if (!dragging) return; const s = scaleOf(); rv_photoX += (x - lastX) / s; rv_photoY += (y - lastY) / s; lastX = x; lastY = y; rv_applyPhoto(); };
+    const end = () => { dragging = false; ph.classList.remove('dragging'); };
+    ph.addEventListener('mousedown', e => { e.preventDefault(); start(e.clientX, e.clientY); });
+    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    window.addEventListener('mouseup', end);
+    ph.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    ph.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+    ph.addEventListener('touchend', end);
+  })();
   // open the view that matches the URL the page was loaded at (deep-link support).
   // check the restricted-unlock state first so an already-unlocked deep link doesn't prompt.
   checkUnlock().then(() => {
