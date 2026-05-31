@@ -365,6 +365,10 @@
   .rv.theme-brand { --rv-bg: linear-gradient(158deg, #1b3a86, #0c1830 78%); --rv-fg: #fff; --rv-muted: #b9c6e0; --rv-star: #ffd166; --rv-accent: #6db3ff; --rv-line: rgba(255,255,255,0.14); }
   .rv.theme-mono  { --rv-bg: linear-gradient(165deg, #1c1c1f, #050506 82%); --rv-fg: #fff; --rv-muted: #9aa0aa; --rv-star: #ffffff; --rv-accent: #c9a14a; --rv-line: rgba(255,255,255,0.12); }
   .rv { background: var(--rv-bg); color: var(--rv-fg); }
+  .rv.fmt-story { height: 1920px; }
+  .rv.fmt-story .rv-body { padding-top: 150px; }
+  .rv.fmt-story.layout-hero .rv-photo { height: 760px; }
+  .rv.fmt-story.layout-hero .rv-body { padding-top: 70px; }
   .rv-photo { display: none; }
   .rv.layout-hero .rv-photo { display: block; height: 560px; flex: 0 0 auto; background-size: cover; background-position: center; background-color: #0a0e17; }
   .rv-body { flex: 1; display: flex; flex-direction: column; padding: 88px 90px 44px; position: relative; min-height: 0; }
@@ -1177,6 +1181,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                 <input type="file" id="rv_file" accept="image/*" style="display:none;" onchange="rv_onPhoto(this.files[0]); this.value='';">
               </div>
               <div id="rv_photoBar" style="display:none;margin-top:8px;"></div>
+              <label style="margin-top:14px;">Format</label>
+              <div class="seg" id="rv_fmtSeg">
+                <button type="button" class="seg-btn active" onclick="rv_setFormat('post')">4:5 Post</button>
+                <button type="button" class="seg-btn" onclick="rv_setFormat('story')">Story 9:16</button>
+              </div>
               <label style="margin-top:14px;">Layout</label>
               <div class="seg" id="rv_layoutSeg">
                 <button type="button" class="seg-btn active" onclick="rv_setLayout('card')">Quote Card</button>
@@ -1394,7 +1403,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     fitStageEl(document.querySelector('#view-ads .ad-stage'), 'adScaler', 1920);
     fitStageEl(document.querySelector('#view-sold .sp-stage'), 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
     fitStageEl(document.querySelector('#view-test .ad-stage'), 't_adScaler', 1920);
-    fitStageEl(document.querySelector('#view-review .rv-stage'), 'rvScaler', 1350);
+    fitStageEl(document.querySelector('#view-review .rv-stage'), 'rvScaler', (typeof rv_format !== 'undefined' && rv_format === 'story') ? 1920 : 1350);
   }
   window.addEventListener('resize', fitPreviews);
 
@@ -3471,7 +3480,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   })();
 
   // ===================== REVIEW GENERATOR =====================
-  let rv_rating = 5, rv_layout = 'card', rv_theme = 'dark', rv_photoData = null;
+  let rv_rating = 5, rv_layout = 'card', rv_theme = 'dark', rv_photoData = null, rv_format = 'post';
+  function rv_h() { return rv_format === 'story' ? 1920 : 1350; }
+  function rv_setFormat(f) { rv_format = f; const b = $('rv_fmtSeg').querySelectorAll('.seg-btn'); b[0].classList.toggle('active', f === 'post'); b[1].classList.toggle('active', f === 'story'); if (typeof slideSeg === 'function') slideSeg($('rv_fmtSeg')); fitPreviews(); rv_render(); }
   const RV_THEMES = [
     { k: 'dark', bg: 'radial-gradient(125% 90% at 50% 0%, #16243f, #0a0e17 70%)' },
     { k: 'light', bg: '#f4f6fa' },
@@ -3496,7 +3507,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function rv_fitText(el, base, min) { el.style.fontSize = base + 'px'; if (!el.clientHeight) return; let s = base; while (el.scrollHeight > el.clientHeight && s > min) { s -= 2; el.style.fontSize = s + 'px'; } }
   function rv_render() {
     const rv = $('rv'); if (!rv) return;
-    rv.className = 'rv layout-' + rv_layout + ' theme-' + rv_theme;
+    rv.className = 'rv layout-' + rv_layout + ' theme-' + rv_theme + ' fmt-' + rv_format;
     $('rv_stars').innerHTML = '★'.repeat(rv_rating) + (rv_rating < 5 ? '<span style="opacity:.22">' + '★'.repeat(5 - rv_rating) + '</span>' : '');
     const name = ($('rv_name').value || '').trim();
     const src = $('rv_source').value, veh = ($('rv_vehicle').value || '').trim();
@@ -3528,16 +3539,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     } catch (e) { rv_setFillStatus('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Auto-fill from review'; }
   }
-  function rv_filename() { const n = (($('rv_name').value || 'review').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')) || 'review'; return 'nova_review_' + n + '.png'; }
+  function rv_filename() { const n = (($('rv_name').value || 'review').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')) || 'review'; return 'nova_review_' + n + (rv_format === 'story' ? '_story' : '_4x5') + '.png'; }
   async function rv_download() {
     rv_setStatus('Rendering…', 'active');
     try {
       await document.fonts.ready;
+      const h = rv_h();
       const scaler = $('rvScaler'), stage = scaler.parentElement;
       const prev = { t: scaler.style.transform, pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
       scaler.style.transform = 'none';
-      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = '1350px';
-      const canvas = await html2canvas($('rv'), { width: 1080, height: 1350, scale: 2, backgroundColor: null, useCORS: true, logging: false });
+      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = h + 'px';
+      const canvas = await html2canvas($('rv'), { width: 1080, height: h, scale: 2, backgroundColor: null, useCORS: true, logging: false });
       stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
       const a = document.createElement('a'); a.download = rv_filename(); a.href = canvas.toDataURL('image/png'); a.click();
       rv_setStatus('Downloaded ✓', 'done');
