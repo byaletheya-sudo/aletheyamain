@@ -62,6 +62,8 @@ def login_page(message=""):
   button {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#3a8eef; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
   button:hover {{ background:#327fe0; }}
   .err {{ color:#ff6b6b; font-size:.82rem; margin-bottom:12px; }}
+  .legal {{ margin-top:20px; padding-top:16px; border-top:1px solid #1c2029; font-size:.66rem; line-height:1.5; color:#5a6472; text-align:left; }}
+  .legal b {{ color:#8a94a3; font-weight:700; }}
 </style></head>
 <body>
   <form class="card" method="POST" action="/login">
@@ -70,6 +72,7 @@ def login_page(message=""):
     {msg}
     <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
     <button type="submit">Enter</button>
+    <p class="legal"><b>Confidential &amp; Proprietary.</b> This application and all concepts, designs, workflows, data, and content within are the exclusive property of <b>Nova Auto Pros</b> and are intended solely for authorized internal use by its personnel. Unauthorized access, use, copying, reproduction, distribution, or disclosure of any ideas or materials herein is strictly prohibited and may result in legal action.</p>
   </form>
 </body></html>"""
 
@@ -700,6 +703,61 @@ def _carsxe_dataurl(url):
         ctype = r.headers.get("Content-Type", "image/png")
         b = r.read()
     return f"data:{ctype};base64," + base64.b64encode(b).decode()
+
+
+def _rgb_to_hex(rgb):
+    """'226,5,0' -> '#e20500'. Returns '' if it can't parse."""
+    try:
+        parts = [max(0, min(255, int(float(x)))) for x in str(rgb).split(",")[:3]]
+        if len(parts) == 3:
+            return "#%02x%02x%02x" % tuple(parts)
+    except Exception:
+        pass
+    return ""
+
+
+@app.route("/carsxe-meta", methods=["POST"])
+def carsxe_meta():
+    """CarsXE colors + trims for a vehicle (the /v1/ymm endpoint). Returns the
+    exterior color list (name + hex) and the available trims, so we can rebuild
+    the color picker and trim suggestions without Vehicle Databases."""
+    if not CARSXE_API_KEY:
+        return jsonify({"error": "CARSXE_API_KEY is not set on the server."}), 500
+    data = request.json or {}
+    make = data.get("make", "").strip()
+    model = data.get("model", "").strip()
+    year = str(data.get("year", "")).strip()
+    trim = data.get("trim", "").strip()
+    if not (make and model):
+        return jsonify({"colors": [], "trims": []})
+    params = {"key": CARSXE_API_KEY, "make": make, "model": model, "allTrimOptions": "1", "format": "json"}
+    if year:
+        params["year"] = year
+    if trim:
+        params["trim"] = trim
+    url = "https://api.carsxe.com/v1/ymm?" + urllib.parse.urlencode(params)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode("utf-8", "ignore"))
+    except Exception as e:
+        return jsonify({"colors": [], "trims": [], "note": f"meta lookup failed: {e}"})
+
+    best = body.get("bestMatch") or {}
+    ext = ((best.get("color") or {}).get("exterior")) or []
+    colors = []
+    for c in ext:
+        name = (c.get("name") or "").strip()
+        if name:
+            colors.append({"name": name, "hex": _rgb_to_hex(c.get("rgb", ""))})
+
+    trims = []
+    for t in (body.get("trimOptions") or []):
+        nm = t if isinstance(t, str) else (t.get("trim") or t.get("name") or "")
+        nm = (nm or "").strip()
+        if nm and nm not in trims:
+            trims.append(nm)
+    return jsonify({"colors": colors, "trims": trims})
 
 
 @app.route("/carsxe-image", methods=["POST"])

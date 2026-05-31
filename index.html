@@ -621,7 +621,7 @@
     <section class="view" id="view-test">
       <div class="view-inner">
         <h1>Lease Ad — TEST</h1>
-        <p class="subtitle">Pulls the real factory photo from Vehicle Databases (by year / make / model) instead of generating one with AI. Background is removed so it drops onto the template.</p>
+        <p class="subtitle">Pulls a real transparent vehicle photo from CarsXE (by year / make / model) and drops it straight onto the template — pick the best result and color.</p>
         <div class="seg" style="margin-bottom:18px;">
           <button type="button" class="seg-btn active" id="t_modeSingle" onclick="t_setMode('single')">Single</button>
           <button type="button" class="seg-btn" id="t_modeBulk" onclick="t_setMode('bulk')">Bulk</button>
@@ -632,35 +632,30 @@
             <div class="panel">
               <h2>Vehicle</h2>
               <div class="row">
-                <div><label for="t_year">Year</label><select id="t_year" onchange="t_onYear()"></select></div>
-                <div><label for="t_make">Make</label><select id="t_make" onchange="t_onMake()" disabled><option value="">Pick a year first</option></select></div>
+                <div><label for="t_year">Year</label><select id="t_year" onchange="t_syncTitle()"></select></div>
+                <div><label for="t_make">Make</label><select id="t_make" onchange="t_syncTitle()"></select></div>
               </div>
               <div class="row">
-                <div><label for="t_model">Model</label><select id="t_model" onchange="t_onModel()" disabled><option value="">Pick a make first</option></select></div>
-                <div><label for="t_trim">Trim</label><select id="t_trim" onchange="t_onTrim()" disabled><option value="">Pick a model first</option></select></div>
+                <div><label for="t_model">Model</label><input type="text" id="t_model" placeholder="e.g. M4, GLC 300" oninput="t_syncTitle()"></div>
+                <div><label for="t_trim">Trim <span style="opacity:.55;font-weight:400;">(optional)</span></label><input type="text" id="t_trim" list="t_trimList" placeholder="e.g. Competition" oninput="t_syncTitle()"><datalist id="t_trimList"></datalist></div>
               </div>
               <div id="t_colorWrap" style="display:none;">
-                <label for="t_color">Color (from the factory options)</label>
+                <label for="t_color">Color (CarsXE factory options)</label>
                 <div style="display:flex;align-items:center;gap:10px;">
                   <span id="t_swatch" style="width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.25);flex:0 0 auto;display:none;"></span>
                   <select id="t_color" onchange="t_pickColor()" style="flex:1;"></select>
                 </div>
               </div>
               <div class="controls" style="margin-top:14px;">
-                <button class="btn-start" id="vdbBtn" onclick="vdbGenerate()">Get photo &amp; build ad</button>
-                <label class="checkbox"><input type="checkbox" id="t_removeBg" checked> Remove background</label>
+                <button class="btn-start" id="vdbBtn" onclick="t_build()">Get photo &amp; build ad</button>
                 <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
               </div>
-              <p class="hint">Pick year → make → model. The first trim is selected and the ad builds automatically. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
-              <div class="status" id="vdbStatus"></div>
-              <div style="margin-top:12px;border-top:1px solid #1d2230;padding-top:12px;">
-                <button class="btn-ghost" id="t_carsxeBtn" onclick="t_carsxeFetch()" style="font-size:.85rem;">🧪 Try CarsXE image (beta)</button>
-                <div id="t_carsxeWrap" style="display:none;margin-top:10px;">
-                  <label for="t_carsxeImg">CarsXE result — pick the best one</label>
-                  <select id="t_carsxeImg" onchange="t_carsxePick()"></select>
-                </div>
-                <p class="hint" style="margin-top:6px;">Pulls the photo from CarsXE (transparent) using the selected vehicle — for comparing image quality vs Vehicle Databases.</p>
+              <div id="t_carsxeWrap" style="display:none;margin-top:12px;">
+                <label for="t_carsxeImg">Photo — pick the best result</label>
+                <select id="t_carsxeImg" onchange="t_carsxePick()"></select>
               </div>
+              <p class="hint">Pick the year + make, type the model (and optional trim), then Get photo. Photos &amp; colors come from CarsXE — images are transparent, so they drop straight onto the template.</p>
+              <div class="status" id="vdbStatus"></div>
             </div>
 
             <div class="panel">
@@ -726,7 +721,7 @@
                 Columns, separated by <b>Tab</b> or <b>|</b>:<br>
                 <code style="color:#7fb6ff;">Year | Make | Model | Trim | Per&nbsp;month | Due&nbsp;at&nbsp;signing | Term | Body&nbsp;style | Badge</code><br>
                 Year/Make/Model required; Trim optional. Prices accept $/commas/units. Badge per-row (blank = none).
-                If a trim isn't found it asks what to do (with a “do this for all” option).
+                Photos come from CarsXE (transparent) per row.
               </p>
               <textarea id="t_bulkInput" oninput="t_bulkDone.clear()" style="min-height:140px;" placeholder="2025 | Mercedes-Benz | GLC 300 | 4MATIC SUV | 799 | 3,500 | 24 | SUV | Loaner Special
 2025 | BMW | X5 | xDrive40i | 899 | 4,000 | 36 | SUV
@@ -820,18 +815,6 @@
   </div>
 </div>
 
-<!-- trim-not-found dialog (TEST tool) -->
-<div class="plate-modal" id="trimModal">
-  <div class="plate-dialog" style="max-width:440px;">
-    <h3>Trim not found</h3>
-    <p id="trimMsg"></p>
-    <label class="checkbox" id="trimAllWrap" style="display:none; margin-top:4px;"><input type="checkbox" id="trimAll"> Do this for all remaining</label>
-    <div class="controls" style="margin-top:16px; justify-content:flex-end;">
-      <button class="btn-ghost" onclick="trimChoose('skip')">Skip</button>
-      <button class="btn-start" onclick="trimChoose('base')">Use base model</button>
-    </div>
-  </div>
-</div>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -1719,9 +1702,8 @@
     }
   }
 
-  // ===================== TEST: lease ad from Vehicle Databases photos =====================
+  // ===================== TEST: lease ad from CarsXE photos =====================
   let t_titleEdited = false;
-  let t_engineSuffix = '';   // e.g. the "i" of 430i — merged onto the model in the headline
   // ---- Single / Bulk mode ----
   let t_mode = 'single';
   function t_setMode(mode) {
@@ -1761,35 +1743,7 @@
   function setVdb(t, type = '') { const e = $('vdbStatus'); e.textContent = t; e.className = 'status ' + type; }
   function setT(t, type = '') { const e = $('t_status'); e.textContent = t; e.className = 'status ' + type; }
   function t_vehName() {
-    const y = $('t_year').value.trim(), mk = $('t_make').value.trim();
-    let md = $('t_model').value.trim();
-    if (t_engineSuffix && md && !md.toLowerCase().endsWith(t_engineSuffix.toLowerCase())) md += t_engineSuffix;
-    return [y, mk, md].filter(Boolean).join(' ');
-  }
-  // Clean a raw catalog trim into a tidy subtitle + an engine suffix for the headline.
-  // "i Convertible Rear Wheel Drive Automatic" (model 430)
-  //   -> { suffix: "i", sub: "Convertible RWD Automatic" }  -> headline "… 430i"
-  function t_cleanTrim(trim, model) {
-    let t = (trim || '').trim(), suffix = '';
-    const m = t.match(/^([A-Za-z])\b\s*/);                 // lone leading letter = engine designator
-    if (m && /\d$/.test((model || '').trim())) { suffix = m[1].toLowerCase(); t = t.slice(m[0].length); }
-    t = t
-      // normalize verbose body types -> clean tags
-      .replace(/\bsports?\s+activity\s+vehicle\b/gi, 'SUV')         // BMW SAV -> SUV
-      .replace(/\bsports?\s+activity\s+coupe?\b/gi, 'Coupe')        // BMW SAC -> Coupe
-      .replace(/\bsport\s+utility(?:\s+vehicle)?\b/gi, 'SUV')
-      .replace(/\bmulti[-\s]?purpose\s+vehicle\b/gi, 'Van')
-      .replace(/\bcrew\s+cab\b/gi, 'Crew Cab')
-      // drivetrain -> abbreviations
-      .replace(/\brear[-\s]?wheel[-\s]?drive\b/gi, 'RWD')
-      .replace(/\ball[-\s]?wheel[-\s]?drive\b/gi, 'AWD')
-      .replace(/\bfront[-\s]?wheel[-\s]?drive\b/gi, 'FWD')
-      .replace(/\bfour[-\s]?wheel[-\s]?drive\b/gi, '4WD')
-      .replace(/\b4x4\b/gi, '4WD')
-      // transmission — every car we sell is automatic, so never show it
-      .replace(/\b(?:automatic|manual|auto|cvt|tiptronic|dct|pdk|dsg|s[-\s]?tronic|geartronic|steptronic|\d+[-\s]?speed)\b/gi, '')
-      .replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim();
-    return { suffix, sub: t };
+    return [$('t_year').value, $('t_make').value, $('t_model').value].map(s => s.trim()).filter(Boolean).join(' ');
   }
   // Shrink an element's font-size until its text fits the box; ellipsis as the
   // last resort (single-line) so a runaway trim can never blow out the layout.
@@ -1851,136 +1805,69 @@
     if (sub) fitText($('t_adSub'), 52, 28, 2);
     if (terms) fitText($('t_adTerms'), 44, 30, 1);
   }
-  // ---- cascading dropdowns sourced from the real Vehicle Databases catalog ----
+  // ---- year dropdown (static) ----
   function t_fillYears() {
     const sel = $('t_year');
     const next = new Date().getFullYear() + 1;
     sel.innerHTML = '<option value="">Select year</option>';
     for (let y = next; y >= 2000; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
   }
-  function t_setSelect(sel, items, placeholder) {
-    sel.innerHTML = '';
-    const ph = document.createElement('option'); ph.value = ''; ph.textContent = placeholder; sel.appendChild(ph);
-    (items || []).forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-    sel.disabled = !(items && items.length);
+  const T_MAKES = ['Acura', 'Alfa Romeo', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge', 'Fiat', 'Ford', 'Genesis', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jaguar', 'Jeep', 'Kia', 'Land Rover', 'Lexus', 'Lincoln', 'Maserati', 'Mazda', 'Mercedes-Benz', 'MINI', 'Mitsubishi', 'Nissan', 'Polestar', 'Porsche', 'Ram', 'Rivian', 'Subaru', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo'];
+  function t_fillMakes() {
+    const sel = $('t_make');
+    sel.innerHTML = '<option value="">Select make</option>';
+    T_MAKES.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); });
   }
-  async function t_fetchOpts(level, params) {
+  // CarsXE's image color filter wants a basic colour word, not a marketing name.
+  function t_basicColor(name) {
+    const basics = ['black', 'white', 'silver', 'gray', 'grey', 'red', 'blue', 'green', 'yellow', 'orange', 'brown', 'gold', 'beige', 'tan', 'purple', 'bronze'];
+    const low = (name || '').toLowerCase();
+    for (const b of basics) if (low.includes(b)) return b === 'grey' ? 'gray' : b;
+    return name || '';
+  }
+  async function t_fetchPhoto(p) {
+    const r = await fetch('/carsxe-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    try { return await r.json(); }
+    catch (_) { return { error: 'Couldn’t reach the server (try reloading / signing in again).' }; }
+  }
+  function t_setPhotoOptions(options) {
+    const sel = $('t_carsxeImg'); sel.innerHTML = '';
+    (options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; sel.appendChild(op); });
+    $('t_carsxeWrap').style.display = (options && options.length > 1) ? '' : 'none';
+  }
+  // CarsXE colours + trims for the picker (best-effort; failures are silent).
+  async function t_loadMeta(year, make, model, trim) {
     try {
-      const r = await fetch('/vdb-options', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level, ...params }) });
-      let d;
-      try { d = await r.json(); }
-      catch (_) { setVdb('✕ Couldn’t reach the catalog (try reloading / signing in again).', 'error'); return null; }
-      if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return null; }
-      if ((!d.options || !d.options.length) && d.vdb_message) {
-        setVdb(`✕ ${d.vdb_message}` + (d.vdb_status ? ` (VDB ${d.vdb_status})` : ''), 'error'); return [];
-      }
-      return d.options || [];
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); return null; }
+      const r = await fetch('/carsxe-meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model, trim }) });
+      const d = await r.json();
+      const sel = $('t_color'), cur = sel.value; sel.innerHTML = '';
+      const blank = document.createElement('option'); blank.value = ''; blank.textContent = 'Any color'; sel.appendChild(blank);
+      (d.colors || []).forEach(c => { const op = document.createElement('option'); op.value = c.name; op.textContent = c.name; if (c.hex) op.dataset.hex = c.hex; sel.appendChild(op); });
+      if (cur) sel.value = cur;
+      $('t_colorWrap').style.display = (d.colors && d.colors.length) ? '' : 'none';
+      t_updateSwatch();
+      const dl = $('t_trimList'); dl.innerHTML = '';
+      (d.trims || []).forEach(t => { const op = document.createElement('option'); op.value = t; dl.appendChild(op); });
+    } catch (e) { /* meta is optional */ }
   }
-  async function t_onYear() {
-    t_engineSuffix = '';
-    t_setSelect($('t_make'), [], 'Pick a make first'); t_setSelect($('t_model'), [], 'Pick a make first'); t_setSelect($('t_trim'), [], 'Pick a model first');
-    t_syncTitle();
-    const year = $('t_year').value; if (!year) { setVdb('', ''); return; }
-    setVdb('Loading makes…', 'active');
-    const makes = await t_fetchOpts('make', { year });
-    if (makes) { t_setSelect($('t_make'), makes, 'Select make'); if (makes.length) setVdb(`${makes.length} makes — pick one`, 'done'); }
-  }
-  async function t_onMake() {
-    t_engineSuffix = '';
-    t_setSelect($('t_model'), [], 'Loading…'); t_setSelect($('t_trim'), [], 'Pick a model first'); t_syncTitle();
-    const year = $('t_year').value, make = $('t_make').value; if (!(year && make)) return;
-    setVdb('Loading models…', 'active');
-    const models = await t_fetchOpts('model', { year, make });
-    if (models) { t_setSelect($('t_model'), models, 'Select model'); if (models.length) setVdb(`${models.length} models — pick one`, 'done'); }
-  }
-  async function t_onModel() {
-    t_engineSuffix = '';
-    t_setSelect($('t_trim'), [], 'Loading…'); t_syncTitle();
-    const year = $('t_year').value, make = $('t_make').value, model = $('t_model').value; if (!(year && make && model)) return;
-    setVdb('Loading trims…', 'active');
-    const trims = await t_fetchOpts('trim', { year, make, model });
-    if (!trims) return;
-    t_setSelect($('t_trim'), trims, trims.length ? 'Select trim' : 'No trims listed — use model');
-    if (trims.length) {
-      $('t_trim').value = trims[0];   // auto-select the first trim…
-      t_onTrim();                     // …set body style + headline, then auto-build the ad
-    } else {
-      setVdb('Ready — click Get photo', 'done');
-    }
-  }
-  // trim changed (or auto-selected): clean it into the subtitle, merge the engine
-  // suffix into the headline, then auto-build.
-  function t_onTrim() {
-    const trim = $('t_trim').value;
-    if (trim) {
-      t_engineSuffix = t_cleanTrim(trim, $('t_model').value).suffix;   // headline becomes e.g. "… 430i"
-      // subtitle is NOT auto-filled — left for the user to type if they want one
-    }
-    t_syncTitle();
-    if (trim) vdbGenerate();                      // auto-generate the image
-  }
-  function vdbFetch(year, make, model, trim, skipTrim) {
-    return fetch('/vdb-image', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year, make, model, trim, skip_trim: !!skipTrim }),
-    }).then(r => r.json());
-  }
-  const vdbMsg = d => (d.vdb_message ? ` — VDB(${d.vdb_status}): ${d.vdb_message}` : '') + (d.requested ? `  [GET ${d.requested}]` : '');
-  // trim-not-found dialog -> resolves {choice:'base'|'skip', all:bool}
-  let _trimResolve = null;
-  function askTrim(label, isBulk) {
-    return new Promise(res => {
-      _trimResolve = res;
-      $('trimMsg').textContent = `No factory photo for the trim on “${label}”. Use the base-model photo instead, or skip this vehicle?`;
-      $('trimAllWrap').style.display = isBulk ? '' : 'none';
-      $('trimAll').checked = false;
-      $('trimModal').style.display = 'flex';
-    });
-  }
-  function trimChoose(choice) {
-    const all = $('trimAll').checked;
-    $('trimModal').style.display = 'none';
-    if (_trimResolve) { _trimResolve({ choice, all }); _trimResolve = null; }
-  }
-
-  async function vdbGenerate(opts) {
-    opts = opts || {};
+  // Main build: pull the CarsXE photo (+ colours/trims), place it, populate pickers.
+  async function t_build() {
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
-    if (!(year && make && model)) { setVdb('Enter year, make, and model.', 'error'); return; }
+    if (!(make && model)) { setVdb('Pick a make and type a model.', 'error'); return; }
     if (!t_titleEdited) $('t_title').value = t_vehName();
     t_render();
     $('vdbBtn').disabled = true;
-    setVdb('Looking up the factory photo…', 'active');
+    setVdb('Finding the best photo…', 'active');
+    t_loadMeta(year, make, model, trim);            // colours + trims (parallel, non-blocking)
     try {
-      let d = await vdbFetch(year, make, model, trim, opts.skipTrim);
-      if (d.error) { setVdb('✕ ' + (d.reason || d.error), 'error'); return; }
-      if (d.found === false) {
-        if (d.trim_not_found) {
-          const ans = await askTrim(`${year} ${make} ${model} ${trim}`, false);
-          if (ans.choice !== 'base') { setVdb('Skipped.', ''); return; }
-          d = await vdbFetch(year, make, model, trim, true);
-          if (d.error || d.found === false) { setVdb('No factory photo for the base model either.' + vdbMsg(d), 'error'); return; }
-        } else { setVdb('No factory photo found.' + vdbMsg(d), 'error'); return; }
-      }
-      // populate the color picker from the manufacturer's own options
-      const sel = $('t_color'); sel.innerHTML = '';
-      (d.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; if (o.hex) op.dataset.hex = o.hex; sel.appendChild(op); });
-      if (d.image_url) sel.value = d.image_url;
-      $('t_colorWrap').style.display = (d.options && d.options.length > 1) ? '' : 'none';
-      t_updateSwatch();
-
-      let url = d.image_data, bgWarn = '';
-      if ($('t_removeBg').checked) {
-        setVdb('Removing background…', 'active');
-        try { url = await t_removeBgFrom(url); }
-        catch (e) { bgWarn = ' (bg not removed — ' + e.message + ')'; console.error('bg removal failed', e); }
-      }
-      $('t_adCar').removeAttribute('crossorigin');
-      $('t_adCar').src = url;
+      const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor($('t_color').value) });
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      if (d.found === false) { setVdb('✕ ' + (d.message || 'No photo found for that vehicle.'), 'error'); return; }
+      t_setPhotoOptions(d.options);
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓' + bgWarn + (d.options && d.options.length > 1 ? ' — change the color above anytime' : ''), bgWarn ? 'error' : 'done');
+      setVdb('Photo placed ✓' + (d.options && d.options.length > 1 ? ' — try another result or a color below' : ''), 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
@@ -1993,69 +1880,34 @@
     const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
     if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
   }
-  // Remove the background from a factory photo. Done server-side (deterministic
-  // flood-fill of the studio backdrop) — reliable, free, and it never alters the
-  // car. Replaces the flaky in-browser library that couldn't resolve its runtime.
-  async function t_removeBgFrom(dataUrl) {
-    const r = await fetch('/remove-bg', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_data: dataUrl }),
-    });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    return d.image_data;
-  }
-  // ---- CarsXE image trial (isolated; doesn't touch the VDB flow) ----
-  async function t_carsxeFetch() {
-    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
-    if (!(make && model)) { setVdb('Pick a make and model first.', 'error'); return; }
-    $('t_carsxeBtn').disabled = true;
-    setVdb('Fetching CarsXE images…', 'active');
-    try {
-      const r = await fetch('/carsxe-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model, trim }) });
-      const d = await r.json();
-      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      if (d.found === false) { setVdb('✕ ' + (d.message || 'No CarsXE images.'), 'error'); return; }
-      const sel = $('t_carsxeImg'); sel.innerHTML = '';
-      (d.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; sel.appendChild(op); });
-      $('t_carsxeWrap').style.display = (d.options && d.options.length) ? '' : 'none';
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      $('t_dlBtn').disabled = false;
-      setVdb(`CarsXE: ${d.options.length} image(s) — pick the best below`, 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
-    finally { $('t_carsxeBtn').disabled = false; }
-  }
+  // Pick a specific result from the CarsXE set (proxied so canvas/export works).
   async function t_carsxePick() {
     const url = $('t_carsxeImg').value; if (!url) return;
-    setVdb('Loading that image…', 'active');
+    setVdb('Loading that photo…', 'active');
     try {
       const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       const d = await r.json();
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
-      setVdb('CarsXE image placed ✓', 'done');
+      setVdb('Photo updated ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
+  // Pick a color -> re-fetch CarsXE filtered by that color family.
   async function t_pickColor() {
     t_updateSwatch();
-    const url = $('t_color').value; if (!url) return;
-    setVdb('Loading that color…', 'active');
+    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
+    if (!(make && model)) return;
+    const colorName = $('t_color').value;
+    setVdb(colorName ? `Finding a ${colorName} one…` : 'Updating…', 'active');
     try {
-      const r = await fetch('/vdb-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-      const d = await r.json();
-      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      let img = d.image_data, bgWarn = '';
-      if ($('t_removeBg').checked) {
-        setVdb('Removing background…', 'active');
-        try { img = await t_removeBgFrom(img); }
-        catch (e) { bgWarn = ' (bg not removed)'; console.error('bg removal failed', e); }
-      }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = img;
+      const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor(colorName) });
+      if (d.error || d.found === false) { setVdb('✕ ' + (d.error || d.message || 'No photo for that color.'), 'error'); return; }
+      t_setPhotoOptions(d.options);
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Color updated ✓' + bgWarn, bgWarn ? 'error' : 'done');
+      setVdb('Color updated ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   async function t_download() {
@@ -2076,7 +1928,7 @@
     } catch (e) { setT('Render failed: ' + e.message, 'error'); }
   }
 
-  // ---- TEST bulk import (Vehicle Databases) ----
+  // ---- TEST bulk import (CarsXE) ----
   let t_bulkAbort = false;
   let t_bulkDone = new Set();
   let t_trimAllChoice = null;
@@ -2141,18 +1993,10 @@
       t_upProg(i, rows.length, `${i + 1} of ${rows.length} — ${name}`);
       try {
         t_applyRow(r, def);
-        let d = await vdbFetch(r.year, r.make, r.model, r.trim, false);
-        if (d.error) { failures.push({ v: name, reason: d.reason || d.error }); if ((d.reason || '').toLowerCase().includes('key')) { fatal = true; break; } t_upProg(i + 1, rows.length); await sleep(200); continue; }
-        if (d.found === false && d.trim_not_found) {
-          let choice = t_trimAllChoice;
-          if (!choice) { const ans = await askTrim(`${name} ${r.trim}`, true); choice = ans.choice; if (ans.all) t_trimAllChoice = ans.choice; }
-          if (choice === 'base') d = await vdbFetch(r.year, r.make, r.model, r.trim, true);
-          else { failures.push({ v: name, reason: 'skipped (trim not found)' }); t_upProg(i + 1, rows.length); await sleep(120); continue; }
-        }
-        if (d.error || d.found === false) { failures.push({ v: name, reason: d.error || 'no factory photo' }); t_upProg(i + 1, rows.length); await sleep(150); continue; }
-        let url = d.image_data;
-        if ($('t_removeBg').checked) { try { url = await t_removeBgFrom(url); } catch (e) { console.error('bg removal failed', e); } }
-        $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = url; await waitForImage($('t_adCar'));
+        const d = await t_fetchPhoto({ year: r.year, make: r.make, model: r.model, trim: r.trim, color: '' });
+        if (d.error) { failures.push({ v: name, reason: d.error }); if (d.error.toLowerCase().includes('key')) { fatal = true; break; } t_upProg(i + 1, rows.length); await sleep(200); continue; }
+        if (d.found === false || !d.image_data) { failures.push({ v: name, reason: d.message || 'no photo found' }); t_upProg(i + 1, rows.length); await sleep(150); continue; }
+        $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
         await t_download();
         t_bulkDone.add(key); done++; t_upProg(i + 1, rows.length); await sleep(500);
       } catch (e) {
@@ -2175,6 +2019,7 @@
     $('t_bulkStatus').className = 'status'; $('t_bulkStatus').innerHTML = head + list + hint;
   }
   t_fillYears();
+  t_fillMakes();
   t_render();
 
   renderSold();
