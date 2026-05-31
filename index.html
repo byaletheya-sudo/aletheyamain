@@ -615,29 +615,7 @@
         <div class="layout">
           <div>
             <div class="panel">
-              <h2>Options</h2>
-              <div class="row">
-                <div>
-                  <label for="t_badge">Badge</label>
-                  <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
-                  <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
-                </div>
-                <div>
-                  <label for="t_bodystyle">Body style (auto-fills from trim)</label>
-                  <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
-                </div>
-              </div>
-              <label for="t_title">Headline (auto-fills, editable)</label>
-              <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
-              <div class="row3">
-                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
-                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
-                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <h2>Vehicle (Vehicle Databases lookup)</h2>
+              <h2>Vehicle</h2>
               <div class="row">
                 <div><label for="t_year">Year</label><select id="t_year" onchange="t_onYear()"></select></div>
                 <div><label for="t_make">Make</label><select id="t_make" onchange="t_onMake()" disabled><option value="">Pick a year first</option></select></div>
@@ -660,6 +638,26 @@
               </div>
               <p class="hint">Pick year → make → model. The first trim is selected and the ad builds automatically. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
               <div class="status" id="vdbStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Deal</h2>
+              <div class="row3">
+                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
+                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
+                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
+              </div>
+              <label for="t_badge">Badge</label>
+              <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
+              <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
+            </div>
+
+            <div class="panel">
+              <h2>Ad Copy <span style="font-weight:400;opacity:.6;font-size:.8rem;">(auto-filled — edit if needed)</span></h2>
+              <label for="t_title">Headline</label>
+              <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
+              <label for="t_bodystyle">Subtitle (from trim)</label>
+              <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
             </div>
 
             <div class="panel">
@@ -1686,12 +1684,22 @@
     let t = (trim || '').trim(), suffix = '';
     const m = t.match(/^([A-Za-z])\b\s*/);                 // lone leading letter = engine designator
     if (m && /\d$/.test((model || '').trim())) { suffix = m[1].toLowerCase(); t = t.slice(m[0].length); }
-    t = t.replace(/\brear[-\s]?wheel[-\s]?drive\b/gi, 'RWD')
-         .replace(/\ball[-\s]?wheel[-\s]?drive\b/gi, 'AWD')
-         .replace(/\bfront[-\s]?wheel[-\s]?drive\b/gi, 'FWD')
-         .replace(/\bfour[-\s]?wheel[-\s]?drive\b/gi, '4WD')
-         .replace(/\b4x4\b/gi, '4WD')
-         .replace(/\s+/g, ' ').trim();
+    t = t
+      // normalize verbose body types -> clean tags
+      .replace(/\bsports?\s+activity\s+vehicle\b/gi, 'SUV')         // BMW SAV -> SUV
+      .replace(/\bsports?\s+activity\s+coupe?\b/gi, 'Coupe')        // BMW SAC -> Coupe
+      .replace(/\bsport\s+utility(?:\s+vehicle)?\b/gi, 'SUV')
+      .replace(/\bmulti[-\s]?purpose\s+vehicle\b/gi, 'Van')
+      .replace(/\bcrew\s+cab\b/gi, 'Crew Cab')
+      // drivetrain -> abbreviations
+      .replace(/\brear[-\s]?wheel[-\s]?drive\b/gi, 'RWD')
+      .replace(/\ball[-\s]?wheel[-\s]?drive\b/gi, 'AWD')
+      .replace(/\bfront[-\s]?wheel[-\s]?drive\b/gi, 'FWD')
+      .replace(/\bfour[-\s]?wheel[-\s]?drive\b/gi, '4WD')
+      .replace(/\b4x4\b/gi, '4WD')
+      // transmission — every car we sell is automatic, so never show it
+      .replace(/\b(?:automatic|manual|auto|cvt|tiptronic|dct|pdk|dsg|s[-\s]?tronic|geartronic|steptronic|\d+[-\s]?speed)\b/gi, '')
+      .replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim();
     return { suffix, sub: t };
   }
   // Shrink an element's font-size until its text fits the box; ellipsis as the
