@@ -698,6 +698,13 @@
                 <div class="ph-thumbs" id="t_photoThumbs"></div>
               </div>
               <div class="status" id="vdbStatus"></div>
+              <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;">
+                <button class="btn-ghost" id="t_cvBtn" onclick="t_cvFetch()" style="font-size:.82rem;">🧪 Try CarVector (beta)</button>
+                <div id="t_cvWrap" style="display:none;margin-top:10px;">
+                  <label>CarVector illustration <span style="opacity:.55;font-weight:400;">— tap to use</span></label>
+                  <div class="ph-thumbs" id="t_cvThumbs"></div>
+                </div>
+              </div>
             </div>
 
             <div class="panel">
@@ -1983,6 +1990,47 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
       setVdb('Photo updated ✓', 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+  }
+  // ---- CarVector trial (isolated; doesn't touch the main flow) ----
+  async function t_cvFetch() {
+    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim();
+    if (!(make && model)) { setVdb('Pick a make and type a model first.', 'error'); return; }
+    const btn = $('t_cvBtn'); btn.disabled = true; btn.textContent = 'Loading…';
+    setVdb('Fetching CarVector illustration…', 'active');
+    try {
+      const r = await fetch('/carvector-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model }) });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      if (d.found === false) { setVdb('✕ ' + (d.message || 'No CarVector image.'), 'error'); return; }
+      const wrap = $('t_cvThumbs'); wrap.innerHTML = '';
+      (d.options || []).forEach((o, i) => {
+        const t = document.createElement('div'); t.className = 'ph-thumb' + (i === 0 ? ' active' : '');
+        const img = document.createElement('img'); img.src = o.thumb || o.url; img.loading = 'lazy';
+        const chk = document.createElement('span'); chk.className = 'chk'; chk.textContent = '✓';
+        t.appendChild(img); t.appendChild(chk);
+        t.onclick = () => t_cvPick(o.url, t);
+        wrap.appendChild(t);
+      });
+      $('t_cvWrap').style.display = '';
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      $('t_dlBtn').disabled = false;
+      setVdb(`CarVector: ${d.options.length} illustration(s) — tap to use`, 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '🧪 Try CarVector (beta)'; }
+  }
+  async function t_cvPick(url, el) {
+    document.querySelectorAll('#t_cvThumbs .ph-thumb').forEach(x => x.classList.remove('active'));
+    if (el) el.classList.add('active');
+    setVdb('Loading that illustration…', 'active');
+    try {
+      const r = await fetch('/carvector-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      setVdb('Illustration placed ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   // the catalog colours + trims for the picker (best-effort; failures are silent).

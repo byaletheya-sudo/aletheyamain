@@ -161,6 +161,12 @@ def _cache_put(cache, key, val):
         cache.pop(next(iter(cache)))   # evict oldest
     cache[key] = val
 
+
+# CarVector (trial image source). Set CARVECTOR_API_KEY in the host env.
+CARVECTOR_API_KEY = os.environ.get("CARVECTOR_API_KEY", "").strip()
+_CARVECTOR_ALLOWED = set()
+_CARVECTOR_CACHE = {}
+
 # Art-directed render rules: locked framing/scale/lighting for a consistent campaign look,
 # rendered on a TRANSPARENT background so each car drops cleanly onto the ad template.
 RENDER_RULES = (
@@ -659,6 +665,85 @@ def carsxe_proxy():
         d = _carsxe_dataurl(url)
         _cache_put(_CARSXE_PROXY_CACHE, url, d)
         return jsonify({"success": True, "image_data": d})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+def _carvector_get(path):
+    req = urllib.request.Request("https://api.carvector.io" + path,
+                                 headers={"Authorization": f"Bearer {CARVECTOR_API_KEY}", "User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode("utf-8", "ignore"))
+
+
+@app.route("/carvector-image", methods=["POST"])
+def carvector_image():
+    """TRIAL: CarVector returns one illustration per vehicle via a 2-step flow
+    (search year/make/model -> get id -> fetch detail -> image_url). We gather a
+    few matching rows (trims/submodels) so the user has a small set to pick from."""
+    if not CARVECTOR_API_KEY:
+        return jsonify({"error": "CARVECTOR_API_KEY is not set on the server. Add it in Railway → Variables."}), 500
+    data = request.json or {}
+    make = data.get("make", "").strip()
+    model = data.get("model", "").strip()
+    year = str(data.get("year", "")).strip()
+    if not (make and model):
+        return jsonify({"error": "Pick a make and model first."}), 400
+
+    key = "|".join([year, make.lower(), model.lower()])
+    cached = _CARVECTOR_CACHE.get(key)
+    if cached is not None:
+        _CARVECTOR_ALLOWED.update(o["url"] for o in cached.get("options", []))
+        return jsonify({**cached, "cached": True})
+
+    qs = {"make": make, "model": model, "limit": "6"}
+    if year:
+        qs["year"] = year
+    try:
+        search = _carvector_get("/v1/vehicles?" + urllib.parse.urlencode(qs))
+    except urllib.error.HTTPError as e:
+        return jsonify({"error": f"CarVector error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"CarVector request failed: {e}"}), 502
+
+    results = search.get("results") or []
+    if not results:
+        return jsonify({"found": False, "message": "No vehicle found in CarVector."})
+
+    options, seen = [], set()
+    for v in results[:5]:                       # cap detail calls (each one is a request)
+        vid = v.get("id")
+        if not vid:
+            continue
+        try:
+            detail = _carvector_get("/v1/vehicles/" + urllib.parse.quote(str(vid)))
+        except Exception:
+            continue
+        img = detail.get("image_url")
+        if img and img not in seen:
+            seen.add(img)
+            label = " ".join(str(x) for x in [detail.get("year"), detail.get("trim") or detail.get("submodel") or detail.get("body_class")] if x)
+            options.append({"url": img, "thumb": img, "label": label or "Illustration"})
+    if not options:
+        return jsonify({"found": False, "message": "CarVector has no image for that vehicle (image plans only)."})
+
+    _CARVECTOR_ALLOWED.update(o["url"] for o in options)
+    try:
+        first = _carsxe_dataurl(options[0]["url"])
+    except Exception as e:
+        return jsonify({"error": f"Couldn't load the CarVector image: {e}"}), 502
+    payload = {"found": True, "image_data": first, "image_url": options[0]["url"], "options": options}
+    _cache_put(_CARVECTOR_CACHE, key, payload)
+    return jsonify(payload)
+
+
+@app.route("/carvector-proxy", methods=["POST"])
+def carvector_proxy():
+    url = (request.json or {}).get("url", "").strip()
+    if url not in _CARVECTOR_ALLOWED:
+        return jsonify({"error": "URL not allowed."}), 400
+    try:
+        return jsonify({"success": True, "image_data": _carsxe_dataurl(url)})
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
