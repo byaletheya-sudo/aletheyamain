@@ -832,7 +832,7 @@ def bulk_parse():
 DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
 DEAL_FIELDS = ["year", "make", "model", "trim", "msrp", "orig_mo", "das", "term",
                "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source",
-               "active_from", "active_to", "special"]
+               "active_from", "active_to", "special", "deal_type", "apr"]
 
 
 def _load_deals():
@@ -898,8 +898,9 @@ def deal_parse():
     rules = (body.get("rules") or "").strip()
     makes = [m for m in (body.get("makes") or []) if isinstance(m, str) and m.strip()][:80]
     today = (body.get("today") or "").strip()
-    if not text:
-        return jsonify({"error": "Paste some deals first."}), 400
+    images = [im for im in (body.get("images") or []) if isinstance(im, str) and im.startswith("data:image")][:8]
+    if not text and not images:
+        return jsonify({"error": "Paste some deals or attach a flyer first."}), 400
     date_rule = (
         f"- Today is {today}. If a line/list states a validity window ('good through 5/31', "
         "'May specials', 'valid until 6/15', 'expires EOM'), output active_from / active_to as "
@@ -939,7 +940,7 @@ def deal_parse():
                             "type": "object", "additionalProperties": False,
                             "required": ["field", "op", "value"],
                             "properties": {
-                                "field": {"type": "string", "enum": ["monthly", "das", "broker_fee", "term", "miles", "msrp"]},
+                                "field": {"type": "string", "enum": ["monthly", "das", "broker_fee", "term", "miles", "msrp", "apr"]},
                                 "op": {"type": "string", "enum": ["add", "mult", "set"]},
                                 "value": {"type": "string"}}}},
                     "remove_tax_pct": {"type": "string"}}},
@@ -954,8 +955,9 @@ def deal_parse():
         "'adjust' empty (match all '', ops []).\n"
         "ADJUST object: 'match' selects WHICH saved deals to change — set any of contact / year / "
         "make / model / trim that the instruction names, leave the rest '' (all-'' = EVERY deal). "
-        "'ops' is a list of {field, op, value}: field is monthly|das|broker_fee|term|miles|msrp "
-        "(use 'monthly' for the payment); op is 'add' (value SIGNED, '-1000' to decrease, '20' to "
+        "'ops' is a list of {field, op, value}: field is monthly|das|broker_fee|term|miles|msrp|apr "
+        "(use 'monthly' for the payment, 'das' for down/DAS, 'apr' for finance rate); op is 'add' "
+        "(value SIGNED, '-1000' to decrease, '20' to "
         "add), 'mult' (multiply), or 'set' (replace). remove_tax_pct = a tax rate to back OUT of "
         "the monthly when they say tax-included ('9.75% tax included'->'9.75'; plain 'tax included' "
         "with no rate -> '9.75'; else '').\n"
@@ -965,9 +967,14 @@ def deal_parse():
         "monthly payment), das (due at signing / cash to dealer), term (months), miles (annual "
         "mileage), tax_in_mo (monthly WITH tax, if quoted that way), broker_fee, dealer, notes "
         "(loyalty / conquest / credit tier / any other terms), source (short label for where it "
-        "came from), active_from / active_to (validity window, only if stated), and special (a "
+        "came from), active_from / active_to (validity window, only if stated), special (a "
         "short tag like 'Loaner', '1 of 1', or 'Demo' ONLY if the deal is a loaner / courtesy / "
-        "demo / service-loaner / one-off special; else '').\n"
+        "demo / service-loaner / one-off special; else ''), deal_type ('finance' if it's a "
+        "FINANCE/purchase/loan deal — mentions APR, % financing, 'finance', months-to-own, down "
+        "payment — otherwise 'lease'), and apr (the finance APR as a number like '4.9', only for "
+        "finance deals; else '').\n"
+        "  For a FINANCE deal: orig_mo = the monthly payment, das = the DOWN PAYMENT (cash up "
+        "front), term = months, apr = the rate; miles is usually '' (no mileage cap on a purchase).\n"
         "ALSO output top-level 'contact': the single person/broker/dealer the paste is from "
         "(sender at top, signature, or 'from X'). If unsure, ''. Put that name in each row's "
         "'dealer' field too. Also output 'contact_phone' and 'contact_email' if a phone number or "
@@ -989,11 +996,20 @@ def deal_parse():
         "- Leave a field '' if it isn't present.\n"
         f"EXTRA ADJUSTMENT RULES (if any) TO APPLY TO EVERY ROW: {rules or '(none)'}"
     )
+    if images:
+        # vision: read the deals straight off a flyer screenshot / PDF page(s)
+        model = "gpt-4.1"
+        user_content = [{"type": "text", "text": text or "Read EVERY car deal from these flyer image(s) and structure them. Capture each vehicle, price, term, miles/down, dealer/contact, and any dates."}]
+        for im in images:
+            user_content.append({"type": "image_url", "image_url": {"url": im}})
+    else:
+        model = "gpt-4.1-mini"
+        user_content = text
     try:
         client = OpenAI(api_key=API_KEY)
         resp = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            model=model,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
             response_format={"type": "json_schema", "json_schema": {"name": "deals", "strict": True, "schema": schema}},
         )
         out = json.loads(resp.choices[0].message.content)
@@ -1026,18 +1042,20 @@ def deal_search():
     for i, c in enumerate(cars):
         lines.append(
             f"{i}: {c.get('year','')} {c.get('make','')} {c.get('model','')} {c.get('trim','')} "
-            f"| mo={c.get('monthly','')} 0down={c.get('zero','')} das={c.get('das','')} "
-            f"term={c.get('term','')} miles={c.get('miles','')}"
+            f"| type={c.get('type','lease')} mo={c.get('monthly','')} eff={c.get('zero','')} "
+            f"down={c.get('das','')} apr={c.get('apr','')} term={c.get('term','')} miles={c.get('miles','')}"
         )
     schema = {
         "type": "object", "additionalProperties": False, "required": ["match"],
         "properties": {"match": {"type": "array", "items": {"type": "integer"}}},
     }
     system = (
-        "You are a search filter for a car-lease deal list. Given a natural-language query and a "
-        "numbered list of vehicles (monthly payment, 0-down effective monthly, DAS, term months, "
-        "annual miles), return 'match': the indices of vehicles that satisfy the query, MOST "
-        "relevant / best first. Understand body styles (SUV, sedan, coupe, truck, wagon), fuel "
+        "You are a search filter for a car deal list. Given a natural-language query and a "
+        "numbered list of vehicles (type lease|finance, monthly payment, effective monthly, "
+        "down/DAS, apr, term months, annual miles), return 'match': the indices of vehicles that "
+        "satisfy the query, MOST relevant / best first. Handle lease vs finance ('finance deals', "
+        "'lease only'), APR limits ('under 5% apr'). Understand body styles (SUV, sedan, coupe, "
+        "truck, wagon), fuel "
         "type (EV / hybrid) from model knowledge, brands and sub-brands ('AMG'=Mercedes-AMG, "
         "'M'/'M3'=BMW M, 'Type R'=Honda, etc.), and numeric limits ('under $500/mo' -> monthly<=500, "
         "'0 down' favors low DAS, 'cheap'/'best' -> lowest 0-down effective). Only use indices from "
