@@ -36,7 +36,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -849,6 +849,13 @@ def _save_deals(deals):
         json.dump(deals, f, indent=1)
 
 
+def _default_year(d):
+    """Most of our cars are new leases — if a year isn't stated, assume the current model year."""
+    if not str(d.get("year") or "").strip():
+        d["year"] = "2026"
+    return d
+
+
 def _strip_tax(d):
     """We NEVER keep tax-included figures. Any tax_in_mo is backed out to a pre-tax
     orig_mo (÷1.0975) and cleared — a hard guarantee on top of the model's own instruction."""
@@ -909,10 +916,12 @@ def deal_parse():
     props = {k: {"type": "string"} for k in DEAL_FIELDS}
     schema = {
         "type": "object", "additionalProperties": False,
-        "required": ["kind", "contact", "deals", "adjust"],
+        "required": ["kind", "contact", "contact_phone", "contact_email", "deals", "adjust"],
         "properties": {
             "kind": {"type": "string", "enum": ["deals", "adjust"]},
             "contact": {"type": "string"},
+            "contact_phone": {"type": "string"},
+            "contact_email": {"type": "string"},
             "deals": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False,
                 "required": DEAL_FIELDS, "properties": props}},
@@ -961,8 +970,10 @@ def deal_parse():
         "demo / service-loaner / one-off special; else '').\n"
         "ALSO output top-level 'contact': the single person/broker/dealer the paste is from "
         "(sender at top, signature, or 'from X'). If unsure, ''. Put that name in each row's "
-        "'dealer' field too.\n"
+        "'dealer' field too. Also output 'contact_phone' and 'contact_email' if a phone number or "
+        "email for that contact appears anywhere in the text (else '').\n"
         "RULES:\n"
+        "- If a vehicle's YEAR isn't stated, use '2026' (most of our cars are new leases).\n"
         + make_rule + date_rule +
         "- GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, $1000 BF') apply to EVERY "
         "line below — copy them into each row.\n"
@@ -986,11 +997,13 @@ def deal_parse():
             response_format={"type": "json_schema", "json_schema": {"name": "deals", "strict": True, "schema": schema}},
         )
         out = json.loads(resp.choices[0].message.content)
-        deals = [_derive_zero_down(_strip_tax(d)) for d in out.get("deals", [])]
+        deals = [_derive_zero_down(_strip_tax(_default_year(d))) for d in out.get("deals", [])]
         return jsonify({
             "kind": out.get("kind") or "deals",
             "deals": deals,
             "contact": (out.get("contact") or "").strip(),
+            "contact_phone": (out.get("contact_phone") or "").strip(),
+            "contact_email": (out.get("contact_email") or "").strip(),
             "adjust": out.get("adjust") or {},
         })
     except Exception as e:
@@ -1054,6 +1067,29 @@ def deals():
         _save_deals(incoming)
         return jsonify({"ok": True, "count": len(incoming)})
     return jsonify({"deals": _load_deals()})
+
+
+CONTACTS_FILE = os.path.join(GENERATED_DIR, "contacts.json")
+
+
+@app.route("/contacts", methods=["GET", "POST"])
+def contacts():
+    if request.method == "POST":
+        incoming = (request.json or {}).get("contacts", [])
+        if not isinstance(incoming, list):
+            return jsonify({"error": "Bad payload."}), 400
+        try:
+            with open(CONTACTS_FILE, "w") as f:
+                json.dump(incoming, f, indent=1)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": True, "count": len(incoming)})
+    try:
+        with open(CONTACTS_FILE) as f:
+            data = json.load(f)
+            return jsonify({"contacts": data if isinstance(data, list) else []})
+    except Exception:
+        return jsonify({"contacts": []})
 
 
 @app.route("/detect-plate", methods=["POST"])

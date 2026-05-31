@@ -229,6 +229,14 @@
   .dh-cmp-tbl thead th { color: #eef1f5; font-size: 0.86rem; }
   .dh-cmp-tbl td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #d2d6dc; white-space: nowrap; }
   .dh-cmp-tbl td.cmp-win { color: var(--dh-price); font-weight: 700; }
+  /* contacts */
+  .dh-contact-link { background: none; border: none; color: inherit; font: inherit; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(150,200,255,0.3); text-underline-offset: 2px; }
+  .dh-contact-link:hover { color: #fff; text-decoration-color: rgba(150,200,255,0.7); }
+  .dh-tag.lead { cursor: pointer; }
+  .dh-ph { opacity: 0.8; font-size: 0.85em; }
+  .dh-cfields { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .dh-cfields label { display: flex; flex-direction: column; gap: 5px; font-size: 0.72rem; color: #8a909b; letter-spacing: 0.02em; }
+  .dh-cfields input, .dh-cfields textarea { width: 100%; }
   /* restricted lock modal */
   .lock-modal { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(4,7,12,0.72); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
   .lock-card { width: 330px; max-width: 90vw; background: #101319; border: 1px solid #232733; border-radius: 16px; padding: 26px 24px; box-shadow: 0 30px 80px rgba(0,0,0,.55); text-align: center; }
@@ -1037,6 +1045,21 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     <div class="dh-modal-foot" style="justify-content:flex-end;"><button class="btn-ghost" onclick="dh_cmpCancel()">Close</button></div>
   </div>
 </div>
+<div class="dh-modal" id="dhContactModal">
+  <div class="dh-modal-card" style="max-width:420px;">
+    <div class="dh-modal-head">👤 <span id="dhContactName">Contact</span></div>
+    <div class="dh-cfields">
+      <label>Phone<input type="text" id="dhcPhone" placeholder="(310) 555-1234"></label>
+      <label>Email<input type="text" id="dhcEmail" placeholder="name@dealer.com"></label>
+      <label>Location / dealership<input type="text" id="dhcLocation" placeholder="Lexus of Van Nuys"></label>
+      <label>Notes<textarea id="dhcNotes" style="min-height:60px;" placeholder="fast funding, easy approvals, aggressive…"></textarea></label>
+    </div>
+    <div class="dh-modal-foot">
+      <button class="btn-ghost" onclick="dh_contactClose()">Close</button>
+      <button class="btn-start" onclick="dh_saveContact()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- license-plate brush modal -->
 <div class="plate-modal" id="plateModal">
@@ -1603,7 +1626,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   const RESTRICTED_VIEWS = new Set(['test', 'deals']);
   async function checkUnlock() {
     try { const r = await fetch('/unlock'); const d = await r.json(); restrictedUnlocked = !!d.unlocked; } catch (e) { }
-    if (restrictedUnlocked) { dh_load(); }   // restricted endpoints are reachable now -> load the saved deals
+    if (restrictedUnlocked) { dh_load(); dh_loadContacts(); }   // restricted endpoints are reachable now
     if (restrictedUnlocked && lockPendingView) { $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; showView(v, { noPush: true }); }
   }
   function showLock(targetView) {
@@ -1618,7 +1641,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     try {
       const r = await fetch('/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
       const d = await r.json();
-      if (d.ok) { restrictedUnlocked = true; dh_load(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
+      if (d.ok) { restrictedUnlocked = true; dh_load(); dh_loadContacts(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
       else { $('lockErr').textContent = d.error || 'Incorrect password.'; }
     } catch (e) { $('lockErr').textContent = e.message; }
   }
@@ -2493,6 +2516,43 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   let dh_saveT;
   async function dh_save() { try { await fetch('/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deals: dh_deals }) }); } catch (e) { } }
   function dh_saveSoon() { clearTimeout(dh_saveT); dh_saveT = setTimeout(dh_save, 600); }
+  // ---- dealer contacts (stored server-side) ----
+  let dh_contacts = [], dh_contactsLoaded = false, dh_contactEditing = '';
+  async function dh_loadContacts() { if (dh_contactsLoaded) return; try { const r = await fetch('/contacts'); if (!r.ok) return; const d = await r.json(); dh_contacts = d.contacts || []; dh_contactsLoaded = true; } catch (e) { } }
+  async function dh_saveContacts() { try { await fetch('/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contacts: dh_contacts }) }); } catch (e) { } }
+  function dh_findContact(name) { return dh_contacts.find(x => dh_dealerNorm(x.name) === dh_dealerNorm(name)); }
+  function dh_hasContactInfo(name) { const c = dh_findContact(name); return !!(c && (c.phone || c.email)); }
+  function dh_upsertContact(name, info) {            // merge AI-found phone/email into the stored card
+    if (!name) return; const i = dh_contacts.findIndex(x => dh_dealerNorm(x.name) === dh_dealerNorm(name));
+    const cur = i >= 0 ? { ...dh_contacts[i] } : { name };
+    ['phone', 'email', 'location', 'notes'].forEach(k => { if (info[k]) cur[k] = info[k]; });
+    if (i >= 0) dh_contacts[i] = cur; else dh_contacts.push(cur);
+    dh_saveContacts();
+  }
+  function dh_openContact(name, ev) {
+    if (ev) ev.stopPropagation();
+    if (!name || name === '—') return;
+    dh_contactEditing = name;
+    const c = dh_findContact(name) || {};
+    $('dhContactName').textContent = name;
+    $('dhcPhone').value = c.phone || ''; $('dhcEmail').value = c.email || '';
+    $('dhcLocation').value = c.location || ''; $('dhcNotes').value = c.notes || '';
+    $('dhContactModal').style.display = 'flex';
+    setTimeout(() => $('dhcPhone').focus(), 40);
+  }
+  function dh_contactClose() { $('dhContactModal').style.display = 'none'; dh_contactEditing = ''; }
+  function dh_saveContact() {
+    const name = dh_contactEditing; if (!name) return;
+    const rec = { name, phone: $('dhcPhone').value.trim(), email: $('dhcEmail').value.trim(), location: $('dhcLocation').value.trim(), notes: $('dhcNotes').value.trim() };
+    const i = dh_contacts.findIndex(x => dh_dealerNorm(x.name) === dh_dealerNorm(name));
+    if (i >= 0) dh_contacts[i] = rec; else dh_contacts.push(rec);
+    dh_saveContacts(); dh_contactClose(); dh_renderByCar();
+  }
+  function dh_dealerCell(name) {                     // a clickable dealer name that opens its contact card
+    if (!name) return '—';
+    const esc = name.replace(/'/g, "\\'").replace(/</g, '&lt;');
+    return `<button class="dh-contact-link" onclick="dh_openContact('${esc}', event)">${name}${dh_hasContactInfo(name) ? ' <span class="dh-ph">📞</span>' : ''}</button>`;
+  }
   function dh_render() {
     const t = $('dh_grid');
     $('dh_count').textContent = '(' + dh_deals.length + ')';
@@ -2647,6 +2707,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       const parsed = d.deals || [];
       if (!parsed.length) { dh_status('No deals found in that text.', 'error'); return; }
       const contact = (d.contact || '').trim();   // the AI pulls "who sent this" straight from the paste
+      if (contact && (d.contact_phone || d.contact_email)) dh_upsertContact(contact, { phone: (d.contact_phone || '').trim(), email: (d.contact_email || '').trim() });
       const { updated, added } = dh_sync(parsed, contact);
       dh_refresh(); dh_save();
       $('dh_input').value = '';
@@ -2796,7 +2857,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   function dh_today() { return dh_ymd(new Date()); }
   function dh_normDate(s) { if (!s) return ''; const t = new Date(s); return isNaN(t) ? '' : dh_ymd(t); }     // any format -> YYYY-MM-DD
   function dh_monthEnd(fromStr) { const d = fromStr ? new Date(fromStr + 'T00:00:00') : new Date(); const base = isNaN(d) ? new Date() : d; return dh_ymd(new Date(base.getFullYear(), base.getMonth() + 1, 0)); }
-  function dh_ensureDates(d) { if (!d.active_from) d.active_from = dh_normDate(d._added) || dh_today(); if (!d.active_to) d.active_to = dh_monthEnd(d.active_from); return d; }
+  function dh_ensureDates(d) { if (!String(d.year || '').trim()) d.year = '2026'; if (!d.active_from) d.active_from = dh_normDate(d._added) || dh_today(); if (!d.active_to) d.active_to = dh_monthEnd(d.active_from); return d; }
   function dh_isExpired(d) { const to = d.active_to; if (!to) return false; const t = new Date(to + 'T23:59:59'); return !isNaN(t) && t.getTime() < Date.now(); }
   function dh_dateShort(s) { if (!s) return ''; const t = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(t) ? '' : (t.getMonth() + 1) + '/' + t.getDate(); }
   function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
@@ -2833,7 +2894,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       const z = dh_zeroOf(best);
       // metadata as scannable pills instead of a "·"-joined string
       const tags = [];
-      if (best.dealer) tags.push(`<span class="dh-tag lead">${best.dealer}</span>`);
+      if (best.dealer) tags.push(`<button class="dh-tag lead" onclick="dh_openContact('${best.dealer.replace(/'/g, "\\'").replace(/</g, '&lt;')}', event)">${best.dealer}${dh_hasContactInfo(best.dealer) ? ' 📞' : ''}</button>`);
       const mo = dh_money(best.orig_mo || best.tax_in_mo); if (mo) tags.push(`<span class="dh-tag">${mo}/mo</span>`);
       if (dh_num(best.das)) tags.push(`<span class="dh-tag">${dh_money(best.das)} DAS</span>`);
       if (best.term) tags.push(`<span class="dh-tag">${best.term}mo</span>`);
@@ -2846,7 +2907,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
         const exp = dh_isExpired(d);
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td>${i === 0 ? '🏆 ' : ''}${(d.dealer || '—')}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (d.miles ? '/' + (dh_num(d.miles) / 1000) + 'k' : '')}</td>
           <td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td></tr>`;
       }).join('');
