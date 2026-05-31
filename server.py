@@ -486,24 +486,8 @@ def _rgb_to_hex(rgb):
     return ""
 
 
-@app.route("/carsxe-meta", methods=["POST"])
-def carsxe_meta():
-    """the catalog colors + trims for a vehicle (the /v1/ymm endpoint). Returns the
-    exterior color list (name + hex) and the available trims, so we can rebuild
-    the color picker and trim suggestions without Vehicle Databases."""
-    if not CARSXE_API_KEY:
-        return jsonify({"error": "CARSXE_API_KEY is not set on the server."}), 500
-    data = request.json or {}
-    make = data.get("make", "").strip()
-    model = data.get("model", "").strip()
-    year = str(data.get("year", "")).strip()
-    trim = data.get("trim", "").strip()
-    if not (make and model):
-        return jsonify({"colors": [], "trims": []})
-    mkey = "|".join([year, make.lower(), model.lower(), trim.lower()])
-    cached = _CARSXE_META_CACHE.get(mkey)
-    if cached is not None:
-        return jsonify({**cached, "cached": True})
+def _carsxe_ymm(make, model, year, trim):
+    """One /v1/ymm lookup -> (colors, trims). Empty lists on any failure."""
     params = {"key": CARSXE_API_KEY, "make": make, "model": model, "allTrimOptions": "1", "format": "json"}
     if year:
         params["year"] = year
@@ -514,10 +498,8 @@ def carsxe_meta():
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=30) as r:
             body = json.loads(r.read().decode("utf-8", "ignore"))
-    except Exception as e:
-        return jsonify({"colors": [], "trims": [], "note": f"meta lookup failed: {e}"})
-
-    # exterior colours — try the documented path, then fall back to other shapes
+    except Exception:
+        return [], []
     best = body.get("bestMatch") or body.get("data") or {}
     cands = []
     col = best.get("color") or best.get("colors") or {}
@@ -535,13 +517,57 @@ def carsxe_meta():
         if name and name.lower() not in seen:
             seen.add(name.lower())
             colors.append({"name": name, "hex": _rgb_to_hex(c.get("rgb") or c.get("rgb_value") or "")})
-
     trims = []
     for t in (body.get("trimOptions") or best.get("trimOptions") or []):
         nm = t if isinstance(t, str) else (t.get("trim") or t.get("name") or "")
         nm = (nm or "").strip()
         if nm and nm not in trims:
             trims.append(nm)
+    return colors, trims
+
+
+@app.route("/carsxe-meta", methods=["POST"])
+def carsxe_meta():
+    """Manufacturer exterior colors + trims for a vehicle. Falls back (drop trim,
+    then recent prior years) when the exact year has no colour data, so the colour
+    picker reliably shows the factory colours."""
+    if not CARSXE_API_KEY:
+        return jsonify({"error": "CARSXE_API_KEY is not set on the server."}), 500
+    data = request.json or {}
+    make = data.get("make", "").strip()
+    model = data.get("model", "").strip()
+    year = str(data.get("year", "")).strip()
+    trim = data.get("trim", "").strip()
+    if not (make and model):
+        return jsonify({"colors": [], "trims": []})
+    mkey = "|".join([year, make.lower(), model.lower(), trim.lower()])
+    cached = _CARSXE_META_CACHE.get(mkey)
+    if cached is not None:
+        return jsonify({**cached, "cached": True})
+
+    # exact -> drop trim -> recent prior years (color data lags for brand-new years)
+    candidates = [(year, trim)]
+    if trim:
+        candidates.append((year, ""))
+    try:
+        yr = int(year)
+        for back in (1, 2, 3):
+            candidates.append((str(yr - back), ""))
+    except Exception:
+        pass
+
+    colors, trims, tried = [], [], set()
+    for (y, tr) in candidates:
+        if (y, tr) in tried:
+            continue
+        tried.add((y, tr))
+        c, t = _carsxe_ymm(make, model, y, tr)
+        if t and not trims:
+            trims = t
+        if c:
+            colors = c
+            break
+
     payload = {"colors": colors, "trims": trims}
     if colors or trims:
         _cache_put(_CARSXE_META_CACHE, mkey, payload)

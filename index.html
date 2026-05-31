@@ -2008,7 +2008,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     t_render();
     $('vdbBtn').disabled = true; $('vdbBtn').classList.add('loading'); $('vdbBtn').textContent = 'Generating…';
     setVdb('Finding the best photo…', 'active');
-    const metaP = t_loadMeta(year, make, model, trim);   // colours + trims, in parallel
+    t_loadMeta(year, make, model, trim);                  // colours + trims populate the picker when ready
     try {
       const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor($('t_color').value) });
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
@@ -2017,9 +2017,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      await metaP;                                        // make sure the colours are populated
-      const haveColors = $('t_color').options.length > 1;
-      setVdb('Photo placed ✓ — tap another photo' + (haveColors ? ' or pick a color' : '') + ' below', 'done');
+      setVdb('Photo placed ✓ — tap another photo or pick a color below', 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
