@@ -1810,7 +1810,7 @@
       priceText = monthly ? `$${money(monthly)} Per Month` : '';
       const down = $('t_down').value.trim(), apr = $('t_apr').value.trim();
       if (down) parts.push(`$${money(down)} Down`);
-      if (term) parts.push(`${term} Months`);
+      if (term) parts.push(`${term} Month Finance`);
       if (apr) parts.push(`${apr}% APR`);
     } else if (t_dealType === 'onepay') {
       priceText = das ? `$${money(das)} One Pay` : '';      // no monthly — the up-front total is the hero
