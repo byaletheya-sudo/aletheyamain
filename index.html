@@ -2680,8 +2680,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dh_saveSoon();
   }
   function dh_addRow() { dh_deals.unshift(dh_ensureDates({ _added: new Date().toLocaleDateString() })); dh_setMode('sheet'); dh_saveSoon(); }
-  function dh_delRow(i) { dh_deals.splice(i, 1); dh_refresh(); dh_saveSoon(); }
-  function dh_clear() { if (!dh_deals.length) return; if (!confirm('Clear all ' + dh_deals.length + ' deals?')) return; dh_deals = []; dh_refresh(); dh_save(); }
+  function dh_delRow(i) {
+    const d = dh_deals[i]; const label = (d && dh_carLabel(d)) || 'this deal';
+    if (!confirm('Delete ' + label + (d && d.dealer ? ' · ' + d.dealer : '') + '?')) return;
+    dh_deals.splice(i, 1); dh_refresh(); dh_saveSoon();
+  }
+  function dh_clear() {
+    if (!dh_deals.length) return;
+    const pw = prompt('Clearing ALL ' + dh_deals.length + ' deals is permanent.\nEnter the admin password to continue:');
+    if (pw == null) return;                                  // cancelled
+    if (pw !== 'Arvinisdingus') { alert('Wrong password — nothing was cleared.'); return; }
+    dh_deals = []; dh_refresh(); dh_save();
+  }
   // Upsert by (contact + car): a dealer's new list updates their existing deals,
   // adds new ones, and never touches another dealer's deals.
   function dh_dealerNorm(s) { return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' '); }
@@ -3073,7 +3083,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_custInput(v) { dh_custSet(dh_num(v) || 0); }
   function dh_custReset() { dh_custSet(dh_cust.origDas); }
   function dh_custClose() { $('dhCustModal').style.display = 'none'; dh_cust = null; }
-  function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
+  function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note" title="${escapeHtml(n).replace(/"/g, '&quot;')}">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
   function dh_renderByCar() {
     const q = ($('dh_search').value || '').toLowerCase().trim();
     const expiredCount = dh_deals.filter(dh_isExpired).length;

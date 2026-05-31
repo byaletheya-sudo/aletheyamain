@@ -993,6 +993,10 @@ def deal_parse():
         "line below — copy them into each row.\n"
         "- Inline ADJUSTMENT instructions mixed into a deal list ('subtract $15 from each "
         "monthly', 'add my $500 fee') — do the arithmetic on every row; never treat as a vehicle.\n"
+        "- PER-IMAGE instructions: attached images are labeled 'Screenshot 1', 'Screenshot 2', … in "
+        "order. The text may target them individually ('for the first screenshot add $40 to each "
+        "monthly', 'screenshot 2: add a $1000 broker fee', 'second one is from Roji'). Apply each "
+        "such instruction ONLY to the deals from that screenshot.\n"
         "- TAX — two OPPOSITE cases, never confuse them:\n"
         "  (a) PLUS tax ('475+ tax', '$475 plus tax', '475 + tax', '475 +tax'): the number is "
         "ALREADY the PRE-TAX payment (tax is added on top, separately). KEEP it as-is in orig_mo. "
@@ -1011,7 +1015,8 @@ def deal_parse():
         # vision: read the deals straight off a flyer screenshot / PDF page(s)
         model = "gpt-4.1"
         user_content = [{"type": "text", "text": text or "Read EVERY car deal from these flyer image(s) and structure them. Capture each vehicle, price, term, miles/down, dealer/contact, and any dates."}]
-        for im in images:
+        for n, im in enumerate(images, 1):
+            user_content.append({"type": "text", "text": f"--- Screenshot {n} ---"})
             user_content.append({"type": "image_url", "image_url": {"url": im}})
     else:
         model = "gpt-4.1-mini"
