@@ -545,6 +545,41 @@ def review_parse():
         return jsonify({"error": f"Couldn't read that review: {e}"}), 502
 
 
+@app.route("/review-caption", methods=["POST"])
+def review_caption():
+    """Write an Instagram caption + hashtags for a customer-review repost."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    d = request.json or {}
+    review = (d.get("review") or "").strip()
+    name = (d.get("name") or "").strip()
+    rating = d.get("rating") or 5
+    vehicle = (d.get("vehicle") or "").strip()
+    source = (d.get("source") or "").strip()
+    if not review:
+        return jsonify({"error": "Add the review text first."}), 400
+    prompt = (
+        "Write a short, warm Instagram caption for a luxury car dealership, Nova Auto Pros, that is "
+        "RESHARING a happy customer's review/testimonial.\n"
+        f"Reviewer: {name or 'a happy customer'}. Rating: {rating}/5 stars"
+        + (f" on their {vehicle}" if vehicle else "")
+        + (f". Left on {source}" if source else "") + ".\n"
+        f'The review: "{review}"\n'
+        "Tone: grateful, celebratory, upscale, authentic. Thank the customer and warmly invite others in. "
+        "1-3 short sentences with 1-2 tasteful emojis. Then a blank line, then a line of 8-12 relevant "
+        "hashtags (mix brand, local car-buying/dealership, and review/testimonial tags). Do NOT wrap the "
+        "caption in quotation marks. Vary the wording each time."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.responses.create(model="gpt-4.1-mini", input=prompt)
+        text = (getattr(resp, "output_text", "") or "").strip()
+        return jsonify({"caption": text})
+    except Exception as e:
+        info = classify_error(e)
+        return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
 def _carsxe_dataurl(url):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
