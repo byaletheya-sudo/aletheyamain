@@ -646,6 +646,14 @@
               </div>
               <p class="hint">Pick year → make → model. The first trim is selected and the ad builds automatically. Lists are pulled live from Vehicle Databases (and cached, so repeats are free).</p>
               <div class="status" id="vdbStatus"></div>
+              <div style="margin-top:12px;border-top:1px solid #1d2230;padding-top:12px;">
+                <button class="btn-ghost" id="t_carsxeBtn" onclick="t_carsxeFetch()" style="font-size:.85rem;">🧪 Try CarsXE image (beta)</button>
+                <div id="t_carsxeWrap" style="display:none;margin-top:10px;">
+                  <label for="t_carsxeImg">CarsXE result — pick the best one</label>
+                  <select id="t_carsxeImg" onchange="t_carsxePick()"></select>
+                </div>
+                <p class="hint" style="margin-top:6px;">Pulls the photo from CarsXE (transparent) using the selected vehicle — for comparing image quality vs Vehicle Databases.</p>
+              </div>
             </div>
 
             <div class="panel">
@@ -1986,6 +1994,39 @@
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     return d.image_data;
+  }
+  // ---- CarsXE image trial (isolated; doesn't touch the VDB flow) ----
+  async function t_carsxeFetch() {
+    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
+    if (!(make && model)) { setVdb('Pick a make and model first.', 'error'); return; }
+    $('t_carsxeBtn').disabled = true;
+    setVdb('Fetching CarsXE images…', 'active');
+    try {
+      const r = await fetch('/carsxe-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model, trim }) });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      if (d.found === false) { setVdb('✕ ' + (d.message || 'No CarsXE images.'), 'error'); return; }
+      const sel = $('t_carsxeImg'); sel.innerHTML = '';
+      (d.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; sel.appendChild(op); });
+      $('t_carsxeWrap').style.display = (d.options && d.options.length) ? '' : 'none';
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      $('t_dlBtn').disabled = false;
+      setVdb(`CarsXE: ${d.options.length} image(s) — pick the best below`, 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+    finally { $('t_carsxeBtn').disabled = false; }
+  }
+  async function t_carsxePick() {
+    const url = $('t_carsxeImg').value; if (!url) return;
+    setVdb('Loading that image…', 'active');
+    try {
+      const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      setVdb('CarsXE image placed ✓', 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   async function t_pickColor() {
     t_updateSwatch();

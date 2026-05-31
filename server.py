@@ -144,6 +144,10 @@ API_KEY = load_api_key()
 # Vehicle Databases (vehicle image API) — set VDB_API_KEY in the host env to enable the TEST tool.
 VDB_API_KEY = os.environ.get("VDB_API_KEY", "").strip()
 
+# CarsXE (alternate image source, being trialed). Set CARSXE_API_KEY in the host env.
+CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
+_CARSXE_ALLOWED = set()   # image URLs CarsXE returned to us (the only ones we'll proxy)
+
 # Art-directed render rules: locked framing/scale/lighting for a consistent campaign look,
 # rendered on a TRANSPARENT background so each car drops cleanly onto the ad template.
 RENDER_RULES = (
@@ -681,6 +685,78 @@ def vdb_proxy():
             ctype = r.headers.get("Content-Type", "image/jpeg")
             b = r.read()
         return jsonify({"success": True, "image_data": f"data:{ctype};base64," + base64.b64encode(b).decode()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+def _carsxe_dataurl(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        ctype = r.headers.get("Content-Type", "image/png")
+        b = r.read()
+    return f"data:{ctype};base64," + base64.b64encode(b).decode()
+
+
+@app.route("/carsxe-image", methods=["POST"])
+def carsxe_image():
+    """TRIAL: pull a vehicle photo from CarsXE's /images endpoint (make/model based,
+    transparent by default) so we can compare its image quality against Vehicle
+    Databases. Returns the full set of results so the user can pick the best one."""
+    if not CARSXE_API_KEY:
+        return jsonify({"error": "CARSXE_API_KEY is not set on the server. Add it in Railway → Variables."}), 500
+    data = request.json or {}
+    make = data.get("make", "").strip()
+    model = data.get("model", "").strip()
+    year = str(data.get("year", "")).strip()
+    trim = data.get("trim", "").strip()
+    color = data.get("color", "").strip()
+    if not (make and model):
+        return jsonify({"error": "Pick a make and model first."}), 400
+    params = {"key": CARSXE_API_KEY, "make": make, "model": model,
+              "transparent": "true", "size": "Large", "format": "json"}
+    if year:
+        params["year"] = year
+    if trim:
+        params["trim"] = trim
+    if color:
+        params["color"] = color
+    url = "https://api.carsxe.com/images?" + urllib.parse.urlencode(params)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode("utf-8", "ignore"))
+    except urllib.error.HTTPError as e:
+        return jsonify({"error": f"CarsXE error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"CarsXE request failed: {e}"}), 502
+
+    imgs = [im for im in (body.get("images") or []) if im.get("link")]
+    if not imgs:
+        return jsonify({"found": False, "message": body.get("error") or "No images returned by CarsXE."})
+    for im in imgs:
+        _CARSXE_ALLOWED.add(im["link"])
+    if len(_CARSXE_ALLOWED) > 800:
+        _CARSXE_ALLOWED.clear()
+        for im in imgs:
+            _CARSXE_ALLOWED.add(im["link"])
+    options = [{"url": im["link"], "label": f"Image {i + 1} ({im.get('width', '?')}×{im.get('height', '?')})"}
+               for i, im in enumerate(imgs)]
+    try:
+        first = _carsxe_dataurl(imgs[0]["link"])
+    except Exception as e:
+        return jsonify({"error": f"Couldn't load the CarsXE image: {e}"}), 502
+    return jsonify({"found": True, "success": True, "image_data": first,
+                    "image_url": imgs[0]["link"], "options": options})
+
+
+@app.route("/carsxe-proxy", methods=["POST"])
+def carsxe_proxy():
+    """Proxy a specific CarsXE image (only URLs CarsXE itself returned — no open SSRF)."""
+    url = (request.json or {}).get("url", "").strip()
+    if url not in _CARSXE_ALLOWED:
+        return jsonify({"error": "URL not allowed."}), 400
+    try:
+        return jsonify({"success": True, "image_data": _carsxe_dataurl(url)})
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
