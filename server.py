@@ -892,35 +892,54 @@ def deal_parse():
     ) if makes else ""
     props = {k: {"type": "string"} for k in DEAL_FIELDS}
     schema = {
-        "type": "object", "additionalProperties": False, "required": ["deals", "contact"],
+        "type": "object", "additionalProperties": False,
+        "required": ["kind", "contact", "deals", "adjust"],
         "properties": {
+            "kind": {"type": "string", "enum": ["deals", "adjust"]},
             "contact": {"type": "string"},
             "deals": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False,
-                "required": DEAL_FIELDS, "properties": props}}},
+                "required": DEAL_FIELDS, "properties": props}},
+            "adjust": {
+                "type": "object", "additionalProperties": False,
+                "required": ["scope_contact", "delta_mo", "remove_tax_pct"],
+                "properties": {
+                    "scope_contact": {"type": "string"},
+                    "delta_mo": {"type": "string"},
+                    "remove_tax_pct": {"type": "string"}}},
+        },
     }
     system = (
-        "You convert messy car lease/finance deal text into structured rows. For EACH "
-        "vehicle output: year, make, model, trim, msrp, orig_mo (base monthly payment), "
-        "das (due at signing / cash to dealer), term (months), miles (annual mileage), "
-        "tax_in_mo (monthly WITH tax, if that's how it's quoted), broker_fee, dealer, "
-        "notes (loyalty / conquest / credit tier / tax handling / any other terms), "
-        "source (a short label for where the deal came from — dealer, flyer title, or sender), "
-        "and active_from / active_to (the validity window, only if stated — see the date rule).\n"
-        "ALSO output a top-level 'contact': the single person/broker/dealer this whole paste "
-        "is from (the sender updating their deals), e.g. 'Diana Santa Monica'. Look for a "
-        "name/sender at the top, a signature, or a 'from X' line. If you truly can't tell, "
-        "use ''. Put that same name in each row's 'dealer' field too.\n"
+        "You read messy car lease/finance text. FIRST classify it with 'kind':\n"
+        "- 'adjust' = an INSTRUCTION to change deals ALREADY saved, with NO new vehicle listings "
+        "(e.g. 'update all of Diana Santa Monica's deals by decreasing payments $15', 'lower "
+        "Mike's monthlies $20', 'Diana: 9.75% tax included'). Output an 'adjust' object and leave "
+        "'deals' empty.\n"
+        "- 'deals' = an actual list/flyer of one or more vehicles. Output 'deals' and leave "
+        "'adjust' fields ''.\n"
+        "ADJUST object: scope_contact = whose saved deals to change (the named person; '' = ALL "
+        "deals). delta_mo = signed dollars to add to each monthly ('decrease $15'->'-15', 'add "
+        "$20'->'20'; else ''). remove_tax_pct = a tax rate to back OUT of the monthly when they "
+        "say it's tax-included (e.g. '9.75% tax included'->'9.75'; else '').\n"
+        "For EACH vehicle (kind='deals') output: year, make, model, trim, msrp, orig_mo (base "
+        "monthly payment), das (due at signing / cash to dealer), term (months), miles (annual "
+        "mileage), tax_in_mo (monthly WITH tax, if quoted that way), broker_fee, dealer, notes "
+        "(loyalty / conquest / credit tier / any other terms), source (short label for where it "
+        "came from), and active_from / active_to (validity window, only if stated).\n"
+        "ALSO output top-level 'contact': the single person/broker/dealer the paste is from "
+        "(sender at top, signature, or 'from X'). If unsure, ''. Put that name in each row's "
+        "'dealer' field too.\n"
         "RULES:\n"
         + make_rule + date_rule +
-        "- A list usually has GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, "
-        "$1000 BF') that apply to EVERY line below — copy them into each row.\n"
-        "- The paste may also contain plain-English ADJUSTMENT INSTRUCTIONS mixed in (e.g. "
-        "'do pre-tax ÷1.0975', 'subtract $15 from each monthly', 'add my $500 fee'). Detect "
-        "these, do the arithmetic on every affected row, and do NOT treat them as a vehicle.\n"
+        "- GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, $1000 BF') apply to EVERY "
+        "line below — copy them into each row.\n"
+        "- Inline ADJUSTMENT instructions mixed into a deal list ('subtract $15 from each "
+        "monthly', 'add my $500 fee') — do the arithmetic on every row; never treat as a vehicle.\n"
+        "- TAX-INCLUDED: if a monthly is stated tax-included WITH a rate (e.g. '$420 incl 9.75% "
+        "tax'), set orig_mo to the PRE-TAX amount (monthly ÷ (1+rate/100)) and do NOT mention the "
+        "tax in notes. Tax-included WITHOUT a stated rate goes in tax_in_mo.\n"
         "- Normalize shorthand to plain numbers (no $ or commas): '3k'->3000, '7.5k'->7500, "
         "'$51k MSRP'->51000, '$289'->289. '13/7500' means term=13, miles=7500.\n"
-        "- A payment quoted 'tax inc'/'tax in' goes in tax_in_mo; otherwise orig_mo.\n"
         "- Leave a field '' if it isn't present.\n"
         f"EXTRA ADJUSTMENT RULES (if any) TO APPLY TO EVERY ROW: {rules or '(none)'}"
     )
@@ -933,7 +952,12 @@ def deal_parse():
         )
         out = json.loads(resp.choices[0].message.content)
         deals = [_derive_zero_down(d) for d in out.get("deals", [])]
-        return jsonify({"deals": deals, "contact": (out.get("contact") or "").strip()})
+        return jsonify({
+            "kind": out.get("kind") or "deals",
+            "deals": deals,
+            "contact": (out.get("contact") or "").strip(),
+            "adjust": out.get("adjust") or {},
+        })
     except Exception as e:
         return jsonify({"error": f"Couldn't parse those deals: {e}"}), 502
 

@@ -141,10 +141,6 @@
   .dh-empty { padding: 28px; text-align: center; color: #5d626b; font-size: 0.85rem; }
   /* Deal Hub — By Car */
   .dh-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-  .dh-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .dh-chip { padding: 5px 11px; font-size: 0.72rem; font-weight: 600; border-radius: 999px; cursor: pointer; color: #9aa1ac; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); transition: background .15s, color .15s, border-color .15s; }
-  .dh-chip:hover { color: #eaeef4; }
-  .dh-chip.active { color: #eef2f8; background: rgba(120,150,200,0.20); border-color: rgba(140,170,220,0.4); }
   .dh-make { margin-bottom: 22px; }
   .dh-make-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.07); cursor: pointer; user-select: none; }
   .dh-make-head:hover .dh-make-name { color: #fff; }
@@ -925,8 +921,6 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
             <div id="dh_bestDeal"></div>
             <div class="dh-filters">
               <input type="text" id="dh_search" placeholder="Search car…" oninput="dh_renderByCar()" style="max-width:240px;">
-              <div class="dh-chips" id="dh_termChips"></div>
-              <div class="dh-chips" id="dh_mileChips"></div>
               <select id="dh_sort" class="dh-sort" onchange="dh_setSort(this.value)" title="Sort cars">
                 <option value="best">Cheapest first</option>
                 <option value="newest">Newest first</option>
@@ -2476,6 +2470,31 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     });
     return { updated, added, removed };
   }
+  // apply a plain-English instruction ("decrease Diana's payments $15", "9.75% tax included")
+  // to deals ALREADY saved — find & edit, never delete.
+  function dh_applyAdjust(adj) {
+    const cn = dh_dealerNorm(adj.scope_contact || '');
+    const taxPct = dh_num(adj.remove_tax_pct);
+    // sign-aware (dh_num strips the '-'); "decrease $15" arrives as "-15"
+    const deltaRaw = (adj.delta_mo == null) ? '' : String(adj.delta_mo).replace(/[^0-9.\-]/g, '');
+    const delta = deltaRaw === '' || deltaRaw === '-' ? null : parseFloat(deltaRaw);
+    const today = dh_today();
+    let n = 0;
+    dh_deals.forEach(d => {
+      if (cn && dh_dealerNorm(d.dealer) !== cn) return;
+      let changed = false;
+      if (taxPct) {                                   // back the tax out of the monthly + drop the now-stale note
+        const f = 1 + taxPct / 100;
+        ['orig_mo', 'tax_in_mo'].forEach(k => { const v = dh_num(d[k]); if (v) { d[k] = String(Math.round(v / f * 100) / 100); changed = true; } });
+        if (d.notes && /tax/i.test(d.notes)) { d.notes = d.notes.split(/[;,]/).map(s => s.trim()).filter(s => s && !/tax/i.test(s)).join(', '); changed = true; }
+      }
+      if (delta != null) {
+        ['orig_mo', 'tax_in_mo'].forEach(k => { const v = dh_num(d[k]); if (v) { d[k] = String(Math.round((v + delta) * 100) / 100); changed = true; } });
+      }
+      if (changed) { d.zero_down_mo = dh_zeroDown(d); d._updated = today; n++; }
+    });
+    return n;
+  }
   async function dh_parse() {
     const text = $('dh_input').value.trim();
     if (!text) { dh_status('Paste some deals first.', 'error'); return; }
@@ -2485,6 +2504,15 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, makes: T_MAKES, today: dh_today() }) });
       let d; try { d = await r.json(); } catch (_) { dh_status('✕ Couldn’t reach the server.', 'error'); return; }
       if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
+      // a command to edit existing deals -> find & update them, don't add/remove
+      if (d.kind === 'adjust') {
+        const adj = d.adjust || {};
+        const n = dh_applyAdjust(adj);
+        if (!n) { dh_status('No saved deals matched' + (adj.scope_contact ? ' "' + adj.scope_contact + '"' : '') + '.', 'error'); return; }
+        dh_refresh(); dh_save(); $('dh_input').value = '';
+        dh_status('Updated ' + n + ' deal' + (n > 1 ? 's' : '') + (adj.scope_contact ? ' for ' + adj.scope_contact : '') + ' ✓', 'done');
+        return;
+      }
       const parsed = d.deals || [];
       if (!parsed.length) { dh_status('No deals found in that text.', 'error'); return; }
       const contact = (d.contact || '').trim();   // the AI pulls "who sent this" straight from the paste
@@ -2495,16 +2523,23 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     } catch (e) { dh_status('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Sync'; }
   }
+  function dh_winners() {                              // the best (active-first, cheapest) deal per car
+    const groups = {};
+    dh_deals.forEach(d => { const k = dh_carKey(d); (groups[k] = groups[k] || []).push(d); });
+    return Object.values(groups).map(arr => arr.slice().sort((a, b) => (dh_isExpired(a) - dh_isExpired(b)) || ((dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)))[0]);
+  }
   function dh_export() {
     if (!dh_deals.length) return;
+    const winnersOnly = !confirm('Export ALL deals?\n\nOK = every deal\nCancel = only the best (winning) deal per car');
+    const rows = winnersOnly ? dh_winners() : dh_deals;
     const esc = v => { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const head = DH_COLS.map(c => c.label).join(',');
-    const lines = dh_deals.map(d => DH_COLS.map(c => esc(d[c.k])).join(','));
-    const a = document.createElement('a'); a.download = 'deals.csv';
+    const lines = rows.map(d => DH_COLS.map(c => esc(d[c.k])).join(','));
+    const a = document.createElement('a'); a.download = winnersOnly ? 'best-deals.csv' : 'deals.csv';
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
   }
   // ---- By Car view ----
-  let dh_mode = 'car', dh_fTerm = '', dh_fMiles = '', dh_sort = 'best';
+  let dh_mode = 'car', dh_sort = 'best';
   function dh_setSort(v) { dh_sort = v; dh_renderByCar(); }
   function dh_refresh() {
     $('dh_count').textContent = dh_deals.length ? ('(' + dh_deals.length + ' deals)') : '';
@@ -2575,25 +2610,9 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   function dh_isExpired(d) { const to = d.active_to; if (!to) return false; const t = new Date(to + 'T23:59:59'); return !isNaN(t) && t.getTime() < Date.now(); }
   function dh_dateShort(s) { if (!s) return ''; const t = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(t) ? '' : (t.getMonth() + 1) + '/' + t.getDate(); }
   function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
-  function dh_chips(elId, vals, active, onPick, suffix) {
-    const w = $(elId); w.innerHTML = '';
-    if (!vals.length) return;
-    const mk = (label, val) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'dh-chip' + (val === active ? ' active' : ''); c.textContent = label; c.onclick = () => onPick(val); w.appendChild(c); };
-    mk('All ' + suffix, '');
-    vals.forEach(v => mk(v + (suffix === 'mo' ? 'mo' : ''), v));
-  }
   function dh_renderByCar() {
-    const terms = [...new Set(dh_deals.map(d => String(d.term || '').trim()).filter(Boolean))].sort((a, b) => (+a) - (+b));
-    const miles = [...new Set(dh_deals.map(d => String(d.miles || '').trim()).filter(Boolean))].sort((a, b) => (+a) - (+b));
-    dh_chips('dh_termChips', terms, dh_fTerm, v => { dh_fTerm = v; dh_renderByCar(); }, 'mo');
-    dh_chips('dh_mileChips', miles, dh_fMiles, v => { dh_fMiles = v; dh_renderByCar(); }, 'mi');
     const q = ($('dh_search').value || '').toLowerCase().trim();
-    const deals = dh_deals.filter(d => {
-      if (dh_fTerm && String(d.term || '').trim() !== dh_fTerm) return false;
-      if (dh_fMiles && String(d.miles || '').trim() !== dh_fMiles) return false;
-      if (q && !dh_carLabel(d).toLowerCase().includes(q)) return false;
-      return true;
-    });
+    const deals = dh_deals.filter(d => !q || dh_carLabel(d).toLowerCase().includes(q));
     const groups = {};
     deals.forEach(d => { const k = dh_carKey(d); (groups[k] = groups[k] || { label: dh_carLabel(d), deals: [] }).deals.push(d); });
     const list = Object.values(groups).filter(g => g.label);
