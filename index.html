@@ -91,9 +91,22 @@
 
   .checkbox { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #aaa; cursor: pointer; }
   .checkbox input { width: 16px; height: 16px; accent-color: #4a9eff; }
-  .seg { display: inline-flex; gap: 0; background: #0a0d12; border: 1px solid #2a2f3a; border-radius: 9px; padding: 3px; }
-  .seg-btn { background: transparent; border: none; color: #9aa3b2; padding: 7px 20px; border-radius: 7px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
-  .seg-btn.active { background: #2f7ff0; color: #fff; }
+  /* iOS-style toggle */
+  .toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 0.82rem; color: #9ba1ab; cursor: pointer; user-select: none; }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .tg-track { position: relative; width: 38px; height: 22px; border-radius: 11px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.06); transition: background .2s; flex: 0 0 auto; }
+  .tg-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: #f3f4f6; transition: transform .2s cubic-bezier(.3,1.4,.5,1); box-shadow: 0 1px 3px rgba(0,0,0,0.45); }
+  .toggle input:checked + .tg-track { background: rgba(90,130,190,0.55); border-color: rgba(120,160,220,0.4); }
+  .toggle input:checked + .tg-track::after { transform: translateX(15px); }
+  .toggle input:focus-visible + .tg-track { box-shadow: 0 0 0 3px rgba(120,160,220,0.25); }
+  /* frosted glass segmented control */
+  .seg { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 11px; padding: 3px; backdrop-filter: blur(8px); }
+  .seg-btn, .seg button { background: transparent; border: none; color: #868d98; padding: 7px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background .18s, color .18s, box-shadow .18s; }
+  .seg-btn:hover, .seg button:hover { color: #c2c8d2; }
+  .seg-btn.active, .seg button.active { background: linear-gradient(180deg, rgba(130,160,210,0.22), rgba(110,140,190,0.14)); color: #eef2f8; box-shadow: inset 0 0 0 1px rgba(140,170,220,0.30), 0 2px 8px rgba(0,0,0,0.22); }
+  @keyframes fieldIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+  .field-anim { animation: fieldIn .24s ease; }
+  .fld-dim label { color: #5f656e; }   /* secondary finance fields */
   .ph-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .ph-thumb { position: relative; width: 94px; height: 64px; border-radius: 9px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; transition: border-color .15s, transform .1s; }
   .ph-thumb:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
@@ -284,9 +297,6 @@
   .sp.r45 .sp__title { font-size: 66px; margin-top: 20px; }
   .sp.r45 .sp__hero.two .sp__photo { width: 424px; height: 424px; }
 
-  .seg { display: inline-flex; background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
-  .seg button { padding: 9px 18px; background: transparent; color: #aaa; border: none; border-radius: 0; font-weight: 600; font-size: 0.85rem; }
-  .seg button.active { background: #4a9eff; color: #fff; }
 
   /* license-plate brush modal */
   .plate-modal { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.72);
@@ -665,7 +675,7 @@
               </div>
               <div class="controls" style="margin-top:14px;">
                 <button class="btn-start" id="vdbBtn" onclick="t_build()">⚡ Generate Ad</button>
-                <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
+                <label class="toggle"><input type="checkbox" id="t_autoDl" checked><span class="tg-track"></span> Auto-download</label>
               </div>
               <div id="t_carsxeWrap" style="display:none;margin-top:12px;">
                 <label>Photo <span style="opacity:.55;font-weight:400;">— tap the best one</span></label>
@@ -690,7 +700,7 @@
               </div>
               <label for="t_badge">Badge</label>
               <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
-              <label class="checkbox" style="margin-top:8px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"> Show badge pill</label>
+              <label class="toggle" style="margin-top:10px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"><span class="tg-track"></span> Show badge pill</label>
             </div>
 
             <div class="panel">
@@ -714,11 +724,11 @@
             </div>
 
             <div class="panel">
-              <h2>Contact &amp; Disclaimer <span style="font-weight:400;opacity:.6;font-size:.8rem;">(fixed)</span></h2>
+              <h2>Contact &amp; Disclaimer <span style="font-weight:400;opacity:.6;font-size:.8rem;">(fixed — triple-click to edit)</span></h2>
               <label for="t_phone">Phone</label>
-              <input type="text" id="t_phone" value="(818) 873 - 3697" readonly style="opacity:.7;cursor:not-allowed;">
+              <input type="text" id="t_phone" value="(818) 873 - 3697" readonly style="opacity:.7;" onclick="t_tripleUnlock(this, event)" oninput="t_render()">
               <label for="t_fine">Fine print</label>
-              <textarea id="t_fine" readonly style="opacity:.7;cursor:not-allowed;">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
+              <textarea id="t_fine" readonly style="opacity:.7;" onclick="t_tripleUnlock(this, event)" oninput="t_render()">Based on Tier 1 credit. Subject to approval. Pricing may require qualification for specific incentives and is subject to availability. **Due at signing includes all fees, registration, and title.** Pricing and availability may change at any time without notice. Vehicle shown may differ from actual stock.</textarea>
             </div>
 
             <div class="panel">
@@ -1745,6 +1755,13 @@
     if (!t_subEdited) $('t_bodystyle').value = t_cleanTrim($('t_trim').value);
     t_syncTitle();
   }
+  // triple-click a fixed field (phone / fine print) to unlock it for editing
+  function t_tripleUnlock(el) {
+    el._clk = (el._clk || 0) + 1;
+    clearTimeout(el._clkT);
+    el._clkT = setTimeout(() => { el._clk = 0; }, 500);
+    if (el._clk >= 3 && el.readOnly) { el.readOnly = false; el.style.opacity = '1'; el.style.cursor = 'text'; el._clk = 0; el.focus(); }
+  }
   // ---- Single / Bulk mode ----
   let t_mode = 'single';
   function t_setMode(mode) {
@@ -1767,7 +1784,15 @@
     t_dealType = type;
     ['lease', 'finance', 'onepay'].forEach(m => $('t_seg_' + m).classList.toggle('active', m === type));
     const show = T_DEAL_FIELDS[type];
-    ['t_fMonthly', 't_fTerm', 't_fDas', 't_fDown', 't_fApr'].forEach(id => { $(id).style.display = show.includes(id) ? '' : 'none'; });
+    // finance hierarchy: monthly + APR are primary (first row), down + term secondary
+    const order = type === 'finance' ? { t_fMonthly: 1, t_fApr: 2, t_fDown: 3, t_fTerm: 4 } : {};
+    ['t_fMonthly', 't_fTerm', 't_fDas', 't_fDown', 't_fApr'].forEach(id => {
+      const el = $(id), vis = show.includes(id);
+      el.style.display = vis ? '' : 'none';
+      el.style.order = order[id] || '';
+      el.classList.toggle('fld-dim', type === 'finance' && (id === 't_fDown' || id === 't_fTerm'));
+      if (vis) { el.classList.remove('field-anim'); void el.offsetWidth; el.classList.add('field-anim'); }   // micro-motion
+    });
     $('t_dasLabel').textContent = type === 'onepay' ? 'One Pay total ($)' : 'Due at signing ($)';
     t_render();
   }
