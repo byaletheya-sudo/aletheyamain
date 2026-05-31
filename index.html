@@ -2419,9 +2419,20 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d); }
   function dh_sync(parsed, fromContact) {
     const today = new Date().toLocaleDateString();
-    let updated = 0, added = 0;
+    let updated = 0, added = 0, removed = 0;
+    if (fromContact) parsed.forEach(p => p.dealer = fromContact);  // attribute the batch to the contact
+    // the contact's paste is their CURRENT list -> drop their old deals not in it (confirmed)
+    if (fromContact) {
+      const cn = dh_dealerNorm(fromContact);
+      const newKeys = new Set(parsed.map(p => dh_carKey(p)));
+      const stale = dh_deals.filter(d => dh_dealerNorm(d.dealer) === cn && !newKeys.has(dh_carKey(d)));
+      if (stale.length && confirm('Replace ' + fromContact + "'s list? " + stale.length + ' of their current deal(s) are not in this paste and will be removed.')) {
+        const staleSet = new Set(stale);
+        dh_deals = dh_deals.filter(d => !staleSet.has(d));
+        removed = stale.length;
+      }
+    }
     parsed.forEach(p => {
-      if (fromContact) p.dealer = fromContact;                 // attribute the whole batch to the contact
       if (!dh_dealerNorm(p.dealer)) { p._added = today; dh_deals.unshift(p); added++; return; }
       const k = dh_dealerCarKey(p);
       const idx = dh_deals.findIndex(d => dh_dealerCarKey(d) === k);
@@ -2432,7 +2443,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
         dh_deals[idx] = merged; updated++;
       } else { p._added = today; dh_deals.unshift(p); added++; }
     });
-    return { updated, added };
+    return { updated, added, removed };
   }
   async function dh_parse() {
     const text = $('dh_input').value.trim();
@@ -2447,10 +2458,10 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
       const parsed = d.deals || [];
       if (!parsed.length) { dh_status('No deals found in that text.', 'error'); return; }
-      const { updated, added } = dh_sync(parsed, fromContact);
+      const { updated, added, removed } = dh_sync(parsed, fromContact);
       dh_refresh(); dh_save();
       $('dh_input').value = '';
-      dh_status('Synced' + (fromContact ? (' for ' + fromContact) : '') + ': ' + updated + ' updated, ' + added + ' added ✓', 'done');
+      dh_status('Synced' + (fromContact ? (' for ' + fromContact) : '') + ': ' + updated + ' updated, ' + added + ' added' + (removed ? (', ' + removed + ' removed') : '') + ' ✓', 'done');
     } catch (e) { dh_status('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Sync'; }
   }
