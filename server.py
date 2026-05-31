@@ -33,6 +33,11 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD") or secrets.token_urlsafe(24)
 if not os.environ.get("APP_PASSWORD"):
     print("[security] APP_PASSWORD is not set — using a random password. Set it in Railway to log in.")
 
+# Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
+# with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
+RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deals")
+
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
 _LOGIN_MAX = 8
@@ -103,6 +108,17 @@ def logout():
     return redirect("/login")
 
 
+@app.route("/unlock", methods=["GET", "POST"])
+def unlock():
+    """Second-tier unlock for the restricted tools."""
+    if request.method == "POST":
+        if hmac.compare_digest((request.json or {}).get("password", ""), RESTRICTED_PASSWORD):
+            session["restricted_ok"] = True
+            return jsonify({"ok": True})
+        return jsonify({"error": "Incorrect password."}), 401
+    return jsonify({"unlocked": bool(session.get("restricted_ok"))})
+
+
 @app.before_request
 def require_login():
     if request.path == "/login":
@@ -110,6 +126,16 @@ def require_login():
     if session.get("ok"):
         return None
     return redirect("/login")
+
+
+@app.before_request
+def gate_restricted():
+    # block the restricted tools' data endpoints until the second password is entered
+    if session.get("restricted_ok"):
+        return None
+    p = request.path
+    if any(p.startswith(pre) for pre in RESTRICTED_API):
+        return jsonify({"error": "This area is locked.", "locked": True}), 403
 
 
 @app.after_request
@@ -697,19 +723,29 @@ def carvector_image():
         _CARVECTOR_ALLOWED.update(o["url"] for o in cached.get("options", []))
         return jsonify({**cached, "cached": True})
 
-    qs = {"make": make, "model": model, "limit": "6"}
+    # try exact (year+make+model), then drop the year (specs DBs lag on new years),
+    # then make+model only — first non-empty wins. Keep diagnostics for the UI.
+    attempts = []
     if year:
-        qs["year"] = year
+        attempts.append({"make": make, "model": model, "year": year, "limit": "8"})
+    attempts.append({"make": make, "model": model, "limit": "8"})
+
+    results, tried = [], []
     try:
-        search = _carvector_get("/v1/vehicles?" + urllib.parse.urlencode(qs))
+        for qs in attempts:
+            search = _carvector_get("/v1/vehicles?" + urllib.parse.urlencode(qs))
+            rs = search.get("results") or search.get("data") or search.get("vehicles") or []
+            tried.append({"q": {k: v for k, v in qs.items() if k != "limit"}, "count": len(rs)})
+            if rs:
+                results = rs
+                break
     except urllib.error.HTTPError as e:
         return jsonify({"error": f"CarVector error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
     except Exception as e:
         return jsonify({"error": f"CarVector request failed: {e}"}), 502
 
-    results = search.get("results") or []
     if not results:
-        return jsonify({"found": False, "message": "No vehicle found in CarVector."})
+        return jsonify({"found": False, "message": "No vehicle found in CarVector.", "tried": tried})
 
     options, seen = [], set()
     for v in results[:5]:                       # cap detail calls (each one is a request)
