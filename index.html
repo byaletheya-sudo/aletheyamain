@@ -2991,7 +2991,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function dh_clearSearch() { dh_searchKeys = null; $('dh_search').value = ''; const c = $('dh_searchChip'); c.style.display = 'none'; c.innerHTML = ''; dh_renderByCar(); }
   // ---- compare mode ----
-  function dh_cmpToggle(key, ev) { if (ev) ev.stopPropagation(); if (dh_compare.has(key)) dh_compare.delete(key); else dh_compare.add(key); dh_cmpBar(); dh_renderByCar(); }
+  function dh_cmpToggle(key, ev) {
+    if (ev) ev.stopPropagation();
+    if (dh_compare.has(key)) dh_compare.delete(key); else dh_compare.add(key);
+    const list = $('dh_carList');                       // update only the affected cards — no full re-render (keeps expand state, faster)
+    if (list) {
+      list.classList.toggle('dh-selecting', dh_compare.size > 0);
+      list.querySelectorAll('.dh-car').forEach(c => { const sel = dh_compare.has(c.dataset.key); c.classList.toggle('selected', sel); const b = c.querySelector('.dh-cmp'); if (b) { b.classList.toggle('on', sel); b.textContent = sel ? '✓' : '+'; } });
+    }
+    dh_cmpBar();
+  }
   // once anything is selected, the whole card becomes a select target (the caret still expands)
   function dh_cardClick(el, key, ev) { if (dh_compare.size > 0) dh_cmpToggle(key, ev); else el.classList.toggle('open'); }
   function dh_cmpClear() { dh_compare.clear(); dh_cmpBar(); dh_renderByCar(); }
@@ -3178,9 +3187,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     [/\bmilitary\b/i, 'Military'], [/\bfirst responder\b/i, 'First Responder'],
     [/\bcostco\b/i, 'Costco'], [/\b(uber|lyft|rideshare)\b/i, 'Rideshare']
   ];
+  function dh_canonIncentive(s) { s = (s || '').trim(); if (!s) return ''; for (const [re, label] of DH_INCENTIVE_PATTERNS) { if (re.test(s)) return label; } return s; }   // 'Triple A' -> 'AAA'
   function dh_incentives(d) {
     const set = new Set();
-    (d.incentives || '').split(/[;,]/).map(s => s.trim()).filter(Boolean).forEach(s => set.add(s));
+    (d.incentives || '').split(/[;,]/).map(dh_canonIncentive).filter(Boolean).forEach(s => set.add(s));   // canonicalize so Triple A == AAA
     const hay = (d.incentives || '') + ' ' + (d.notes || '');
     DH_INCENTIVE_PATTERNS.forEach(([re, label]) => { if (re.test(hay)) set.add(label); });
     return [...set];
@@ -3255,7 +3265,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const key = dh_carKey(best);
       const ekey = key.replace(/'/g, "\\'");
       const inCmp = dh_compare.has(key);
-      return `<div class="dh-car${inCmp ? ' selected' : ''}" onclick="dh_cardClick(this, '${ekey}', event)">
+      return `<div class="dh-car${inCmp ? ' selected' : ''}" data-key="${escapeHtml(key).replace(/"/g, '&quot;')}" onclick="dh_cardClick(this, '${ekey}', event)">
         <div class="dh-car-head">
           <div style="flex:1;min-width:0;">
             <div class="dh-car-name">${cardLabel(g, nested)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
