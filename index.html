@@ -145,6 +145,10 @@
   .dh-chip { padding: 5px 11px; font-size: 0.72rem; font-weight: 600; border-radius: 999px; cursor: pointer; color: #9aa1ac; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); transition: background .15s, color .15s, border-color .15s; }
   .dh-chip:hover { color: #eaeef4; }
   .dh-chip.active { color: #eef2f8; background: rgba(120,150,200,0.20); border-color: rgba(140,170,220,0.4); }
+  .dh-make { margin-bottom: 22px; }
+  .dh-make-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .dh-make-name { font-weight: 800; font-size: 0.96rem; letter-spacing: 0.01em; color: #eef2f8; }
+  .dh-make-meta { color: #6b7280; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .dh-car { border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; margin-bottom: 8px; overflow: hidden; background: rgba(255,255,255,0.012); }
   .dh-car-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
   .dh-car-head:hover { background: rgba(255,255,255,0.022); }
@@ -1501,6 +1505,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   const RESTRICTED_VIEWS = new Set(['test', 'deals']);
   async function checkUnlock() {
     try { const r = await fetch('/unlock'); const d = await r.json(); restrictedUnlocked = !!d.unlocked; } catch (e) { }
+    if (restrictedUnlocked) { dh_load(); }   // restricted endpoints are reachable now -> load the saved deals
     if (restrictedUnlocked && lockPendingView) { $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; showView(v, { noPush: true }); }
   }
   function showLock(targetView) {
@@ -1515,7 +1520,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     try {
       const r = await fetch('/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
       const d = await r.json();
-      if (d.ok) { restrictedUnlocked = true; $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
+      if (d.ok) { restrictedUnlocked = true; dh_load(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
       else { $('lockErr').textContent = d.error || 'Incorrect password.'; }
     } catch (e) { $('lockErr').textContent = e.message; }
   }
@@ -2379,8 +2384,10 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     const mo = parseFloat(d.orig_mo) || 0, das = parseFloat(d.das) || 0, term = parseFloat(d.term) || 0;
     return (mo && term) ? String(Math.round((mo + das / term) * 100) / 100) : '';
   }
+  let dh_loaded = false;
   async function dh_load() {
-    try { const r = await fetch('/deals'); const d = await r.json(); dh_deals = d.deals || []; dh_refresh(); } catch (e) { }
+    if (dh_loaded) return;                                  // load once per session
+    try { const r = await fetch('/deals'); if (!r.ok) return; const d = await r.json(); dh_deals = d.deals || []; dh_loaded = true; dh_refresh(); } catch (e) { }
   }
   let dh_saveT;
   async function dh_save() { try { await fetch('/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deals: dh_deals }) }); } catch (e) { } }
@@ -2534,7 +2541,15 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     list.sort((a, b) => a.label.localeCompare(b.label));
     const el = $('dh_carList');
     if (!list.length) { el.innerHTML = '<div class="dh-empty">No deals match — adjust the filters, or paste some in.</div>'; return; }
-    el.innerHTML = list.map(g => {
+
+    // organize the cars under make headers — same hierarchy the ad builder uses (Make ▸ Year/Model/Trim)
+    const makeOf = g => ((T_MAKE_SHORT[g.deals[0].make] || g.deals[0].make || '').toString().trim()) || 'Other';
+    const cardLabel = g => [g.deals[0].year, g.deals[0].model, g.deals[0].trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || g.label;
+    const byMake = {};
+    list.forEach(g => { const mk = makeOf(g); (byMake[mk] = byMake[mk] || []).push(g); });
+    const makeNames = Object.keys(byMake).sort((a, b) => a.localeCompare(b));
+
+    const carCard = g => {
       const best = g.deals[0];
       const dealers = new Set(g.deals.map(d => (d.dealer || '').trim().toLowerCase()).filter(Boolean)).size;
       const z = dh_zeroOf(best);
@@ -2551,7 +2566,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       return `<div class="dh-car" onclick="this.classList.toggle('open')">
         <div class="dh-car-head">
           <div style="flex:1;min-width:0;">
-            <div class="dh-car-name">${g.label}${dh_isStale(best) ? '<span class="dh-pill">stale</span>' : ''}</div>
+            <div class="dh-car-name">${cardLabel(g)}${dh_isStale(best) ? '<span class="dh-pill">stale</span>' : ''}</div>
             <div class="dh-car-sub">${sub}  ·  ${g.deals.length} deal${g.deals.length > 1 ? 's' : ''} · ${dealers} dealer${dealers > 1 ? 's' : ''}</div>
           </div>
           <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>0-down</small></div>
@@ -2561,6 +2576,15 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
           <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>DAS</th><th>0-Down</th><th>Term/Mi</th><th>BF</th><th>Added</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
+    };
+
+    el.innerHTML = makeNames.map(mk => {
+      const cars = byMake[mk].sort((a, b) => cardLabel(a).localeCompare(cardLabel(b)));
+      const dealCount = cars.reduce((n, g) => n + g.deals.length, 0);
+      return `<section class="dh-make">
+        <div class="dh-make-head"><span class="dh-make-name">${mk}</span><span class="dh-make-meta">${cars.length} car${cars.length > 1 ? 's' : ''} · ${dealCount} deal${dealCount > 1 ? 's' : ''}</span></div>
+        ${cars.map(carCard).join('')}
+      </section>`;
     }).join('');
   }
 
@@ -2569,7 +2593,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   t_renderBadgeChips();
   t_render();
   dh_setMode('car');
-  dh_load();
+  // dh_load() is triggered by checkUnlock()/lockSubmit() once the restricted area is unlocked
 
   renderSold();
   // open the view that matches the URL the page was loaded at (deep-link support).
