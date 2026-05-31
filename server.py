@@ -517,16 +517,27 @@ def carsxe_meta():
     except Exception as e:
         return jsonify({"colors": [], "trims": [], "note": f"meta lookup failed: {e}"})
 
-    best = body.get("bestMatch") or {}
-    ext = ((best.get("color") or {}).get("exterior")) or []
-    colors = []
+    # exterior colours — try the documented path, then fall back to other shapes
+    best = body.get("bestMatch") or body.get("data") or {}
+    cands = []
+    col = best.get("color") or best.get("colors") or {}
+    if isinstance(col, dict):
+        cands.append(col.get("exterior"))
+    elif isinstance(col, list):
+        cands.append(col)
+    cands += [best.get("exterior_colors"), body.get("colors"), body.get("exterior_colors")]
+    ext = next((c for c in cands if isinstance(c, list) and c), [])
+    colors, seen = [], set()
     for c in ext:
-        name = (c.get("name") or "").strip()
-        if name:
-            colors.append({"name": name, "hex": _rgb_to_hex(c.get("rgb", ""))})
+        if not isinstance(c, dict):
+            continue
+        name = (c.get("name") or c.get("color_name") or c.get("description") or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            colors.append({"name": name, "hex": _rgb_to_hex(c.get("rgb") or c.get("rgb_value") or "")})
 
     trims = []
-    for t in (body.get("trimOptions") or []):
+    for t in (body.get("trimOptions") or best.get("trimOptions") or []):
         nm = t if isinstance(t, str) else (t.get("trim") or t.get("name") or "")
         nm = (nm or "").strip()
         if nm and nm not in trims:

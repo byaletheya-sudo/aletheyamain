@@ -693,10 +693,6 @@
                   <select id="t_color" onchange="t_pickColor()" style="flex:1;"></select>
                 </div>
               </div>
-              <div class="controls" style="margin-top:14px;">
-                <button class="btn-start" id="vdbBtn" onclick="t_build()">⚡ Generate Ad</button>
-                <label class="toggle"><input type="checkbox" id="t_autoDl" checked><span class="tg-track"></span> Auto-download</label>
-              </div>
               <div id="t_carsxeWrap" style="display:none;margin-top:12px;">
                 <label>Photo <span style="opacity:.55;font-weight:400;">— tap the best one</span></label>
                 <div class="ph-thumbs" id="t_photoThumbs"></div>
@@ -718,10 +714,6 @@
                 <div id="t_fDown" style="display:none;"><label for="t_down">Down payment ($)</label><input type="text" id="t_down" value="" placeholder="e.g. 5,000" oninput="t_render()"></div>
                 <div id="t_fApr" style="display:none;"><label for="t_apr">APR (%)</label><input type="text" id="t_apr" value="" placeholder="e.g. 4.9" oninput="t_render()"></div>
               </div>
-              <label for="t_badge">Badge</label>
-              <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
-              <div class="badge-chips" id="t_badgeChips"></div>
-              <label class="toggle" style="margin-top:10px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"><span class="tg-track"></span> Show badge pill</label>
             </div>
 
             <div class="panel">
@@ -730,6 +722,10 @@
               <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
               <label for="t_bodystyle">Subtitle <span style="font-weight:400;opacity:.6;font-size:.78rem;">(from trim — editable)</span></label>
               <input type="text" id="t_bodystyle" value="" placeholder="e.g. Convertible RWD" oninput="t_subEdited=true; t_render()">
+              <label for="t_badge">Badge</label>
+              <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
+              <div class="badge-chips" id="t_badgeChips"></div>
+              <label class="toggle" style="margin-top:10px;"><input type="checkbox" id="t_showBadge" checked onchange="t_render()"><span class="tg-track"></span> Show badge pill</label>
               <label>Background</label>
               <div class="bg-thumbs" id="t_bgThumbs">
                 <div class="bg-thumb active" data-bg="default" onclick="t_setBg('default')" title="Nova Default">
@@ -742,6 +738,11 @@
                   <div class="ph" style="background:linear-gradient(160deg,#242424,#0c0c0c)"></div><span>Soon</span>
                 </div>
               </div>
+            </div>
+
+            <div class="controls" style="margin-bottom:13px;">
+              <button class="btn-start" id="vdbBtn" onclick="t_build()">⚡ Generate Ad</button>
+              <label class="toggle"><input type="checkbox" id="t_autoDl" checked><span class="tg-track"></span> Auto-download</label>
             </div>
 
             <div class="panel">
@@ -2007,7 +2008,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     t_render();
     $('vdbBtn').disabled = true; $('vdbBtn').classList.add('loading'); $('vdbBtn').textContent = 'Generating…';
     setVdb('Finding the best photo…', 'active');
-    t_loadMeta(year, make, model, trim);            // colours + trims (parallel, non-blocking)
+    const metaP = t_loadMeta(year, make, model, trim);   // colours + trims, in parallel
     try {
       const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor($('t_color').value) });
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
@@ -2016,7 +2017,9 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓' + (d.options && d.options.length > 1 ? ' — try another result or a color below' : ''), 'done');
+      await metaP;                                        // make sure the colours are populated
+      const haveColors = $('t_color').options.length > 1;
+      setVdb('Photo placed ✓ — tap another photo' + (haveColors ? ' or pick a color' : '') + ' below', 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
