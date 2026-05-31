@@ -216,7 +216,7 @@
   .dh-search-chip button { background: none; border: none; color: #8b919b; cursor: pointer; font-size: 0.8rem; padding: 0 2px; }
   .dh-search-chip button:hover { color: #fff; }
   /* compare */
-  .dh-cmp { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #9aa1ac; font-size: 0.9rem; line-height: 1; cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
+  .dh-cmp { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: 7px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #9aa1ac; font-size: 0.95rem; line-height: 1; cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
   .dh-cmp:hover { border-color: rgba(150,200,255,0.4); color: #dfe4ea; }
   .dh-cmp.on { background: rgba(120,150,200,0.22); border-color: rgba(140,170,220,0.5); color: #eef2f8; }
   .dh-cmp-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 90; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 18px; border-radius: 12px; background: linear-gradient(180deg,#1b1d22,#141518); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 14px 40px rgba(0,0,0,0.5); }
@@ -2475,7 +2475,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     { k: 'active_from', label: 'Active From', w: 124, type: 'date' }, { k: 'active_to', label: 'Active To', w: 124, type: 'date' },
     { k: 'year', label: 'Year', w: 50 }, { k: 'make', label: 'Make', w: 78 },
     { k: 'model', label: 'Model', w: 90 }, { k: 'trim', label: 'Trim', w: 110 }, { k: 'msrp', label: 'MSRP', w: 66 },
-    { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: '0-Down', w: 66 }, { k: 'das', label: 'DAS', w: 56 },
+    { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: 'Effective', w: 72 }, { k: 'das', label: 'DAS', w: 56 },
     { k: 'term', label: 'Term', w: 48 }, { k: 'miles', label: 'Miles', w: 56 }, { k: 'tax_in_mo', label: 'Tax Mo', w: 60 },
     { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'special', label: 'Special', w: 86 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
     { k: 'source', label: 'Source', w: 90 },
@@ -2708,7 +2708,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     const cols = keys.map(k => { const arr = dh_deals.filter(d => dh_carKey(d) === k); const best = arr.slice().sort((a, b) => (dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9))[0]; const dealers = new Set(arr.map(d => (d.dealer || '').toLowerCase()).filter(Boolean)).size; return { label: dh_carLabel(best), best, dealers }; });
     const rowsDef = [
       { label: 'Monthly', val: c => dh_num(c.best.orig_mo || c.best.tax_in_mo), fmt: v => v == null ? '—' : dh_money(v) + '/mo', best: 'min' },
-      { label: '0-down (eff.)', val: c => dh_zeroOf(c.best), fmt: v => v == null ? '—' : dh_money(v) + '/mo', best: 'min' },
+      { label: 'Effective', val: c => dh_zeroOf(c.best), fmt: v => v == null ? '—' : dh_money(v) + '/mo', best: 'min' },
       { label: 'Due at signing', val: c => dh_num(c.best.das) || 0, fmt: v => dh_money(v), best: 'min' },
       { label: 'Term', val: c => dh_num(c.best.term), fmt: v => v ? v + 'mo' : '—', best: null },
       { label: 'Miles / yr', val: c => dh_num(c.best.miles), fmt: v => v ? (v / 1000) + 'k' : '—', best: 'max' },
@@ -2749,7 +2749,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     el.innerHTML = `<div class="dh-best">
       <div class="dh-best-tag">🏆 Best Deal of the Month</div>
       <div class="dh-best-main"><div class="dh-best-car">${dh_carLabel(best)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}</div><div class="dh-best-meta">${meta}</div></div>
-      <div class="dh-best-price"><b>${dh_money(dh_zeroOf(best))}</b><small>0-down / mo</small></div>
+      <div class="dh-best-price"><b>${dh_money(dh_zeroOf(best))}</b><small>Effective / mo</small></div>
     </div>`;
   }
   function dh_setMode(m) {
@@ -2858,12 +2858,12 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
             <div class="dh-car-name">${cardLabel(g)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
             <div class="dh-car-sub">${sub}</div>
           </div>
-          <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>0-down</small></div>
+          <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>Effective</small></div>
           <button class="dh-cmp${inCmp ? ' on' : ''}" onclick="dh_cmpToggle('${key.replace(/'/g, "\\'")}', event)" title="Add to compare">${inCmp ? '✓' : '+'}</button>
           <span class="dh-car-caret">▾</span>
         </div>
         <div class="dh-car-deals">
-          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>DAS</th><th>0-Down</th><th>Term/Mi</th><th>BF</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>DAS</th><th>Effective</th><th>Term/Mi</th><th>BF</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
     };

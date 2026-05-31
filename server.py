@@ -849,6 +849,22 @@ def _save_deals(deals):
         json.dump(deals, f, indent=1)
 
 
+def _strip_tax(d):
+    """We NEVER keep tax-included figures. Any tax_in_mo is backed out to a pre-tax
+    orig_mo (÷1.0975) and cleared — a hard guarantee on top of the model's own instruction."""
+    try:
+        t = d.get("tax_in_mo")
+        if t not in (None, "", "0"):
+            tv = float(str(t).replace("$", "").replace(",", "").strip())
+            if tv:
+                if not d.get("orig_mo"):
+                    d["orig_mo"] = str(round(tv / 1.0975, 2))
+                d["tax_in_mo"] = ""
+    except Exception:
+        pass
+    return d
+
+
 def _derive_zero_down(d):
     """0-Down Mo = Orig Mo + DAS / Term (the dealer-sheet convention)."""
     try:
@@ -932,7 +948,8 @@ def deal_parse():
         "'ops' is a list of {field, op, value}: field is monthly|das|broker_fee|term|miles|msrp "
         "(use 'monthly' for the payment); op is 'add' (value SIGNED, '-1000' to decrease, '20' to "
         "add), 'mult' (multiply), or 'set' (replace). remove_tax_pct = a tax rate to back OUT of "
-        "the monthly when they say tax-included ('9.75% tax included'->'9.75'; else '').\n"
+        "the monthly when they say tax-included ('9.75% tax included'->'9.75'; plain 'tax included' "
+        "with no rate -> '9.75'; else '').\n"
         "  e.g. 'decrease all GLA 250 das by $1000' -> match:{model:'GLA 250'}, ops:[{field:'das',op:'add',value:'-1000'}].\n"
         "  e.g. 'lower Diana's monthlies $15' -> match:{contact:'Diana'}, ops:[{field:'monthly',op:'add',value:'-15'}].\n"
         "For EACH vehicle (kind='deals') output: year, make, model, trim, msrp, orig_mo (base "
@@ -951,9 +968,11 @@ def deal_parse():
         "line below — copy them into each row.\n"
         "- Inline ADJUSTMENT instructions mixed into a deal list ('subtract $15 from each "
         "monthly', 'add my $500 fee') — do the arithmetic on every row; never treat as a vehicle.\n"
-        "- TAX-INCLUDED: if a monthly is stated tax-included WITH a rate (e.g. '$420 incl 9.75% "
-        "tax'), set orig_mo to the PRE-TAX amount (monthly ÷ (1+rate/100)) and do NOT mention the "
-        "tax in notes. Tax-included WITHOUT a stated rate goes in tax_in_mo.\n"
+        "- TAX-INCLUDED (CRITICAL — WE NEVER KEEP TAX): if a monthly/payment is stated tax-included "
+        "in ANY way ('tax in', 'tax included', 'w/ tax', 'incl tax', '+ tax'), you MUST back the tax "
+        "out. Divide that monthly by 1.0975 (our standard 9.75% tax) — or by (1+rate/100) if a "
+        "DIFFERENT explicit rate is given — and put the PRE-TAX result in orig_mo. Leave tax_in_mo "
+        "ALWAYS ''. Never output a tax-included number and never mention tax in notes.\n"
         "- Normalize shorthand to plain numbers (no $ or commas): '3k'->3000, '7.5k'->7500, "
         "'$51k MSRP'->51000, '$289'->289. '13/7500' means term=13, miles=7500.\n"
         "- Leave a field '' if it isn't present.\n"
@@ -967,7 +986,7 @@ def deal_parse():
             response_format={"type": "json_schema", "json_schema": {"name": "deals", "strict": True, "schema": schema}},
         )
         out = json.loads(resp.choices[0].message.content)
-        deals = [_derive_zero_down(d) for d in out.get("deals", [])]
+        deals = [_derive_zero_down(_strip_tax(d)) for d in out.get("deals", [])]
         return jsonify({
             "kind": out.get("kind") or "deals",
             "deals": deals,
