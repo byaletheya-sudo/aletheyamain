@@ -179,8 +179,22 @@
   .dh-note:hover .dh-note-pop { display: block; }
   .dh-deals-tbl td .dh-note-pop { left: 0; transform: none; }
   .dh-badge-fin { font-size: 0.58rem; padding: 1px 5px; border-radius: 5px; background: rgba(230,180,90,0.14); color: #f0c987; margin-left: 4px; }
-  .dh-tag.pkg { color: #c7b6e8; background: rgba(150,110,220,0.12); border-color: rgba(150,110,220,0.22); }
-  .dh-badge-pkg { font-size: 0.58rem; padding: 1px 5px; border-radius: 5px; background: rgba(150,110,220,0.14); color: #c7b6e8; margin-left: 4px; }
+  /* qualifying-incentive tags */
+  .dh-inc { display: inline-block; font-size: 0.62rem; font-weight: 600; padding: 1px 7px; border-radius: 5px; background: rgba(120,220,170,0.12); color: #8fe3c4; border: 1px solid rgba(120,220,170,0.22); }
+  .dh-row-dealer .dh-inc { margin-left: 5px; }
+  /* package shown as a quiet sub-line on the deal row, not a loud pill */
+  .dh-row-dealer { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; }
+  .dh-row-pkg { color: #8a7fb0; font-size: 0.68rem; margin-top: 2px; white-space: normal; }
+  /* model cascade (Make ▸ Model ▸ Trim) */
+  .dh-model { margin-bottom: 6px; }
+  .dh-model-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 4px 6px 10px; cursor: pointer; user-select: none; border-left: 2px solid rgba(150,200,255,0.20); }
+  .dh-model-head:hover .dh-model-name { color: #fff; }
+  .dh-model-caret { color: #6b7280; font-size: 0.62rem; transition: transform .18s; align-self: center; }
+  .dh-model.collapsed .dh-model-caret { transform: rotate(-90deg); }
+  .dh-model.collapsed .dh-model-body { display: none; }
+  .dh-model-name { font-weight: 700; font-size: 0.88rem; color: #dfe4ea; }
+  .dh-model-meta { color: #6b7280; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .dh-model-body { padding-left: 12px; margin-left: 4px; border-left: 1px solid rgba(255,255,255,0.06); }
   .dh-car-best { text-align: right; white-space: nowrap; }
   .dh-car-best b { color: var(--dh-price); font-size: 1.06rem; font-weight: 800; }
   .dh-car-best small { display: block; color: #767c86; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -2600,7 +2614,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     { k: 'deal_type', label: 'Type', w: 64 }, { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: 'Effective', w: 72 },
     { k: 'das', label: 'DAS/Down', w: 70 }, { k: 'apr', label: 'APR', w: 48 },
     { k: 'term', label: 'Term', w: 48 }, { k: 'miles', label: 'Miles', w: 56 }, { k: 'tax_in_mo', label: 'Tax Mo', w: 60 },
-    { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'special', label: 'Special', w: 86 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
+    { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'special', label: 'Special', w: 86 }, { k: 'incentives', label: 'Incentives', w: 130 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
     { k: 'source', label: 'Source', w: 90 },
   ];
   function dh_status(t, type = '') { const e = $('dh_status'); e.textContent = t; e.className = 'status ' + type; }
@@ -3084,6 +3098,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_custReset() { dh_custSet(dh_cust.origDas); }
   function dh_custClose() { $('dhCustModal').style.display = 'none'; dh_cust = null; }
   function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note" title="${escapeHtml(n).replace(/"/g, '&quot;')}">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
+  // qualifying incentives -> their own tags (from the incentives field + detected in legacy notes)
+  const DH_INCENTIVE_PATTERNS = [[/conquest/i, 'Conquest'], [/loyalt/i, 'Loyalty'], [/\b(aaa|triple ?a)\b/i, 'AAA'], [/college grad|recent grad/i, 'College Grad'], [/\bmilitary\b/i, 'Military'], [/first responder/i, 'First Responder'], [/costco/i, 'Costco'], [/uber|lyft|rideshare/i, 'Rideshare']];
+  function dh_incentives(d) {
+    const set = new Set();
+    (d.incentives || '').split(/[;,]/).map(s => s.trim()).filter(Boolean).forEach(s => set.add(s));
+    const hay = (d.incentives || '') + ' ' + (d.notes || '');
+    DH_INCENTIVE_PATTERNS.forEach(([re, label]) => { if (re.test(hay)) set.add(label); });
+    return [...set];
+  }
+  function dh_incentiveTags(d) { return dh_incentives(d).map(x => `<span class="dh-inc">${escapeHtml(x)}</span>`).join(''); }
   function dh_renderByCar() {
     const q = ($('dh_search').value || '').toLowerCase().trim();
     const expiredCount = dh_deals.filter(dh_isExpired).length;
@@ -3106,12 +3130,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
     // organize the cars under make headers — same hierarchy the ad builder uses (Make ▸ Year/Model/Trim)
     const makeOf = g => ((T_MAKE_SHORT[g.deals[0].make] || g.deals[0].make || '').toString().trim()) || 'Other';
-    const cardLabel = g => [g.deals[0].year, g.deals[0].model, g.deals[0].trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || g.label;
+    const cardLabel = (g, nested) => nested ? (((g.deals[0].trim || '').toString().trim()) || 'Base') : ([g.deals[0].year, g.deals[0].model, g.deals[0].trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || g.label);
     const byMake = {};
     list.forEach(g => { const mk = makeOf(g); (byMake[mk] = byMake[mk] || []).push(g); });
     const makeNames = Object.keys(byMake).sort((a, b) => a.localeCompare(b));
 
-    const carCard = g => {
+    const carCard = (g, nested) => {
       const best = g.deals[0];
       const dealers = new Set(g.deals.map(d => (d.dealer || '').trim().toLowerCase()).filter(Boolean)).size;
       const z = dh_zeroOf(best);
@@ -3119,7 +3143,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const fin = dh_isFinance(best);
       const tags = [];
       if (fin) tags.push(`<span class="dh-tag fin">Finance</span>`);
-      if ((best.package || '').trim()) tags.push(`<span class="dh-tag pkg">${escapeHtml(best.package.trim())}</span>`);
+      const incs = dh_incentiveTags(best); if (incs) tags.push(incs);
       if (best.dealer) tags.push(`<button class="dh-tag lead" onclick="dh_openContact('${best.dealer.replace(/'/g, "\\'").replace(/</g, '&lt;')}', event)">${best.dealer}${dh_hasContactInfo(best.dealer) ? ' 📞' : ''}</button>`);
       const eff = dh_zeroOf(best); if (eff != null) tags.push(`<span class="dh-tag">${dh_money(eff)} eff</span>`);
       if (fin && dh_num(best.apr) != null) tags.push(`<span class="dh-tag">${dh_num(best.apr)}% APR</span>`);
@@ -3136,7 +3160,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         const fin = dh_isFinance(d);
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${(d.package || '').trim() ? ' <span class="dh-badge-pkg">' + escapeHtml(d.package.trim()) + '</span>' : ''}${dh_noteIcon(d.notes)}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(d.notes)}</div>${(d.package || '').trim() ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
           <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
           <td><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
@@ -3146,7 +3170,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       return `<div class="dh-car" onclick="this.classList.toggle('open')">
         <div class="dh-car-head">
           <div style="flex:1;min-width:0;">
-            <div class="dh-car-name">${cardLabel(g)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
+            <div class="dh-car-name">${cardLabel(g, nested)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
             <div class="dh-car-sub">${sub}</div>
           </div>
           <div class="dh-car-best"><b>${dh_money(best.orig_mo || best.tax_in_mo) || '—'}</b><small>Monthly</small></div>
@@ -3169,15 +3193,37 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     };
 
     el.innerHTML = makeNames.map(mk => {
-      const cars = sortCars(byMake[mk]);
+      const cars = byMake[mk];
       const dealCount = cars.reduce((n, g) => n + g.deals.length, 0);
+      // cascade: group this make's trims by model; a model with 2+ trims nests them (Make ▸ Model ▸ Trim)
+      const byModel = {};
+      cars.forEach(g => { const d0 = g.deals[0]; const k = dh_norm((d0.year || '') + '|' + (d0.model || '')); (byModel[k] = byModel[k] || []).push(g); });
+      let modelGroups = Object.values(byModel).map(group => ({ cars: sortCars(group), label: [group[0].deals[0].year, group[0].deals[0].model].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') }));
+      modelGroups.sort((a, b) => {
+        if (dh_sort === 'newest') return newestOf(b.cars[0]) - newestOf(a.cars[0]);
+        if (dh_sort === 'dealers') return dealersOf(b.cars[0]) - dealersOf(a.cars[0]);
+        return (dh_zeroOf(a.cars[0].deals[0]) ?? 1e9) - (dh_zeroOf(b.cars[0].deals[0]) ?? 1e9);
+      });
+      const body = modelGroups.map(mg => {
+        if (mg.cars.length < 2) return carCard(mg.cars[0], false);   // single trim -> direct card
+        const mDeals = mg.cars.reduce((n, g) => n + g.deals.length, 0);
+        const from = dh_money(dh_zeroOf(mg.cars[0].deals[0]));
+        return `<div class="dh-model">
+          <div class="dh-model-head" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="dh-model-caret">▾</span>
+            <span class="dh-model-name">${mg.label}</span>
+            <span class="dh-model-meta">${mg.cars.length} trims · ${mDeals} deal${mDeals > 1 ? 's' : ''}${from ? ' · from ' + from + ' eff' : ''}</span>
+          </div>
+          <div class="dh-model-body">${mg.cars.map(g => carCard(g, true)).join('')}</div>
+        </div>`;
+      }).join('');
       return `<section class="dh-make">
         <div class="dh-make-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <span class="dh-make-caret">▾</span>
           <span class="dh-make-name">${mk}</span>
           <span class="dh-make-meta">${cars.length} car${cars.length > 1 ? 's' : ''} · ${dealCount} deal${dealCount > 1 ? 's' : ''}</span>
         </div>
-        <div class="dh-make-body">${cars.map(carCard).join('')}</div>
+        <div class="dh-make-body">${body}</div>
       </section>`;
     }).join('');
     dh_cmpBar();

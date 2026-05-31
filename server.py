@@ -832,7 +832,7 @@ def bulk_parse():
 DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
 DEAL_FIELDS = ["year", "make", "model", "trim", "package", "msrp", "orig_mo", "das", "term",
                "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source",
-               "active_from", "active_to", "special", "deal_type", "apr"]
+               "active_from", "active_to", "special", "deal_type", "apr", "incentives"]
 
 
 def _load_deals():
@@ -971,6 +971,9 @@ def deal_parse():
         "came from), active_from / active_to (validity window, only if stated), special (a "
         "short tag like 'Loaner', '1 of 1', or 'Demo' ONLY if the deal is a loaner / courtesy / "
         "demo / service-loaner / one-off special; else ''), deal_type ('finance' if it's a "
+        "incentives (a comma-separated list of QUALIFYING rebates the customer must qualify for: "
+        "'Loyalty', 'Conquest', 'AAA', 'College Grad', 'Military', 'First Responder', etc. — keep "
+        "these OUT of notes), deal_type ('finance' if it's a "
         "FINANCE/purchase/loan deal — mentions APR, % financing, 'finance', months-to-own, down "
         "payment — otherwise 'lease'), and apr (the finance APR as a number like '4.9', only for "
         "finance deals; else '').\n"
