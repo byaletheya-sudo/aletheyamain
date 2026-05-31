@@ -831,7 +831,8 @@ def bulk_parse():
 # ----------------------- Deal Hub -----------------------
 DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
 DEAL_FIELDS = ["year", "make", "model", "trim", "msrp", "orig_mo", "das", "term",
-               "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source"]
+               "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source",
+               "active_from", "active_to"]
 
 
 def _load_deals():
@@ -873,8 +874,15 @@ def deal_parse():
     # paste itself. Still honored if a caller passes it explicitly.
     rules = (body.get("rules") or "").strip()
     makes = [m for m in (body.get("makes") or []) if isinstance(m, str) and m.strip()][:80]
+    today = (body.get("today") or "").strip()
     if not text:
         return jsonify({"error": "Paste some deals first."}), 400
+    date_rule = (
+        f"- Today is {today}. If a line/list states a validity window ('good through 5/31', "
+        "'May specials', 'valid until 6/15', 'expires EOM'), output active_from / active_to as "
+        "YYYY-MM-DD. 'May specials' => first..last day of that May. If only an end is given, set "
+        "active_to and leave active_from ''. Leave BOTH '' if no dates are mentioned.\n"
+    ) if today else ""
     make_rule = (
         "- NORMALIZE 'make' to EXACTLY one entry (matching case) from this canonical list: "
         + ", ".join(makes) + ". Map shorthand/synonyms to it: 'Chevy'->'Chevrolet', "
@@ -896,14 +904,15 @@ def deal_parse():
         "vehicle output: year, make, model, trim, msrp, orig_mo (base monthly payment), "
         "das (due at signing / cash to dealer), term (months), miles (annual mileage), "
         "tax_in_mo (monthly WITH tax, if that's how it's quoted), broker_fee, dealer, "
-        "notes (loyalty / conquest / credit tier / tax handling / any other terms), and "
-        "source (a short label for where the deal came from — dealer, flyer title, or sender).\n"
+        "notes (loyalty / conquest / credit tier / tax handling / any other terms), "
+        "source (a short label for where the deal came from — dealer, flyer title, or sender), "
+        "and active_from / active_to (the validity window, only if stated — see the date rule).\n"
         "ALSO output a top-level 'contact': the single person/broker/dealer this whole paste "
         "is from (the sender updating their deals), e.g. 'Diana Santa Monica'. Look for a "
         "name/sender at the top, a signature, or a 'from X' line. If you truly can't tell, "
         "use ''. Put that same name in each row's 'dealer' field too.\n"
         "RULES:\n"
-        + make_rule +
+        + make_rule + date_rule +
         "- A list usually has GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, "
         "$1000 BF') that apply to EVERY line below — copy them into each row.\n"
         "- The paste may also contain plain-English ADJUSTMENT INSTRUCTIONS mixed in (e.g. "
