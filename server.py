@@ -147,9 +147,21 @@ API_KEY = load_api_key()
 # Vehicle Databases (vehicle image API) — set VDB_API_KEY in the host env to enable the TEST tool.
 VDB_API_KEY = os.environ.get("VDB_API_KEY", "").strip()
 
-# CarsXE (alternate image source, being trialed). Set CARSXE_API_KEY in the host env.
+# CarsXE (image source). Set CARSXE_API_KEY in the host env.
 CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
-_CARSXE_ALLOWED = set()   # image URLs CarsXE returned to us (the only ones we'll proxy)
+_CARSXE_ALLOWED = set()     # image URLs CarsXE returned to us (the only ones we'll proxy)
+_CARSXE_IMG_CACHE = {}      # vehicle -> image response, so repeats never re-hit CarsXE
+_CARSXE_META_CACHE = {}     # vehicle -> colors + trims
+_CARSXE_PROXY_CACHE = {}    # image url -> data URL
+_CARSXE_CACHE_MAX = 150     # keep the last ~150 of each (FIFO)
+
+
+def _cache_put(cache, key, val):
+    if key in cache:
+        return
+    if len(cache) >= _CARSXE_CACHE_MAX:
+        cache.pop(next(iter(cache)))   # evict oldest
+    cache[key] = val
 
 # Art-directed render rules: locked framing/scale/lighting for a consistent campaign look,
 # rendered on a TRANSPARENT background so each car drops cleanly onto the ad template.
@@ -730,6 +742,10 @@ def carsxe_meta():
     trim = data.get("trim", "").strip()
     if not (make and model):
         return jsonify({"colors": [], "trims": []})
+    mkey = "|".join([year, make.lower(), model.lower(), trim.lower()])
+    cached = _CARSXE_META_CACHE.get(mkey)
+    if cached is not None:
+        return jsonify({**cached, "cached": True})
     params = {"key": CARSXE_API_KEY, "make": make, "model": model, "allTrimOptions": "1", "format": "json"}
     if year:
         params["year"] = year
@@ -757,7 +773,10 @@ def carsxe_meta():
         nm = (nm or "").strip()
         if nm and nm not in trims:
             trims.append(nm)
-    return jsonify({"colors": colors, "trims": trims})
+    payload = {"colors": colors, "trims": trims}
+    if colors or trims:
+        _cache_put(_CARSXE_META_CACHE, mkey, payload)
+    return jsonify(payload)
 
 
 @app.route("/carsxe-image", methods=["POST"])
@@ -772,9 +791,17 @@ def carsxe_image():
     model = data.get("model", "").strip()
     year = str(data.get("year", "")).strip()
     trim = data.get("trim", "").strip()
-    color = data.get("color", "").strip()
+    color = data.get("color", "").strip().lower()    # CarsXE expects a lowercase basic colour
     if not (make and model):
         return jsonify({"error": "Pick a make and model first."}), 400
+
+    key = "|".join([year, make.lower(), model.lower(), trim.lower(), color])
+    cached = _CARSXE_IMG_CACHE.get(key)
+    if cached is not None:
+        for o in cached.get("options", []):           # keep proxy allow-list warm
+            _CARSXE_ALLOWED.add(o["url"])
+        return jsonify({**cached, "cached": True})
+
     params = {"key": CARSXE_API_KEY, "make": make, "model": model,
               "transparent": "true", "size": "Large", "format": "json"}
     if year:
@@ -798,18 +825,18 @@ def carsxe_image():
         return jsonify({"found": False, "message": body.get("error") or "No images returned by CarsXE."})
     for im in imgs:
         _CARSXE_ALLOWED.add(im["link"])
-    if len(_CARSXE_ALLOWED) > 800:
-        _CARSXE_ALLOWED.clear()
-        for im in imgs:
-            _CARSXE_ALLOWED.add(im["link"])
-    options = [{"url": im["link"], "label": f"Image {i + 1} ({im.get('width', '?')}×{im.get('height', '?')})"}
-               for i, im in enumerate(imgs)]
+    options = [{"url": im["link"], "thumb": im.get("thumbnailLink") or im["link"],
+                "w": im.get("width"), "h": im.get("height"),
+                "transparent": str(im.get("mime", "")).endswith("png")}
+               for im in imgs]
     try:
         first = _carsxe_dataurl(imgs[0]["link"])
     except Exception as e:
         return jsonify({"error": f"Couldn't load the CarsXE image: {e}"}), 502
-    return jsonify({"found": True, "success": True, "image_data": first,
-                    "image_url": imgs[0]["link"], "options": options})
+    payload = {"found": True, "success": True, "image_data": first,
+               "image_url": imgs[0]["link"], "options": options}
+    _cache_put(_CARSXE_IMG_CACHE, key, payload)
+    return jsonify(payload)
 
 
 @app.route("/carsxe-proxy", methods=["POST"])
@@ -818,8 +845,13 @@ def carsxe_proxy():
     url = (request.json or {}).get("url", "").strip()
     if url not in _CARSXE_ALLOWED:
         return jsonify({"error": "URL not allowed."}), 400
+    cached = _CARSXE_PROXY_CACHE.get(url)
+    if cached is not None:
+        return jsonify({"success": True, "image_data": cached, "cached": True})
     try:
-        return jsonify({"success": True, "image_data": _carsxe_dataurl(url)})
+        d = _carsxe_dataurl(url)
+        _cache_put(_CARSXE_PROXY_CACHE, url, d)
+        return jsonify({"success": True, "image_data": d})
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 

@@ -94,6 +94,13 @@
   .seg { display: inline-flex; gap: 0; background: #0a0d12; border: 1px solid #2a2f3a; border-radius: 9px; padding: 3px; }
   .seg-btn { background: transparent; border: none; color: #9aa3b2; padding: 7px 20px; border-radius: 7px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
   .seg-btn.active { background: #2f7ff0; color: #fff; }
+  .ph-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .ph-thumb { position: relative; width: 94px; height: 64px; border-radius: 9px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; transition: border-color .15s, transform .1s; }
+  .ph-thumb:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
+  .ph-thumb.active { border-color: #2f7ff0; }
+  .ph-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .ph-thumb .chk { position: absolute; top: 3px; right: 3px; width: 17px; height: 17px; border-radius: 50%; background: #2f7ff0; color: #fff; font-size: .66rem; display: none; align-items: center; justify-content: center; }
+  .ph-thumb.active .chk { display: flex; }
   .bg-thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
   .bg-thumb { width: 60px; cursor: pointer; text-align: center; }
   .bg-thumb .ph { width: 60px; height: 90px; border-radius: 8px; background-size: cover; background-position: center; border: 2px solid transparent; transition: border-color .15s; }
@@ -661,10 +668,9 @@
                 <label class="checkbox"><input type="checkbox" id="t_autoDl" checked> Auto-download</label>
               </div>
               <div id="t_carsxeWrap" style="display:none;margin-top:12px;">
-                <label for="t_carsxeImg">Photo — pick the best result</label>
-                <select id="t_carsxeImg" onchange="t_carsxePick()"></select>
+                <label>Photo <span style="opacity:.55;font-weight:400;">— tap the best one</span></label>
+                <div class="ph-thumbs" id="t_photoThumbs"></div>
               </div>
-              <p class="hint">Factory photos pulled automatically.</p>
               <div class="status" id="vdbStatus"></div>
             </div>
 
@@ -1845,8 +1851,9 @@
   function t_fillYears() {
     const sel = $('t_year');
     const next = new Date().getFullYear() + 1;
-    sel.innerHTML = '<option value="">Select year</option>';
+    sel.innerHTML = '';
     for (let y = next; y >= 2000; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
+    sel.value = '2026';   // sensible default
   }
   const T_MAKES = ['Acura', 'Alfa Romeo', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge', 'Fiat', 'Ford', 'Genesis', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jaguar', 'Jeep', 'Kia', 'Land Rover', 'Lexus', 'Lincoln', 'Maserati', 'Mazda', 'Mercedes-Benz', 'MINI', 'Mitsubishi', 'Nissan', 'Polestar', 'Porsche', 'Ram', 'Rivian', 'Subaru', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo'];
   function t_fillMakes() {
@@ -1866,10 +1873,34 @@
     try { return await r.json(); }
     catch (_) { return { error: 'Couldn’t reach the server (try reloading / signing in again).' }; }
   }
+  // Render the CarsXE results as tappable thumbnails (first one is active).
   function t_setPhotoOptions(options) {
-    const sel = $('t_carsxeImg'); sel.innerHTML = '';
-    (options || []).forEach(o => { const op = document.createElement('option'); op.value = o.url; op.textContent = o.label; sel.appendChild(op); });
+    const wrap = $('t_photoThumbs'); wrap.innerHTML = '';
+    (options || []).forEach((o, i) => {
+      const t = document.createElement('div');
+      t.className = 'ph-thumb' + (i === 0 ? ' active' : '');
+      const img = document.createElement('img'); img.src = o.thumb || o.url; img.alt = ''; img.loading = 'lazy';
+      const chk = document.createElement('span'); chk.className = 'chk'; chk.textContent = '✓';
+      t.appendChild(img); t.appendChild(chk);
+      t.onclick = () => t_pickPhoto(o.url, t);
+      wrap.appendChild(t);
+    });
     $('t_carsxeWrap').style.display = (options && options.length > 1) ? '' : 'none';
+  }
+  async function t_pickPhoto(url, el) {
+    if (!url) return;
+    document.querySelectorAll('#t_photoThumbs .ph-thumb').forEach(x => x.classList.remove('active'));
+    if (el) el.classList.add('active');
+    setVdb('Loading that photo…', 'active');
+    try {
+      const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      const d = await r.json();
+      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      $('t_dlBtn').disabled = false;
+      setVdb('Photo updated ✓', 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   // CarsXE colours + trims for the picker (best-effort; failures are silent).
   async function t_loadMeta(year, make, model, trim) {
@@ -1915,19 +1946,6 @@
     const sel = $('t_color'), sw = $('t_swatch');
     const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
     if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
-  }
-  // Pick a specific result from the CarsXE set (proxied so canvas/export works).
-  async function t_carsxePick() {
-    const url = $('t_carsxeImg').value; if (!url) return;
-    setVdb('Loading that photo…', 'active');
-    try {
-      const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-      const d = await r.json();
-      if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      setVdb('Photo updated ✓', 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
   // Pick a color -> re-fetch CarsXE filtered by that color family.
   async function t_pickColor() {
