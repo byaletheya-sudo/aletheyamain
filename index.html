@@ -615,8 +615,13 @@
       <div class="view-inner">
         <h1>Lease Ad — TEST</h1>
         <p class="subtitle">Pulls the real factory photo from Vehicle Databases (by year / make / model) instead of generating one with AI. Background is removed so it drops onto the template.</p>
+        <div class="seg" style="margin-bottom:18px;">
+          <button type="button" class="seg-btn active" id="t_modeSingle" onclick="t_setMode('single')">Single</button>
+          <button type="button" class="seg-btn" id="t_modeBulk" onclick="t_setMode('bulk')">Bulk</button>
+        </div>
         <div class="layout">
           <div>
+            <div id="t_singlePanels">
             <div class="panel">
               <h2>Vehicle</h2>
               <div class="row">
@@ -646,20 +651,16 @@
             <div class="panel">
               <h2>Deal</h2>
               <div class="seg" style="margin-bottom:14px;">
-                <button type="button" class="seg-btn active" id="t_segLease" onclick="t_setDeal('lease')">Lease</button>
-                <button type="button" class="seg-btn" id="t_segFinance" onclick="t_setDeal('finance')">Finance</button>
+                <button type="button" class="seg-btn active" id="t_seg_lease" onclick="t_setDeal('lease')">Lease</button>
+                <button type="button" class="seg-btn" id="t_seg_finance" onclick="t_setDeal('finance')">Finance</button>
+                <button type="button" class="seg-btn" id="t_seg_onepay" onclick="t_setDeal('onepay')">One Pay</button>
               </div>
               <div class="row">
-                <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
-                <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
-              </div>
-              <div class="row" id="t_leaseFields">
-                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
-                <div></div>
-              </div>
-              <div class="row" id="t_financeFields" style="display:none;">
-                <div><label for="t_down">Down payment ($)</label><input type="text" id="t_down" value="" placeholder="e.g. 5,000" oninput="t_render()"></div>
-                <div><label for="t_apr">APR (%)</label><input type="text" id="t_apr" value="" placeholder="e.g. 4.9" oninput="t_render()"></div>
+                <div id="t_fMonthly"><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
+                <div id="t_fTerm"><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
+                <div id="t_fDas"><label for="t_das" id="t_dasLabel">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
+                <div id="t_fDown" style="display:none;"><label for="t_down">Down payment ($)</label><input type="text" id="t_down" value="" placeholder="e.g. 5,000" oninput="t_render()"></div>
+                <div id="t_fApr" style="display:none;"><label for="t_apr">APR (%)</label><input type="text" id="t_apr" value="" placeholder="e.g. 4.9" oninput="t_render()"></div>
               </div>
               <label for="t_badge">Badge</label>
               <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
@@ -672,6 +673,13 @@
               <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
               <label for="t_bodystyle">Subtitle (from trim)</label>
               <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
+              <label for="t_bg">Background <span style="font-weight:400;opacity:.6;font-size:.78rem;">(placeholders — real ones coming soon)</span></label>
+              <select id="t_bg" onchange="t_setBg()">
+                <option value="default">Nova Default</option>
+                <option value="ph1">Placeholder — Midnight</option>
+                <option value="ph2">Placeholder — Slate</option>
+                <option value="ph3">Placeholder — Charcoal</option>
+              </select>
             </div>
 
             <div class="panel">
@@ -689,7 +697,9 @@
               </div>
               <div class="status" id="t_status"></div>
             </div>
+            </div><!-- /t_singlePanels -->
 
+            <div id="t_bulkPanels" style="display:none;">
             <div class="panel">
               <h2>Bulk Import (one ad per line)</h2>
               <p class="hint" style="margin-bottom:10px;">
@@ -711,6 +721,7 @@
               </div>
               <div class="status" id="t_bulkStatus"></div>
             </div>
+            </div><!-- /t_bulkPanels -->
           </div>
 
           <div class="preview-col">
@@ -1691,14 +1702,42 @@
   // ===================== TEST: lease ad from Vehicle Databases photos =====================
   let t_titleEdited = false;
   let t_engineSuffix = '';   // e.g. the "i" of 430i — merged onto the model in the headline
-  let t_dealType = 'lease';  // 'lease' | 'finance' (lease selected first)
+  // ---- Single / Bulk mode ----
+  let t_mode = 'single';
+  function t_setMode(mode) {
+    t_mode = mode;
+    $('t_modeSingle').classList.toggle('active', mode === 'single');
+    $('t_modeBulk').classList.toggle('active', mode === 'bulk');
+    $('t_singlePanels').style.display = mode === 'single' ? '' : 'none';
+    $('t_bulkPanels').style.display = mode === 'bulk' ? '' : 'none';
+    if (typeof fitPreviews === 'function') fitPreviews();
+  }
+
+  // ---- Deal type: Lease / Finance / One Pay (lease first) ----
+  let t_dealType = 'lease';
+  const T_DEAL_FIELDS = {                       // which inputs each deal shows
+    lease:   ['t_fMonthly', 't_fTerm', 't_fDas'],
+    finance: ['t_fMonthly', 't_fTerm', 't_fDown', 't_fApr'],
+    onepay:  ['t_fDas', 't_fTerm'],             // one pay: no monthly, just the up-front total
+  };
   function t_setDeal(type) {
     t_dealType = type;
-    $('t_segLease').classList.toggle('active', type === 'lease');
-    $('t_segFinance').classList.toggle('active', type === 'finance');
-    $('t_leaseFields').style.display = type === 'lease' ? '' : 'none';
-    $('t_financeFields').style.display = type === 'finance' ? '' : 'none';
+    ['lease', 'finance', 'onepay'].forEach(m => $('t_seg_' + m).classList.toggle('active', m === type));
+    const show = T_DEAL_FIELDS[type];
+    ['t_fMonthly', 't_fTerm', 't_fDas', 't_fDown', 't_fApr'].forEach(id => { $(id).style.display = show.includes(id) ? '' : 'none'; });
+    $('t_dasLabel').textContent = type === 'onepay' ? 'One Pay total ($)' : 'Due at signing ($)';
     t_render();
+  }
+
+  // ---- Background (placeholders for now; real backdrops swap in later) ----
+  const T_BACKGROUNDS = {
+    default: '',                                                            // revert to the CSS .ad default
+    ph1: 'radial-gradient(80% 60% at 50% 28%, #15233f, #060a12)',
+    ph2: 'linear-gradient(160deg, #1b2330, #0a0e16)',
+    ph3: 'linear-gradient(160deg, #242424, #0c0c0c)',
+  };
+  function t_setBg() {
+    $('t_ad').style.background = T_BACKGROUNDS[$('t_bg').value] || '';
   }
   function setVdb(t, type = '') { const e = $('vdbStatus'); e.textContent = t; e.className = 'status ' + type; }
   function setT(t, type = '') { const e = $('t_status'); e.textContent = t; e.className = 'status ' + type; }
@@ -1761,23 +1800,28 @@
     $('t_adTitle').textContent = $('t_title').value || t_vehName();
     const sub = $('t_bodystyle').value.trim();
     $('t_adSub').textContent = sub; $('t_adSub').style.display = sub ? '' : 'none';
-    // price line (hidden if no monthly entered)
+    // price + terms — built per deal type, only from the fields actually filled in
     const monthly = $('t_monthly').value.trim();
-    $('t_adPrice').textContent = monthly ? `$${money(monthly)} Per Month` : '';
-    $('t_adPrice').style.display = monthly ? '' : 'none';
-    // terms line — build only from the fields the user actually filled in
     const term = $('t_term').value.trim();
+    const das = $('t_das').value.trim();
+    let priceText = '';
     const parts = [];
     if (t_dealType === 'finance') {
+      priceText = monthly ? `$${money(monthly)} Per Month` : '';
       const down = $('t_down').value.trim(), apr = $('t_apr').value.trim();
       if (down) parts.push(`$${money(down)} Down`);
       if (term) parts.push(`${term} Months`);
       if (apr) parts.push(`${apr}% APR`);
+    } else if (t_dealType === 'onepay') {
+      priceText = das ? `$${money(das)} One Pay` : '';      // no monthly — the up-front total is the hero
+      if (term) parts.push(`${term} Month Lease`);
     } else {
-      const das = $('t_das').value.trim();
+      priceText = monthly ? `$${money(monthly)} Per Month` : '';
       if (das) parts.push(`$${money(das)} Due at Signing`);
       if (term) parts.push(`${term} Month Lease`);
     }
+    $('t_adPrice').textContent = priceText;
+    $('t_adPrice').style.display = priceText ? '' : 'none';
     const terms = parts.join(' • ');
     $('t_adTerms').textContent = terms;
     $('t_adTerms').style.display = terms ? '' : 'none';
@@ -1918,7 +1962,7 @@
       $('t_adCar').src = url;
       await waitForImage($('t_adCar'));
       $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓' + bgWarn + (d.options && d.options.length > 1 ? ' — pick a color below if you like' : ''), bgWarn ? 'error' : 'done');
+      setVdb('Photo placed ✓' + bgWarn + (d.options && d.options.length > 1 ? ' — change the color above anytime' : ''), bgWarn ? 'error' : 'done');
       if ($('t_autoDl').checked) await t_download();
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
