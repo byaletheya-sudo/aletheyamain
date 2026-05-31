@@ -2731,8 +2731,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // Upsert by (contact + car): a dealer's new list updates their existing deals,
   // adds new ones, and never touches another dealer's deals.
   function dh_dealerNorm(s) { return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' '); }
-  // include the special tag so a loaner / one-off stays a STANDALONE deal and never merges with the normal one
-  function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d) + (d.special ? '||s:' + dh_dealerNorm(d.special) : ''); }
+  // a deal is unique per dealer + car + TERM + MILES (+ special): different terms/miles for the same
+  // car are separate offers and must not overwrite each other; a loaner/one-off also stays standalone.
+  function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d) + '||t:' + dh_norm(d.term) + '||m:' + dh_norm(d.miles) + (d.special ? '||s:' + dh_dealerNorm(d.special) : ''); }
   const DH_DIFF_FIELDS = ['orig_mo', 'tax_in_mo', 'das', 'apr', 'term', 'miles', 'broker_fee', 'msrp', 'deal_type', 'special', 'package', 'notes'];   // the active-window refresh is mechanical, not shown as a "change"
   // build a preview of what an import will do (add vs update + the field diffs) WITHOUT applying it.
   // A contact's paste UPDATES the cars it mentions and ADDS new ones; it never touches their other cars.
