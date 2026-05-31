@@ -36,7 +36,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deals")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -960,6 +960,54 @@ def deal_parse():
         })
     except Exception as e:
         return jsonify({"error": f"Couldn't parse those deals: {e}"}), 502
+
+
+@app.route("/deal-search", methods=["POST"])
+def deal_search():
+    """Natural-language filter over the deal list. Given a query and the candidate
+    vehicles, an LLM returns the indices that match, best-first."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    query = (body.get("query") or "").strip()
+    cars = body.get("cars") or []
+    if not query or not isinstance(cars, list) or not cars:
+        return jsonify({"match": []})
+    cars = cars[:400]
+    lines = []
+    for i, c in enumerate(cars):
+        lines.append(
+            f"{i}: {c.get('year','')} {c.get('make','')} {c.get('model','')} {c.get('trim','')} "
+            f"| mo={c.get('monthly','')} 0down={c.get('zero','')} das={c.get('das','')} "
+            f"term={c.get('term','')} miles={c.get('miles','')}"
+        )
+    schema = {
+        "type": "object", "additionalProperties": False, "required": ["match"],
+        "properties": {"match": {"type": "array", "items": {"type": "integer"}}},
+    }
+    system = (
+        "You are a search filter for a car-lease deal list. Given a natural-language query and a "
+        "numbered list of vehicles (monthly payment, 0-down effective monthly, DAS, term months, "
+        "annual miles), return 'match': the indices of vehicles that satisfy the query, MOST "
+        "relevant / best first. Understand body styles (SUV, sedan, coupe, truck, wagon), fuel "
+        "type (EV / hybrid) from model knowledge, brands and sub-brands ('AMG'=Mercedes-AMG, "
+        "'M'/'M3'=BMW M, 'Type R'=Honda, etc.), and numeric limits ('under $500/mo' -> monthly<=500, "
+        "'0 down' favors low DAS, 'cheap'/'best' -> lowest 0-down effective). Only use indices from "
+        "the list. If nothing matches, return an empty array."
+    )
+    user = "QUERY: " + query + "\n\nVEHICLES:\n" + "\n".join(lines)
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            response_format={"type": "json_schema", "json_schema": {"name": "search", "strict": True, "schema": schema}},
+        )
+        idx = json.loads(resp.choices[0].message.content).get("match", [])
+        keys = [cars[i].get("key") for i in idx if isinstance(i, int) and 0 <= i < len(cars)]
+        return jsonify({"keys": keys})
+    except Exception as e:
+        return jsonify({"error": f"Search failed: {e}"}), 502
 
 
 @app.route("/deals", methods=["GET", "POST"])
