@@ -1004,7 +1004,6 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     <section class="view" id="view-deals">
       <div class="view-inner" style="max-width:1400px;">
         <h1>Deal Hub</h1>
-        <p class="subtitle">Every deal you collect — ranked by the best effective price per car. Tap the Nova orb to import or update.</p>
 
         <!-- floating Nova import agent -->
         <button type="button" id="dhAgentFab" class="dh-agent-fab" onclick="dh_toggleAgent()" title="Import &amp; update deals" aria-label="Import deals">
@@ -3099,7 +3098,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_custClose() { $('dhCustModal').style.display = 'none'; dh_cust = null; }
   function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note" title="${escapeHtml(n).replace(/"/g, '&quot;')}">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
   // qualifying incentives -> their own tags (from the incentives field + detected in legacy notes)
-  const DH_INCENTIVE_PATTERNS = [[/conquest/i, 'Conquest'], [/loyalt/i, 'Loyalty'], [/\b(aaa|triple ?a)\b/i, 'AAA'], [/college grad|recent grad/i, 'College Grad'], [/\bmilitary\b/i, 'Military'], [/first responder/i, 'First Responder'], [/costco/i, 'Costco'], [/uber|lyft|rideshare/i, 'Rideshare']];
+  const DH_INCENTIVE_PATTERNS = [
+    [/\bconquest\b/i, 'Conquest'], [/\b(lease )?loyalty\b/i, 'Loyalty'], [/\b(aaa|triple ?a)\b/i, 'AAA'],
+    [/\bcollege grad(uate)?\b/i, 'College Grad'], [/\brecent grad(uate)?\b/i, 'College Grad'],
+    [/\bmilitary\b/i, 'Military'], [/\bfirst responder\b/i, 'First Responder'],
+    [/\bcostco\b/i, 'Costco'], [/\b(uber|lyft|rideshare)\b/i, 'Rideshare']
+  ];
   function dh_incentives(d) {
     const set = new Set();
     (d.incentives || '').split(/[;,]/).map(s => s.trim()).filter(Boolean).forEach(s => set.add(s));
@@ -3108,6 +3112,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     return [...set];
   }
   function dh_incentiveTags(d) { return dh_incentives(d).map(x => `<span class="dh-inc">${escapeHtml(x)}</span>`).join(''); }
+  // the note shown in By-Car has any recognized incentive (now a tag) stripped out, so it isn't duplicated
+  function dh_cleanNotes(d) {
+    let n = (d.notes || '').toString(); if (!n.trim()) return '';
+    DH_INCENTIVE_PATTERNS.forEach(([re]) => { n = n.replace(new RegExp(re.source, 'gi'), ' '); });
+    n = n.replace(/[+&]/g, ' ').replace(/\band\b/gi, ' ');
+    n = n.split(/[,;\n]/).map(s => s.trim().replace(/^[-–]\s*/, '')).filter(Boolean).join(', ');
+    return n.replace(/\s{2,}/g, ' ').trim();
+  }
   function dh_renderByCar() {
     const q = ($('dh_search').value || '').toLowerCase().trim();
     const expiredCount = dh_deals.filter(dh_isExpired).length;
@@ -3152,7 +3164,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!fin && best.miles) tags.push(`<span class="dh-tag">${dh_mi(best.miles)} mi</span>`);
       tags.push(`<span class="dh-tag">${g.deals.length} deal${g.deals.length > 1 ? 's' : ''} · ${dealers} dealer${dealers > 1 ? 's' : ''}</span>`);
       const age = dh_age(best); if (age) tags.push(`<span class="dh-tag">${age}</span>`);
-      if ((best.notes || '').trim()) tags.push(`<span class="dh-tag dh-note">📝<span class="dh-note-pop">${escapeHtml(best.notes.trim())}</span></span>`);
+      const cleanN = dh_cleanNotes(best); if (cleanN) tags.push(`<span class="dh-tag dh-note" title="${escapeHtml(cleanN).replace(/"/g, '&quot;')}">📝<span class="dh-note-pop">${escapeHtml(cleanN)}</span></span>`);
       const sub = tags.join('');
       const rows = g.deals.map((d, i) => {
         const dq = dh_money(d.orig_mo || d.tax_in_mo) + '/mo';
@@ -3160,7 +3172,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         const fin = dh_isFinance(d);
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(d.notes)}</div>${(d.package || '').trim() ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(dh_cleanNotes(d))}</div>${(d.package || '').trim() ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
           <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
           <td><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
