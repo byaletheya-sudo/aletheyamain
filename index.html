@@ -186,7 +186,6 @@
   .dh-deals-tbl td { padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.04); color: #d2d6dc; white-space: nowrap; }
   .dh-deals-tbl tr.win td { background: rgba(140,225,195,0.055); }
   .dh-deals-tbl tr.win td:first-child { box-shadow: inset 3px 0 0 var(--dh-price); }
-  .dh-stale { opacity: 0.5; }
   .dh-expired td { opacity: 0.45; }
   .dh-exp { color: #ff7676; font-weight: 600; }
   .dh-pill { font-size: 0.6rem; padding: 1px 6px; border-radius: 999px; background: rgba(255,180,80,0.15); color: #ffb450; margin-left: 6px; }
@@ -956,12 +955,11 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
         <div class="panel">
           <h2>Import &amp; Update Deals</h2>
           <label for="dh_input">Paste anything <span style="opacity:.55;font-weight:400;">— text, a flyer screenshot, or a PDF. The AI reads the contact, terms, and any adjustments.</span></label>
-          <datalist id="dh_dealerList"></datalist>
           <textarea id="dh_input" style="min-height:150px;" placeholder="Paste a flyer's text, a message, a list… or drop a screenshot / PDF below.
 
 e.g.
 From Diana Santa Monica — do pre-tax (÷1.0975), drop $15/mo
-$2000 Down · 36 Month · 10k Miles · $1000 BF
+$2000 Down · 36 Month · 10,000 Miles · $1000 BF
 26 K4 LXS — $289
 26 K5 GT Line — $389"></textarea>
           <div id="dh_drop" class="dh-drop" onclick="$('dh_file').click()">
@@ -2827,7 +2825,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       { label: 'Down / DAS', val: c => dh_num(c.best.das) || 0, fmt: v => dh_money(v), best: 'min' },
       { label: 'APR', val: c => dh_num(c.best.apr), fmt: v => v == null ? '—' : v + '%', best: 'min' },
       { label: 'Term', val: c => dh_num(c.best.term), fmt: v => v ? v + 'mo' : '—', best: null },
-      { label: 'Miles / yr', val: c => dh_num(c.best.miles), fmt: v => v ? (v / 1000) + 'k' : '—', best: 'max' },
+      { label: 'Miles / yr', val: c => dh_num(c.best.miles), fmt: v => v ? v.toLocaleString() : '—', best: 'max' },
       { label: 'Dealers', val: c => c.dealers || 1, fmt: v => v, best: 'max' },
       { label: 'Top dealer', val: c => c.best.dealer || '—', fmt: v => v, best: null },
     ];
@@ -2849,8 +2847,6 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   function dh_setSort(v) { dh_sort = v; dh_renderByCar(); }
   function dh_refresh() {
     $('dh_count').textContent = dh_deals.length ? ('(' + dh_deals.length + ' deals)') : '';
-    const dl = $('dh_dealerList');
-    if (dl) { const ds = [...new Set(dh_deals.map(d => (d.dealer || '').trim()).filter(Boolean))].sort(); dl.innerHTML = ds.map(x => '<option value="' + x.replace(/"/g, '&quot;') + '">').join(''); }
     dh_renderBest();
     if (dh_mode === 'car') dh_renderByCar(); else dh_render();
   }
@@ -2860,7 +2856,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     if (!valid.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
     const best = valid.reduce((a, b) => dh_zeroOf(b) < dh_zeroOf(a) ? b : a);
     const finB = dh_isFinance(best);
-    const tm = [best.term ? best.term + 'mo' : '', (!finB && best.miles) ? (dh_num(best.miles) / 1000) + 'k mi' : '', (finB && dh_num(best.apr) != null) ? dh_num(best.apr) + '% APR' : ''].filter(Boolean).join(' / ');
+    const tm = [best.term ? best.term + 'mo' : '', (!finB && best.miles) ? dh_mi(best.miles) + ' mi' : '', (finB && dh_num(best.apr) != null) ? dh_num(best.apr) + '% APR' : ''].filter(Boolean).join(' / ');
     const meta = [(finB ? 'Finance' : ''), best.dealer, tm, dh_money(best.orig_mo || best.tax_in_mo) + '/mo' + (dh_num(best.das) ? ' + ' + dh_money(best.das) + (finB ? ' down' : ' DAS') : '')].filter(Boolean).join('  ·  ');
     el.style.display = '';
     el.innerHTML = `<div class="dh-best">
@@ -2918,6 +2914,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   function dh_isExpired(d) { const to = d.active_to; if (!to) return false; const t = new Date(to + 'T23:59:59'); return !isNaN(t) && t.getTime() < Date.now(); }
   function dh_dateShort(s) { if (!s) return ''; const t = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(t) ? '' : (t.getMonth() + 1) + '/' + t.getDate(); }
   function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function dh_mi(v) { const n = dh_num(v); return n == null ? '' : n.toLocaleString(); }   // full miles, no "k"
   function dh_renderByCar() {
     const q = ($('dh_search').value || '').toLowerCase().trim();
     const expiredCount = dh_deals.filter(dh_isExpired).length;
@@ -2958,7 +2955,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       if (fin && dh_num(best.apr) != null) tags.push(`<span class="dh-tag">${dh_num(best.apr)}% APR</span>`);
       if (dh_num(best.das)) tags.push(`<span class="dh-tag">${dh_money(best.das)} ${fin ? 'down' : 'DAS'}</span>`);
       if (best.term) tags.push(`<span class="dh-tag">${best.term}mo</span>`);
-      if (!fin && best.miles) tags.push(`<span class="dh-tag">${dh_num(best.miles) / 1000}k mi</span>`);
+      if (!fin && best.miles) tags.push(`<span class="dh-tag">${dh_mi(best.miles)} mi</span>`);
       tags.push(`<span class="dh-tag">${g.deals.length} deal${g.deals.length > 1 ? 's' : ''} · ${dealers} dealer${dealers > 1 ? 's' : ''}</span>`);
       const age = dh_age(best); if (age) tags.push(`<span class="dh-tag">${age}</span>`);
       const sub = tags.join('');
@@ -2969,7 +2966,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
         const fin = dh_isFinance(d);
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
           <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
-          <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? '/' + (dh_num(d.miles) / 1000) + 'k' : '')}</td>
+          <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
           <td>${fin && dh_num(d.apr) != null ? dh_num(d.apr) + '%' : (dh_money(d.broker_fee) || '')}</td><td>${active}</td></tr>`;
       }).join('');
       const key = dh_carKey(best);
