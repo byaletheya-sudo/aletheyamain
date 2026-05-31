@@ -99,11 +99,15 @@
   .toggle input:checked + .tg-track { background: rgba(90,130,190,0.55); border-color: rgba(120,160,220,0.4); }
   .toggle input:checked + .tg-track::after { transform: translateX(15px); }
   .toggle input:focus-visible + .tg-track { box-shadow: 0 0 0 3px rgba(120,160,220,0.25); }
-  /* frosted glass segmented control */
-  .seg { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 11px; padding: 3px; backdrop-filter: blur(8px); }
-  .seg-btn, .seg button { background: transparent; border: none; color: #868d98; padding: 7px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background .18s, color .18s, box-shadow .18s; }
+  /* frosted glass segmented control with a sliding thumb */
+  .seg { position: relative; display: inline-flex; gap: 2px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 11px; padding: 3px; backdrop-filter: blur(8px); }
+  .seg-thumb { position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; border-radius: 8px; pointer-events: none; opacity: 0;
+    background: linear-gradient(180deg, rgba(130,160,210,0.22), rgba(110,140,190,0.14));
+    box-shadow: inset 0 0 0 1px rgba(140,170,220,0.30), 0 2px 8px rgba(0,0,0,0.22);
+    transition: left .3s cubic-bezier(.34,1.18,.42,1), width .3s cubic-bezier(.34,1.18,.42,1), opacity .2s; }
+  .seg-btn, .seg button { position: relative; z-index: 1; background: transparent; border: none; color: #868d98; padding: 7px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: color .2s; }
   .seg-btn:hover, .seg button:hover { color: #c2c8d2; }
-  .seg-btn.active, .seg button.active { background: linear-gradient(180deg, rgba(130,160,210,0.22), rgba(110,140,190,0.14)); color: #eef2f8; box-shadow: inset 0 0 0 1px rgba(140,170,220,0.30), 0 2px 8px rgba(0,0,0,0.22); }
+  .seg-btn.active, .seg button.active { color: #eef2f8; }
   @keyframes fieldIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
   .field-anim { animation: fieldIn .24s ease; }
   .fld-dim label { color: #5f656e; }   /* secondary finance fields */
@@ -664,7 +668,7 @@
     <section class="view" id="view-test">
       <div class="view-inner">
         <h1>Lease Ad — TEST</h1>
-        <p class="subtitle">Pulls a real transparent vehicle photo from CarsXE (by year / make / model) and drops it straight onto the template — pick the best result and color.</p>
+        <p class="subtitle">Pulls a real transparent factory photo by year / make / model and drops it straight onto the template — pick the best result and color.</p>
         <div class="seg" style="margin-bottom:18px;">
           <button type="button" class="seg-btn active" id="t_modeSingle" onclick="t_setMode('single')">Single</button>
           <button type="button" class="seg-btn" id="t_modeBulk" onclick="t_setMode('bulk')">Bulk</button>
@@ -683,7 +687,7 @@
                 <div><label for="t_trim">Trim <span style="opacity:.55;font-weight:400;">(optional)</span></label><input type="text" id="t_trim" list="t_trimList" placeholder="e.g. Competition" oninput="t_onTrimInput()"><datalist id="t_trimList"></datalist></div>
               </div>
               <div id="t_colorWrap" style="display:none;">
-                <label for="t_color">Color (CarsXE factory options)</label>
+                <label for="t_color">Color (factory options)</label>
                 <div style="display:flex;align-items:center;gap:10px;">
                   <span id="t_swatch" style="width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.25);flex:0 0 auto;display:none;"></span>
                   <select id="t_color" onchange="t_pickColor()" style="flex:1;"></select>
@@ -1379,6 +1383,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     $('nav-' + name).classList.add('active');
     closeSidebar();                                          // auto-close after selecting
     if (typeof fitPreviews === 'function') fitPreviews();    // re-fit the now-visible preview
+    if (typeof slideAllSegs === 'function') requestAnimationFrame(slideAllSegs);   // position seg thumbs once visible
     document.title = (VIEW_TITLE[name] || 'nova') + ' — nova.byAletheya';
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
@@ -1441,6 +1446,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
 
   function setSoldFormat(f) {
     document.querySelectorAll('#spFormatSeg button').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+    slideSeg($('spFormatSeg'));
     const r45 = f === '4x5';
     $('sp').classList.toggle('r45', r45);
     soldH = r45 ? 1350 : 1920;
@@ -1663,6 +1669,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
   function spSetLayout(n) {
     spLayout = n;
     document.querySelectorAll('#spLayoutSeg button').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
+    slideSeg($('spLayoutSeg'));
     $('spPhotos').className = 'sp__hero ' + (n === 1 ? 'one' : 'two');
     $('spPhoto2Wrap').style.display = n === 2 ? '' : 'none';
   }
@@ -1745,10 +1752,10 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     }
   }
 
-  // ===================== TEST: lease ad from CarsXE photos =====================
+  // ===================== TEST: lease ad from the catalog photos =====================
   let t_titleEdited = false;
   let t_subEdited = false;
-  // Make display shortenings (CarsXE still gets the full value).
+  // Make display shortenings (the catalog still gets the full value).
   const T_MAKE_SHORT = { 'Mercedes-Benz': 'Mercedes' };
   // Normalize an ugly trim into clean ad copy: "AMG C 43 4MATIC Sedan All Wheel
   // Drive" -> "AMG C43 AWD Sedan". Drivetrain abbreviated, transmission dropped,
@@ -1781,12 +1788,27 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
   }
   // ---- Single / Bulk mode ----
   let t_mode = 'single';
+  // sliding indicator for any .seg (positions a thumb under the .active button)
+  function slideSeg(seg) {
+    if (!seg) return;
+    let thumb = seg.querySelector(':scope > .seg-thumb');
+    if (!thumb) { thumb = document.createElement('span'); thumb.className = 'seg-thumb'; seg.insertBefore(thumb, seg.firstChild); }
+    const active = seg.querySelector('.active');
+    if (!active || !active.offsetWidth) { thumb.style.opacity = '0'; return; }
+    thumb.style.opacity = '1';
+    thumb.style.left = active.offsetLeft + 'px';
+    thumb.style.width = active.offsetWidth + 'px';
+  }
+  function slideAllSegs() { document.querySelectorAll('.view.active .seg, body > .seg').forEach(slideSeg); }
+  window.addEventListener('resize', slideAllSegs);
+
   function t_setMode(mode) {
     t_mode = mode;
     $('t_modeSingle').classList.toggle('active', mode === 'single');
     $('t_modeBulk').classList.toggle('active', mode === 'bulk');
     $('t_singlePanels').style.display = mode === 'single' ? '' : 'none';
     $('t_bulkPanels').style.display = mode === 'bulk' ? '' : 'none';
+    slideSeg($('t_modeSingle').closest('.seg'));
     if (typeof fitPreviews === 'function') fitPreviews();
   }
 
@@ -1811,6 +1833,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       if (vis) { el.classList.remove('field-anim'); void el.offsetWidth; el.classList.add('field-anim'); }   // micro-motion
     });
     $('t_dasLabel').textContent = type === 'onepay' ? 'One Pay total ($)' : 'Due at signing ($)';
+    slideSeg($('t_seg_lease').closest('.seg'));
     t_renderBadgeChips();
     t_render();
   }
@@ -1920,7 +1943,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     sel.innerHTML = '<option value="">Select make</option>';
     T_MAKES.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = T_MAKE_SHORT[m] || m; sel.appendChild(o); });
   }
-  // CarsXE's image color filter wants a basic colour word, not a marketing name.
+  // the catalog's image color filter wants a basic colour word, not a marketing name.
   function t_basicColor(name) {
     const basics = ['black', 'white', 'silver', 'gray', 'grey', 'red', 'blue', 'green', 'yellow', 'orange', 'brown', 'gold', 'beige', 'tan', 'purple', 'bronze'];
     const low = (name || '').toLowerCase();
@@ -1932,7 +1955,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     try { return await r.json(); }
     catch (_) { return { error: 'Couldn’t reach the server (try reloading / signing in again).' }; }
   }
-  // Render the CarsXE results as tappable thumbnails (first one is active).
+  // Render the the catalog results as tappable thumbnails (first one is active).
   function t_setPhotoOptions(options) {
     const wrap = $('t_photoThumbs'); wrap.innerHTML = '';
     (options || []).forEach((o, i) => {
@@ -1961,7 +1984,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       setVdb('Photo updated ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
   }
-  // CarsXE colours + trims for the picker (best-effort; failures are silent).
+  // the catalog colours + trims for the picker (best-effort; failures are silent).
   async function t_loadMeta(year, make, model, trim) {
     try {
       const r = await fetch('/carsxe-meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model, trim }) });
@@ -1976,7 +1999,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
       (d.trims || []).forEach(t => { const op = document.createElement('option'); op.value = t; dl.appendChild(op); });
     } catch (e) { /* meta is optional */ }
   }
-  // Main build: pull the CarsXE photo (+ colours/trims), place it, populate pickers.
+  // Main build: pull the the catalog photo (+ colours/trims), place it, populate pickers.
   async function t_build() {
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
     if (!(make && model)) { setVdb('Pick a make and type a model.', 'error'); return; }
@@ -2006,7 +2029,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
     if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
   }
-  // Pick a color -> re-fetch CarsXE filtered by that color family.
+  // Pick a color -> re-fetch the catalog filtered by that color family.
   async function t_pickColor() {
     t_updateSwatch();
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();

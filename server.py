@@ -145,10 +145,10 @@ def load_api_key():
 API_KEY = load_api_key()
 
 
-# CarsXE (image source). Set CARSXE_API_KEY in the host env.
+# the catalog (image source). Set CARSXE_API_KEY in the host env.
 CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
-_CARSXE_ALLOWED = set()     # image URLs CarsXE returned to us (the only ones we'll proxy)
-_CARSXE_IMG_CACHE = {}      # vehicle -> image response, so repeats never re-hit CarsXE
+_CARSXE_ALLOWED = set()     # image URLs the catalog returned to us (the only ones we'll proxy)
+_CARSXE_IMG_CACHE = {}      # vehicle -> image response, so repeats never re-hit the catalog
 _CARSXE_META_CACHE = {}     # vehicle -> colors + trims
 _CARSXE_PROXY_CACHE = {}    # image url -> data URL
 _CARSXE_CACHE_MAX = 150     # keep the last ~150 of each (FIFO)
@@ -488,7 +488,7 @@ def _rgb_to_hex(rgb):
 
 @app.route("/carsxe-meta", methods=["POST"])
 def carsxe_meta():
-    """CarsXE colors + trims for a vehicle (the /v1/ymm endpoint). Returns the
+    """the catalog colors + trims for a vehicle (the /v1/ymm endpoint). Returns the
     exterior color list (name + hex) and the available trims, so we can rebuild
     the color picker and trim suggestions without Vehicle Databases."""
     if not CARSXE_API_KEY:
@@ -539,7 +539,7 @@ def carsxe_meta():
 
 @app.route("/carsxe-image", methods=["POST"])
 def carsxe_image():
-    """TRIAL: pull a vehicle photo from CarsXE's /images endpoint (make/model based,
+    """TRIAL: pull a vehicle photo from the catalog's /images endpoint (make/model based,
     transparent by default) so we can compare its image quality against Vehicle
     Databases. Returns the full set of results so the user can pick the best one."""
     if not CARSXE_API_KEY:
@@ -549,7 +549,7 @@ def carsxe_image():
     model = data.get("model", "").strip()
     year = str(data.get("year", "")).strip()
     trim = data.get("trim", "").strip()
-    color = data.get("color", "").strip().lower()    # CarsXE expects a lowercase basic colour
+    color = data.get("color", "").strip().lower()    # the catalog expects a lowercase basic colour
     if not (make and model):
         return jsonify({"error": "Pick a make and model first."}), 400
 
@@ -574,13 +574,13 @@ def carsxe_image():
         with urllib.request.urlopen(req, timeout=30) as r:
             body = json.loads(r.read().decode("utf-8", "ignore"))
     except urllib.error.HTTPError as e:
-        return jsonify({"error": f"CarsXE error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
+        return jsonify({"error": f"the catalog error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
     except Exception as e:
-        return jsonify({"error": f"CarsXE request failed: {e}"}), 502
+        return jsonify({"error": f"the catalog request failed: {e}"}), 502
 
     imgs = [im for im in (body.get("images") or []) if im.get("link")]
     if not imgs:
-        return jsonify({"found": False, "message": body.get("error") or "No images returned by CarsXE."})
+        return jsonify({"found": False, "message": body.get("error") or "No images returned by the catalog."})
     for im in imgs:
         _CARSXE_ALLOWED.add(im["link"])
     options = [{"url": im["link"], "thumb": im.get("thumbnailLink") or im["link"],
@@ -590,7 +590,7 @@ def carsxe_image():
     try:
         first = _carsxe_dataurl(imgs[0]["link"])
     except Exception as e:
-        return jsonify({"error": f"Couldn't load the CarsXE image: {e}"}), 502
+        return jsonify({"error": f"Couldn't load the the catalog image: {e}"}), 502
     payload = {"found": True, "success": True, "image_data": first,
                "image_url": imgs[0]["link"], "options": options}
     _cache_put(_CARSXE_IMG_CACHE, key, payload)
@@ -599,7 +599,7 @@ def carsxe_image():
 
 @app.route("/carsxe-proxy", methods=["POST"])
 def carsxe_proxy():
-    """Proxy a specific CarsXE image (only URLs CarsXE itself returned — no open SSRF)."""
+    """Proxy a specific the catalog image (only URLs the catalog itself returned — no open SSRF)."""
     url = (request.json or {}).get("url", "").strip()
     if url not in _CARSXE_ALLOWED:
         return jsonify({"error": "URL not allowed."}), 400
