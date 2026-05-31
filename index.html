@@ -267,6 +267,26 @@
   .dh-agent-body { padding: 14px 16px 16px; overflow-y: auto; }
   .dh-agent-body textarea { width: 100%; }
   .dh-agent-hint { color: #8a909b; font-size: 0.78rem; line-height: 1.4; margin: 0 0 10px; }
+  /* ===== premium polish: motion, depth, micro-interactions ===== */
+  .dh-car.open > .dh-car-deals { animation: dhReveal .26s cubic-bezier(.33,1,.68,1); }
+  @keyframes dhReveal { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
+  .dh-model:not(.collapsed) > .dh-model-body { animation: dhReveal .24s cubic-bezier(.33,1,.68,1); }
+  .dh-modal { animation: dhFade .18s ease; }
+  .dh-modal-card { animation: dhPop .22s cubic-bezier(.34,1.36,.64,1); }
+  @keyframes dhFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dhPop { from { opacity: 0; transform: translateY(14px) scale(.975); } to { opacity: 1; transform: none; } }
+  .btn-start, .btn-ghost, .dh-custom-btn, .dh-cmp, .dh-toggle-btn, .dh-sort, .dh-link { transition: transform .12s ease, background .15s ease, border-color .15s ease, color .15s ease, box-shadow .18s ease, filter .18s ease; }
+  .btn-start:hover { filter: brightness(1.07); }
+  .btn-start:active, .btn-ghost:active, .dh-custom-btn:active, .dh-cmp:active, .dh-toggle-btn:active, .dh-agent-fab:active, .dh-sort:active { transform: translateY(1px) scale(.985); }
+  .dh-tag { transition: background .14s ease, border-color .14s ease, color .14s ease, transform .12s ease; }
+  .dh-tag.lead:hover, .dh-note:hover, .dh-inc:hover { transform: translateY(-1px); }
+  .dh-car:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.34), 0 0 0 1px rgba(150,200,255,0.12); }
+  .dh-best { transition: box-shadow .22s ease, transform .22s ease; }
+  .dh-best:hover { box-shadow: 0 16px 44px rgba(0,0,0,0.42), 0 0 0 1px rgba(140,225,195,0.14); }
+  .dh-cust-slider { transition: filter .15s ease; } .dh-cust-slider:hover { filter: brightness(1.1); }
+  .dh-car-caret, .dh-make-caret, .dh-model-caret { transition: transform .2s cubic-bezier(.33,1,.68,1), color .15s ease; }
+  .dh-make-head:hover .dh-make-caret, .dh-model-head:hover .dh-model-caret { color: #aab2c0; }
+  @media (prefers-reduced-motion: reduce) { .dh-car.open > .dh-car-deals, .dh-model:not(.collapsed) > .dh-model-body, .dh-modal, .dh-modal-card, .dh-agent-fab { animation: none !important; } }
   .dh-modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
   /* smart-search chip */
   .dh-search-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; color: #b9c2cc; background: rgba(150,200,255,0.08); border: 1px solid rgba(150,200,255,0.16); border-radius: 999px; padding: 4px 10px; }
