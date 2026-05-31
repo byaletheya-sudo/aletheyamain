@@ -139,6 +139,31 @@
   .dh-del { background: transparent; color: #6b7280; padding: 4px 9px; font-size: 1.05rem; line-height: 1; }
   .dh-del:hover { color: #ff6b6b; }
   .dh-empty { padding: 28px; text-align: center; color: #5d626b; font-size: 0.85rem; }
+  /* Deal Hub — By Car */
+  .dh-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .dh-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .dh-chip { padding: 5px 11px; font-size: 0.72rem; font-weight: 600; border-radius: 999px; cursor: pointer; color: #9aa1ac; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); transition: background .15s, color .15s, border-color .15s; }
+  .dh-chip:hover { color: #eaeef4; }
+  .dh-chip.active { color: #eef2f8; background: rgba(120,150,200,0.20); border-color: rgba(140,170,220,0.4); }
+  .dh-car { border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; margin-bottom: 8px; overflow: hidden; background: rgba(255,255,255,0.012); }
+  .dh-car-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+  .dh-car-head:hover { background: rgba(255,255,255,0.022); }
+  .dh-car-name { font-weight: 700; font-size: 0.92rem; }
+  .dh-car-sub { color: #7b818b; font-size: 0.76rem; margin-top: 3px; }
+  .dh-car-best { text-align: right; white-space: nowrap; }
+  .dh-car-best b { color: #4aff7b; font-size: 1rem; font-weight: 800; }
+  .dh-car-best small { display: block; color: #6b7280; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .dh-car-caret { color: #6b7280; transition: transform .2s; flex: 0 0 auto; }
+  .dh-car.open .dh-car-caret { transform: rotate(180deg); }
+  .dh-car-deals { display: none; padding: 0 6px 8px; }
+  .dh-car.open .dh-car-deals { display: block; }
+  .dh-deals-tbl { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+  .dh-deals-tbl th { text-align: left; color: #767c86; font-weight: 600; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 8px; white-space: nowrap; }
+  .dh-deals-tbl td { padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.04); color: #d2d6dc; white-space: nowrap; }
+  .dh-deals-tbl tr.win td { background: rgba(74,255,123,0.06); }
+  .dh-deals-tbl tr.win td:first-child { box-shadow: inset 3px 0 0 #4aff7b; }
+  .dh-stale { opacity: 0.5; }
+  .dh-pill { font-size: 0.6rem; padding: 1px 6px; border-radius: 999px; background: rgba(255,180,80,0.15); color: #ffb450; margin-left: 6px; }
   /* restricted lock modal */
   .lock-modal { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(4,7,12,0.72); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
   .lock-card { width: 330px; max-width: 90vw; background: #101319; border: 1px solid #232733; border-radius: 16px; padding: 26px 24px; box-shadow: 0 30px 80px rgba(0,0,0,.55); text-align: center; }
@@ -864,15 +889,29 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
           <div class="status" id="dh_status"></div>
         </div>
         <div class="panel">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-            <h2 style="margin:0;">Deals <span id="dh_count" style="font-weight:400;opacity:.55;"></span></h2>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <div class="seg">
+              <button type="button" class="seg-btn active" id="dh_segCar" onclick="dh_setMode('car')">By Car</button>
+              <button type="button" class="seg-btn" id="dh_segSheet" onclick="dh_setMode('sheet')">Sheet</button>
+            </div>
             <div class="controls" style="margin:0;">
-              <button class="btn-ghost" onclick="dh_addRow()">+ Row</button>
+              <span id="dh_count" style="opacity:.5;font-size:.78rem;"></span>
               <button class="btn-ghost" onclick="dh_export()">Export CSV</button>
               <button class="btn-ghost" onclick="dh_clear()">Clear all</button>
             </div>
           </div>
-          <div class="dh-grid-wrap"><table class="dh-grid" id="dh_grid"></table></div>
+          <div id="dh_byCar">
+            <div class="dh-filters">
+              <input type="text" id="dh_search" placeholder="Search car…" oninput="dh_renderByCar()" style="max-width:240px;">
+              <div class="dh-chips" id="dh_termChips"></div>
+              <div class="dh-chips" id="dh_mileChips"></div>
+            </div>
+            <div id="dh_carList"></div>
+          </div>
+          <div id="dh_sheetWrap" style="display:none;">
+            <div style="margin-bottom:8px;"><button class="btn-ghost" onclick="dh_addRow()">+ Row</button></div>
+            <div class="dh-grid-wrap"><table class="dh-grid" id="dh_grid"></table></div>
+          </div>
         </div>
       </div>
     </section><!-- /#view-deals -->
@@ -2338,7 +2377,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
     return (mo && term) ? String(Math.round((mo + das / term) * 100) / 100) : '';
   }
   async function dh_load() {
-    try { const r = await fetch('/deals'); const d = await r.json(); dh_deals = d.deals || []; dh_render(); } catch (e) { }
+    try { const r = await fetch('/deals'); const d = await r.json(); dh_deals = d.deals || []; dh_refresh(); } catch (e) { }
   }
   let dh_saveT;
   async function dh_save() { try { await fetch('/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deals: dh_deals }) }); } catch (e) { } }
@@ -2368,9 +2407,9 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
     }
     dh_saveSoon();
   }
-  function dh_addRow() { dh_deals.unshift({ _added: new Date().toLocaleDateString() }); dh_render(); dh_saveSoon(); }
-  function dh_delRow(i) { dh_deals.splice(i, 1); dh_render(); dh_saveSoon(); }
-  function dh_clear() { if (!dh_deals.length) return; if (!confirm('Clear all ' + dh_deals.length + ' deals?')) return; dh_deals = []; dh_render(); dh_save(); }
+  function dh_addRow() { dh_deals.unshift({ _added: new Date().toLocaleDateString() }); dh_setMode('sheet'); dh_saveSoon(); }
+  function dh_delRow(i) { dh_deals.splice(i, 1); dh_refresh(); dh_saveSoon(); }
+  function dh_clear() { if (!dh_deals.length) return; if (!confirm('Clear all ' + dh_deals.length + ' deals?')) return; dh_deals = []; dh_refresh(); dh_save(); }
   async function dh_parse() {
     const text = $('dh_input').value.trim();
     if (!text) { dh_status('Paste some deals first.', 'error'); return; }
@@ -2385,7 +2424,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
       const added = (d.deals || []).map(x => ({ ...x, _added: today }));
       if (!added.length) { dh_status('No deals found in that text.', 'error'); return; }
       dh_deals = added.concat(dh_deals);
-      dh_render(); dh_save();
+      dh_refresh(); dh_save();
       $('dh_input').value = '';
       dh_status('Added ' + added.length + ' deal(s) ✓', 'done');
     } catch (e) { dh_status('✕ ' + e.message, 'error'); }
@@ -2399,12 +2438,99 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
     const a = document.createElement('a'); a.download = 'deals.csv';
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
   }
+  // ---- By Car view ----
+  let dh_mode = 'car', dh_fTerm = '', dh_fMiles = '';
+  function dh_refresh() {
+    $('dh_count').textContent = dh_deals.length ? ('(' + dh_deals.length + ' deals)') : '';
+    if (dh_mode === 'car') dh_renderByCar(); else dh_render();
+  }
+  function dh_setMode(m) {
+    dh_mode = m;
+    $('dh_segCar').classList.toggle('active', m === 'car');
+    $('dh_segSheet').classList.toggle('active', m === 'sheet');
+    $('dh_byCar').style.display = m === 'car' ? '' : 'none';
+    $('dh_sheetWrap').style.display = m === 'sheet' ? '' : 'none';
+    if (typeof slideSeg === 'function') slideSeg($('dh_segCar').closest('.seg'));
+    dh_refresh();
+  }
+  function dh_num(v) { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.]/g, '')); return isFinite(n) ? n : null; }
+  function dh_zeroOf(d) {              // the apples-to-apples comparison metric
+    const z = dh_num(d.zero_down_mo); if (z != null) return z;
+    const mo = dh_num(d.orig_mo), das = dh_num(d.das) || 0, term = dh_num(d.term);
+    if (mo != null && term) return Math.round((mo + das / term) * 100) / 100;
+    return dh_num(d.tax_in_mo);
+  }
+  function dh_carKey(d) { return ['year', 'make', 'model', 'trim'].map(k => (d[k] || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ')).join('|'); }
+  function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
+  function dh_age(d) {
+    if (!d._added) return '';
+    const t = new Date(d._added); if (isNaN(t)) return '';
+    const days = Math.floor((Date.now() - t.getTime()) / 86400000);
+    return days <= 0 ? 'today' : days === 1 ? '1d ago' : days + 'd ago';
+  }
+  function dh_isStale(d) { const t = new Date(d._added); return !isNaN(t) && (Date.now() - t.getTime()) > 30 * 86400000; }
+  function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function dh_chips(elId, vals, active, onPick, suffix) {
+    const w = $(elId); w.innerHTML = '';
+    if (!vals.length) return;
+    const mk = (label, val) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'dh-chip' + (val === active ? ' active' : ''); c.textContent = label; c.onclick = () => onPick(val); w.appendChild(c); };
+    mk('All ' + suffix, '');
+    vals.forEach(v => mk(v + (suffix === 'mo' ? 'mo' : ''), v));
+  }
+  function dh_renderByCar() {
+    const terms = [...new Set(dh_deals.map(d => String(d.term || '').trim()).filter(Boolean))].sort((a, b) => (+a) - (+b));
+    const miles = [...new Set(dh_deals.map(d => String(d.miles || '').trim()).filter(Boolean))].sort((a, b) => (+a) - (+b));
+    dh_chips('dh_termChips', terms, dh_fTerm, v => { dh_fTerm = v; dh_renderByCar(); }, 'mo');
+    dh_chips('dh_mileChips', miles, dh_fMiles, v => { dh_fMiles = v; dh_renderByCar(); }, 'mi');
+    const q = ($('dh_search').value || '').toLowerCase().trim();
+    const deals = dh_deals.filter(d => {
+      if (dh_fTerm && String(d.term || '').trim() !== dh_fTerm) return false;
+      if (dh_fMiles && String(d.miles || '').trim() !== dh_fMiles) return false;
+      if (q && !dh_carLabel(d).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const groups = {};
+    deals.forEach(d => { const k = dh_carKey(d); (groups[k] = groups[k] || { label: dh_carLabel(d), deals: [] }).deals.push(d); });
+    const list = Object.values(groups).filter(g => g.label);
+    list.forEach(g => g.deals.sort((a, b) => (dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)));
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    const el = $('dh_carList');
+    if (!list.length) { el.innerHTML = '<div class="dh-empty">No deals match — adjust the filters, or paste some in.</div>'; return; }
+    el.innerHTML = list.map(g => {
+      const best = g.deals[0];
+      const dealers = new Set(g.deals.map(d => (d.dealer || '').trim().toLowerCase()).filter(Boolean)).size;
+      const z = dh_zeroOf(best);
+      const quote = dh_money(best.orig_mo || best.tax_in_mo) + '/mo' + (dh_num(best.das) ? ' + ' + dh_money(best.das) + ' DAS' : '');
+      const tm = [best.term ? best.term + 'mo' : '', best.miles ? (dh_num(best.miles) / 1000) + 'k' : ''].filter(Boolean).join('/');
+      const sub = [best.dealer, quote, tm, dh_age(best)].filter(Boolean).join('  ·  ');
+      const rows = g.deals.map((d, i) => {
+        const dq = dh_money(d.orig_mo || d.tax_in_mo) + '/mo';
+        return `<tr class="${i === 0 ? 'win' : ''}${dh_isStale(d) ? ' dh-stale' : ''}">
+          <td>${i === 0 ? '🏆 ' : ''}${(d.dealer || '—')}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (d.miles ? '/' + (dh_num(d.miles) / 1000) + 'k' : '')}</td>
+          <td>${dh_money(d.broker_fee) || ''}</td><td>${dh_age(d)}</td></tr>`;
+      }).join('');
+      return `<div class="dh-car" onclick="this.classList.toggle('open')">
+        <div class="dh-car-head">
+          <div style="flex:1;min-width:0;">
+            <div class="dh-car-name">${g.label}${dh_isStale(best) ? '<span class="dh-pill">stale</span>' : ''}</div>
+            <div class="dh-car-sub">${sub}  ·  ${g.deals.length} deal${g.deals.length > 1 ? 's' : ''} · ${dealers} dealer${dealers > 1 ? 's' : ''}</div>
+          </div>
+          <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>0-down</small></div>
+          <span class="dh-car-caret">▾</span>
+        </div>
+        <div class="dh-car-deals">
+          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>DAS</th><th>0-Down</th><th>Term/Mi</th><th>BF</th><th>Added</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   t_fillYears();
   t_fillMakes();
   t_renderBadgeChips();
   t_render();
-  dh_render();
+  dh_setMode('car');
   dh_load();
 
   renderSold();
