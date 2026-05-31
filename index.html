@@ -127,6 +127,18 @@
   .bulk-dot.loading { background: #ffd166; animation: btnpulse 1s infinite; }
   .bulk-dot.done { background: #4aff7b; }
   .bulk-dot.error { background: #ff6b6b; }
+  /* Deal Hub spreadsheet */
+  .dh-grid-wrap { overflow-x: auto; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+  .dh-grid { border-collapse: collapse; width: 100%; }
+  .dh-grid th { text-align: left; padding: 8px; color: #767c86; font-weight: 600; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; background: rgba(255,255,255,0.025); border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; z-index: 1; }
+  .dh-grid td { padding: 0; border-bottom: 1px solid rgba(255,255,255,0.035); border-right: 1px solid rgba(255,255,255,0.03); }
+  .dh-grid input { width: 100%; border: none; background: transparent; color: #e9ebee; padding: 7px 8px; font-size: 0.78rem; border-radius: 0; outline: none; }
+  .dh-grid input:focus { background: rgba(74,158,255,0.10); box-shadow: inset 0 0 0 1px rgba(74,158,255,0.45); }
+  .dh-grid input[data-ro] { color: #86a3cc; font-weight: 600; }
+  .dh-grid tr:hover td { background: rgba(255,255,255,0.015); }
+  .dh-del { background: transparent; color: #6b7280; padding: 4px 9px; font-size: 1.05rem; line-height: 1; }
+  .dh-del:hover { color: #ff6b6b; }
+  .dh-empty { padding: 28px; text-align: center; color: #5d626b; font-size: 0.85rem; }
   .ph-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .ph-thumb { position: relative; width: 94px; height: 64px; border-radius: 9px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; transition: border-color .15s, transform .1s; }
   .ph-thumb:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
@@ -361,6 +373,10 @@
     <div class="nav-item" id="nav-test" onclick="showView('test')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 3h8"/></svg></span>
       Lease Ad — TEST
+    </div>
+    <div class="nav-item" id="nav-deals" onclick="showView('deals')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
+      Deal Hub
     </div>
   </aside>
 
@@ -818,6 +834,40 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
         </div>
       </div>
     </section><!-- /#view-test -->
+
+    <section class="view" id="view-deals">
+      <div class="view-inner" style="max-width:1400px;">
+        <h1>Deal Hub</h1>
+        <p class="subtitle">Paste any messy deal list — the AI reads it, applies your rules, and files it in the sheet. Everything you add is saved.</p>
+        <div class="panel">
+          <h2>Import Deals</h2>
+          <label for="dh_input">Paste deals</label>
+          <textarea id="dh_input" style="min-height:120px;" placeholder="Paste a flyer's text, a message, a list… global terms + per-line deals.
+
+e.g.
+$2000 Down · 36 Month · 10k Miles · $1000 BF · Diana @ Kia
+26 K4 LXS — $289
+26 K5 GT Line — $389"></textarea>
+          <label for="dh_rules">Rules / adjustments <span style="opacity:.55;font-weight:400;">(optional, plain English)</span></label>
+          <input type="text" id="dh_rules" placeholder="e.g. do pre-tax (÷1.0975) and subtract $15 from each monthly">
+          <div class="controls" style="margin-top:12px;">
+            <button class="btn-start" id="dh_parseBtn" onclick="dh_parse()">✨ Parse &amp; Add</button>
+          </div>
+          <div class="status" id="dh_status"></div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+            <h2 style="margin:0;">Deals <span id="dh_count" style="font-weight:400;opacity:.55;"></span></h2>
+            <div class="controls" style="margin:0;">
+              <button class="btn-ghost" onclick="dh_addRow()">+ Row</button>
+              <button class="btn-ghost" onclick="dh_export()">Export CSV</button>
+              <button class="btn-ghost" onclick="dh_clear()">Clear all</button>
+            </div>
+          </div>
+          <div class="dh-grid-wrap"><table class="dh-grid" id="dh_grid"></table></div>
+        </div>
+      </div>
+    </section><!-- /#view-deals -->
 
   </main>
 </div>
@@ -1379,9 +1429,9 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     $('scrim').classList.remove('show');
   }
   // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
-  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test' };
-  const PATH_VIEW = { '/': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test' };
-  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST' };
+  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub' };
+  const PATH_VIEW = { '/': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals' };
+  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub' };
   function showView(name, opts) {
     opts = opts || {};
     if (!$('view-' + name)) name = 'ads';
@@ -2222,10 +2272,91 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     $('t_dlAllBtn').disabled = false; $('vdbBtn').disabled = false; $('t_bulkStopBtn').disabled = true;
     setTB(t_bulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + '.'), fail ? 'error' : 'done');
   }
+
+  // ===================== DEAL HUB =====================
+  let dh_deals = [];
+  const DH_COLS = [
+    { k: '_added', label: 'Added', w: 78 }, { k: 'year', label: 'Year', w: 50 }, { k: 'make', label: 'Make', w: 78 },
+    { k: 'model', label: 'Model', w: 90 }, { k: 'trim', label: 'Trim', w: 110 }, { k: 'msrp', label: 'MSRP', w: 66 },
+    { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: '0-Down', w: 66 }, { k: 'das', label: 'DAS', w: 56 },
+    { k: 'term', label: 'Term', w: 48 }, { k: 'miles', label: 'Miles', w: 56 }, { k: 'tax_in_mo', label: 'Tax Mo', w: 60 },
+    { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
+    { k: 'source', label: 'Source', w: 90 },
+  ];
+  function dh_status(t, type = '') { const e = $('dh_status'); e.textContent = t; e.className = 'status ' + type; }
+  function dh_zeroDown(d) {
+    const mo = parseFloat(d.orig_mo) || 0, das = parseFloat(d.das) || 0, term = parseFloat(d.term) || 0;
+    return (mo && term) ? String(Math.round((mo + das / term) * 100) / 100) : '';
+  }
+  async function dh_load() {
+    try { const r = await fetch('/deals'); const d = await r.json(); dh_deals = d.deals || []; dh_render(); } catch (e) { }
+  }
+  let dh_saveT;
+  async function dh_save() { try { await fetch('/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deals: dh_deals }) }); } catch (e) { } }
+  function dh_saveSoon() { clearTimeout(dh_saveT); dh_saveT = setTimeout(dh_save, 600); }
+  function dh_render() {
+    const t = $('dh_grid');
+    $('dh_count').textContent = '(' + dh_deals.length + ')';
+    if (!dh_deals.length) { t.innerHTML = '<tbody><tr><td class="dh-empty">No deals yet — paste a list above and hit Parse.</td></tr></tbody>'; return; }
+    const esc = s => (s == null ? '' : String(s)).replace(/"/g, '&quot;');
+    const head = '<thead><tr>' + DH_COLS.map(c => `<th style="min-width:${c.w}px">${c.label}</th>`).join('') + '<th></th></tr></thead>';
+    const body = dh_deals.map((d, i) => {
+      const cells = DH_COLS.map(c => {
+        const ro = c.k === 'zero_down_mo' ? ' data-ro="1"' : '';
+        return `<td><input value="${esc(d[c.k])}" data-i="${i}" data-k="${c.k}"${ro} oninput="dh_edit(this)"></td>`;
+      }).join('');
+      return `<tr>${cells}<td><button class="dh-del" onclick="dh_delRow(${i})" title="Delete">×</button></td></tr>`;
+    }).join('');
+    t.innerHTML = head + '<tbody>' + body + '</tbody>';
+  }
+  function dh_edit(el) {
+    const i = +el.dataset.i, k = el.dataset.k;
+    dh_deals[i][k] = el.value;
+    if (k === 'orig_mo' || k === 'das' || k === 'term') {
+      dh_deals[i].zero_down_mo = dh_zeroDown(dh_deals[i]);
+      const z = document.querySelector(`#dh_grid input[data-i="${i}"][data-k="zero_down_mo"]`);
+      if (z) z.value = dh_deals[i].zero_down_mo;
+    }
+    dh_saveSoon();
+  }
+  function dh_addRow() { dh_deals.unshift({ _added: new Date().toLocaleDateString() }); dh_render(); dh_saveSoon(); }
+  function dh_delRow(i) { dh_deals.splice(i, 1); dh_render(); dh_saveSoon(); }
+  function dh_clear() { if (!dh_deals.length) return; if (!confirm('Clear all ' + dh_deals.length + ' deals?')) return; dh_deals = []; dh_render(); dh_save(); }
+  async function dh_parse() {
+    const text = $('dh_input').value.trim();
+    if (!text) { dh_status('Paste some deals first.', 'error'); return; }
+    const rules = $('dh_rules').value.trim();
+    const btn = $('dh_parseBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Reading…';
+    dh_status('AI is reading the deals…', 'active');
+    try {
+      const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, rules }) });
+      let d; try { d = await r.json(); } catch (_) { dh_status('✕ Couldn’t reach the server.', 'error'); return; }
+      if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
+      const today = new Date().toLocaleDateString();
+      const added = (d.deals || []).map(x => ({ ...x, _added: today }));
+      if (!added.length) { dh_status('No deals found in that text.', 'error'); return; }
+      dh_deals = added.concat(dh_deals);
+      dh_render(); dh_save();
+      $('dh_input').value = '';
+      dh_status('Added ' + added.length + ' deal(s) ✓', 'done');
+    } catch (e) { dh_status('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse & Add'; }
+  }
+  function dh_export() {
+    if (!dh_deals.length) return;
+    const esc = v => { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const head = DH_COLS.map(c => c.label).join(',');
+    const lines = dh_deals.map(d => DH_COLS.map(c => esc(d[c.k])).join(','));
+    const a = document.createElement('a'); a.download = 'deals.csv';
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
+  }
+
   t_fillYears();
   t_fillMakes();
   t_renderBadgeChips();
   t_render();
+  dh_render();
+  dh_load();
 
   renderSold();
   // open the view that matches the URL the page was loaded at (deep-link support)

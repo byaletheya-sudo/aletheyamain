@@ -289,6 +289,7 @@ def car_slug(vehicle, bodystyle, color):
 @app.route("/lease")
 @app.route("/sold")
 @app.route("/leasead-test")
+@app.route("/deal-hub")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
@@ -789,6 +790,100 @@ def bulk_parse():
         return jsonify({"rows": rows})
     except Exception as e:
         return jsonify({"error": f"Couldn't parse that: {e}"}), 502
+
+
+# ----------------------- Deal Hub -----------------------
+DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
+DEAL_FIELDS = ["year", "make", "model", "trim", "msrp", "orig_mo", "das", "term",
+               "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source"]
+
+
+def _load_deals():
+    try:
+        with open(DEALS_FILE) as f:
+            d = json.load(f)
+            return d if isinstance(d, list) else []
+    except Exception:
+        return []
+
+
+def _save_deals(deals):
+    with open(DEALS_FILE, "w") as f:
+        json.dump(deals, f, indent=1)
+
+
+def _derive_zero_down(d):
+    """0-Down Mo = Orig Mo + DAS / Term (the dealer-sheet convention)."""
+    try:
+        mo = float(d.get("orig_mo") or 0)
+        das = float(d.get("das") or 0)
+        term = float(d.get("term") or 0)
+        if mo and term:
+            d["zero_down_mo"] = str(round(mo + das / term, 2))
+    except Exception:
+        pass
+    return d
+
+
+@app.route("/deal-parse", methods=["POST"])
+def deal_parse():
+    """Read messy pasted deal text into structured rows, applying the user's
+    plain-English adjustment rules (math) and propagating global header terms."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    text = (body.get("text") or "").strip()
+    rules = (body.get("rules") or "").strip()
+    if not text:
+        return jsonify({"error": "Paste some deals first."}), 400
+    props = {k: {"type": "string"} for k in DEAL_FIELDS}
+    schema = {
+        "type": "object", "additionalProperties": False, "required": ["deals"],
+        "properties": {"deals": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": DEAL_FIELDS, "properties": props}}},
+    }
+    system = (
+        "You convert messy car lease/finance deal text into structured rows. For EACH "
+        "vehicle output: year, make, model, trim, msrp, orig_mo (base monthly payment), "
+        "das (due at signing / cash to dealer), term (months), miles (annual mileage), "
+        "tax_in_mo (monthly WITH tax, if that's how it's quoted), broker_fee, dealer, "
+        "notes (loyalty / conquest / credit tier / tax handling / any other terms), and "
+        "source (a short label for where the deal came from — dealer, flyer title, or sender).\n"
+        "RULES:\n"
+        "- A list usually has GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, "
+        "$1000 BF', or 'Diana Santa Monica, 1k fee included') that apply to EVERY line below "
+        "— copy them into each row.\n"
+        "- Normalize shorthand to plain numbers (no $ or commas): '3k'->3000, '7.5k'->7500, "
+        "'$51k MSRP'->51000, '$289'->289. '13/7500' means term=13, miles=7500.\n"
+        "- A payment quoted 'tax inc'/'tax in' goes in tax_in_mo; otherwise orig_mo.\n"
+        "- After extracting, APPLY the user's adjustment rules below and do the arithmetic.\n"
+        "- Leave a field '' if it isn't present.\n"
+        f"ADJUSTMENT RULES TO APPLY TO EVERY ROW: {rules or '(none)'}"
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "deals", "strict": True, "schema": schema}},
+        )
+        deals = json.loads(resp.choices[0].message.content).get("deals", [])
+        deals = [_derive_zero_down(d) for d in deals]
+        return jsonify({"deals": deals})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't parse those deals: {e}"}), 502
+
+
+@app.route("/deals", methods=["GET", "POST"])
+def deals():
+    if request.method == "POST":
+        incoming = (request.json or {}).get("deals", [])
+        if not isinstance(incoming, list):
+            return jsonify({"error": "Bad payload."}), 400
+        _save_deals(incoming)
+        return jsonify({"ok": True, "count": len(incoming)})
+    return jsonify({"deals": _load_deals()})
 
 
 @app.route("/detect-plate", methods=["POST"])
