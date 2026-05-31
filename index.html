@@ -238,6 +238,8 @@
   /* customize deal */
   .dh-custom-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 7px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #9aa1ac; font-size: 0.9rem; cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
   .dh-custom-btn:hover { border-color: rgba(150,200,255,0.45); color: #eaeef4; }
+  .dh-row-actions { white-space: nowrap; }
+  .dh-row-actions .dh-custom-btn + .dh-custom-btn { margin-left: 5px; }
   .dh-cust-body { padding: 16px 18px 6px; }
   .dh-cust-readout { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
   .dh-cust-readout > div { flex: 1; text-align: center; }
@@ -1143,9 +1145,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
 <!-- compare tray + side-by-side modal -->
 <div id="dhCmpBar" class="dh-cmp-bar" style="display:none;">
-  <span><b id="dhCmpCount">0</b> selected to compare</span>
+  <span><b id="dhCmpCount">0</b> selected</span>
   <div>
     <button class="btn-ghost" onclick="dh_cmpClear()">Clear</button>
+    <button class="btn-ghost" onclick="dh_sendCarsToAd()">🎨 Make Ads</button>
     <button class="btn-start" onclick="dh_openCompare()">Compare →</button>
   </div>
 </div>
@@ -3096,6 +3099,49 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_custInput(v) { dh_custSet(dh_num(v) || 0); }
   function dh_custReset() { dh_custSet(dh_cust.origDas); }
   function dh_custClose() { $('dhCustModal').style.display = 'none'; dh_cust = null; }
+  // ---- bridge to the Lease Ad builder (uses the deal AS QUOTED) ----
+  function dh_setSelect(id, val) { const el = $(id); if (!el) return; val = (val == null ? '' : String(val)); if (val && ![...el.options].some(o => o.value === val)) { const o = document.createElement('option'); o.value = val; o.textContent = val; el.appendChild(o); } el.value = val; }
+  function dh_sendToAd(idx, ev) {
+    if (ev) ev.stopPropagation();
+    const d = dh_deals[idx]; if (!d) return;
+    const fin = dh_isFinance(d);
+    showView('test'); t_setMode('single');
+    dh_setSelect('t_year', d.year || '2026');
+    dh_setSelect('t_make', d.make || '');
+    $('t_model').value = d.model || ''; $('t_trim').value = d.trim || '';
+    t_titleEdited = false; t_subEdited = false;            // let title + subtitle auto-generate
+    t_setDeal(fin ? 'finance' : 'lease');
+    $('t_monthly').value = d.orig_mo || d.tax_in_mo || '';
+    $('t_term').value = d.term || '';
+    if (fin) { $('t_down').value = d.das || ''; $('t_apr').value = d.apr || ''; }
+    else { $('t_das').value = d.das || ''; }
+    if ((d.special || '').trim()) { $('t_badge').value = d.special.trim(); const sb = $('t_showBadge'); if (sb) sb.checked = true; }
+    if (typeof t_syncTitle === 'function') t_syncTitle();
+    if (typeof t_onTrimInput === 'function') t_onTrimInput();
+    t_build();
+  }
+  function dh_sendDealsToBulk(deals) {
+    if (!deals || !deals.length) return;
+    showView('test'); t_setMode('bulk');
+    const numS = v => { const n = dh_num(v); return n == null ? '' : String(n); };   // grid expects strings
+    t_bulkRows = deals.map(d => {
+      const fin = dh_isFinance(d);
+      return { year: String(d.year || '2026'), make: String(d.make || ''), model: String(d.model || ''), trim: String(d.trim || ''),
+        dealType: fin ? 'finance' : 'lease', monthly: numS(d.orig_mo || d.tax_in_mo),
+        das: fin ? '' : numS(d.das), down: fin ? numS(d.das) : '',
+        apr: String(d.apr || ''), term: String(d.term || ''), badge: String(d.special || '') };
+    });
+    $('t_bulkInput').value = deals.map(d => [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].filter(Boolean).join(' ')).join('\n');
+    if (typeof t_renderBulkGrid === 'function') t_renderBulkGrid();
+    const panel = $('t_bulkResultPanel'); if (panel) panel.style.display = '';
+    if (typeof setTB === 'function') setTB(deals.length + ' deal(s) sent from the Deal Hub — review & generate.', 'done');
+  }
+  function dh_sendCarsToAd() {              // each selected car's best (active, cheapest) deal -> ad bulk
+    const deals = [...dh_compare].map(k => { const arr = dh_deals.filter(d => dh_carKey(d) === k); return arr.slice().sort((a, b) => (dh_isExpired(a) - dh_isExpired(b)) || ((dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)))[0]; }).filter(Boolean);
+    if (!deals.length) return;
+    if (deals.length === 1) { dh_sendToAd(dh_deals.indexOf(deals[0])); dh_cmpClear(); return; }
+    dh_sendDealsToBulk(deals); dh_cmpClear();
+  }
   function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note" title="${escapeHtml(n).replace(/"/g, '&quot;')}">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
   // qualifying incentives -> their own tags (from the incentives field + detected in legacy notes)
   const DH_INCENTIVE_PATTERNS = [
@@ -3153,6 +3199,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const z = dh_zeroOf(best);
       // metadata as scannable pills instead of a "·"-joined string
       const fin = dh_isFinance(best);
+      const hasFin = g.deals.some(dh_isFinance);   // only show the APR column when a finance deal is present
       const tags = [];
       if (fin) tags.push(`<span class="dh-tag fin">Finance</span>`);
       const incs = dh_incentiveTags(best); if (incs) tags.push(incs);
@@ -3174,8 +3221,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
           <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(dh_cleanNotes(d))}</div>${(d.package || '').trim() ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
-          <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
-          <td><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
+          ${hasFin ? '<td>' + (fin && dh_num(d.apr) != null ? dh_num(d.apr) + '%' : '') + '</td>' : ''}<td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
+          <td class="dh-row-actions"><button class="dh-custom-btn" onclick="dh_sendToAd(${dh_deals.indexOf(d)}, event)" title="Make an ad from this deal">🎨</button><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
       }).join('');
       const key = dh_carKey(best);
       const inCmp = dh_compare.has(key);
@@ -3190,7 +3237,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
           <span class="dh-car-caret">▾</span>
         </div>
         <div class="dh-car-deals">
-          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th><th>APR</th><th>BF</th><th>Active</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th>${hasFin ? '<th>APR</th>' : ''}<th>BF</th><th>Active</th><th></th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
     };
