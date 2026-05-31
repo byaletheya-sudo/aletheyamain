@@ -2475,7 +2475,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     const btn = $('dh_parseBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Reading…';
     dh_status('AI is reading the deals…', 'active');
     try {
-      const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const r = await fetch('/deal-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, makes: T_MAKES }) });
       let d; try { d = await r.json(); } catch (_) { dh_status('✕ Couldn’t reach the server.', 'error'); return; }
       if (d.error) { dh_status('✕ ' + d.error, 'error'); return; }
       const parsed = d.deals || [];
@@ -2536,7 +2536,20 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     if (mo != null && term) return Math.round((mo + das / term) * 100) / 100;
     return dh_num(d.tax_in_mo);
   }
-  function dh_carKey(d) { return ['year', 'make', 'model', 'trim'].map(k => (d[k] || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ')).join('|'); }
+  // make synonyms folded to one canonical (normalized: lowercase, no punctuation) so the same car
+  // from different dealers shares a key. "GT-Line"/"GT Line" etc. already fold via the punctuation strip.
+  const DH_MAKE_ALIAS = {
+    'chevy': 'chevrolet', 'chev': 'chevrolet',
+    'vw': 'volkswagen', 'volkswagon': 'volkswagen',
+    'merc': 'mercedes benz', 'mercedes': 'mercedes benz', 'benz': 'mercedes benz', 'mb': 'mercedes benz',
+    'landrover': 'land rover', 'range rover': 'land rover', 'rangerover': 'land rover',
+    'alfa': 'alfa romeo', 'mini cooper': 'mini', 'beemer': 'bmw', 'bimmer': 'bmw'
+  };
+  const dh_norm = s => (s || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ');
+  function dh_carKey(d) {
+    let make = dh_norm(d.make); make = DH_MAKE_ALIAS[make] || make;
+    return [dh_norm(d.year), make, dh_norm(d.model), dh_norm(d.trim)].join('|');
+  }
   function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
   function dh_lastDate(d) { return d._updated || d._added || ''; }
   function dh_age(d) {

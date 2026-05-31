@@ -872,8 +872,16 @@ def deal_parse():
     # rules used to be a separate field; now the AI also picks adjustments out of the
     # paste itself. Still honored if a caller passes it explicitly.
     rules = (body.get("rules") or "").strip()
+    makes = [m for m in (body.get("makes") or []) if isinstance(m, str) and m.strip()][:80]
     if not text:
         return jsonify({"error": "Paste some deals first."}), 400
+    make_rule = (
+        "- NORMALIZE 'make' to EXACTLY one entry (matching case) from this canonical list: "
+        + ", ".join(makes) + ". Map shorthand/synonyms to it: 'Chevy'->'Chevrolet', "
+        "'VW'->'Volkswagen', 'Mercedes'/'Benz'/'MB'->'Mercedes-Benz', 'Range Rover'->'Land Rover', "
+        "'Alfa'->'Alfa Romeo'. If a make truly isn't in the list, output your best clean guess.\n"
+        "- Clean the 'model' to its standard spelling/casing ('k5'->'K5', 'corolla cross'->'Corolla Cross').\n"
+    ) if makes else ""
     props = {k: {"type": "string"} for k in DEAL_FIELDS}
     schema = {
         "type": "object", "additionalProperties": False, "required": ["deals", "contact"],
@@ -895,6 +903,7 @@ def deal_parse():
         "name/sender at the top, a signature, or a 'from X' line. If you truly can't tell, "
         "use ''. Put that same name in each row's 'dealer' field too.\n"
         "RULES:\n"
+        + make_rule +
         "- A list usually has GLOBAL header terms (e.g. '$2000 Down, 36 Month, 10k Miles, "
         "$1000 BF') that apply to EVERY line below — copy them into each row.\n"
         "- The paste may also contain plain-English ADJUSTMENT INSTRUCTIONS mixed in (e.g. "
