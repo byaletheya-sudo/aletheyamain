@@ -187,6 +187,8 @@
   .dh-exp { color: #ff7676; font-weight: 600; }
   .dh-pill { font-size: 0.6rem; padding: 1px 6px; border-radius: 999px; background: rgba(255,180,80,0.15); color: #ffb450; margin-left: 6px; }
   .dh-pill-exp { background: rgba(255,90,90,0.16); color: #ff8585; }
+  .dh-pill-special { background: rgba(170,130,255,0.18); color: #c4a9ff; }
+  .dh-badge-special { font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; background: rgba(170,130,255,0.18); color: #c4a9ff; margin-left: 4px; }
   .dh-toggle-btn { padding: 7px 12px; font-size: 0.78rem; border-radius: 9px; cursor: pointer; color: #9aa1ac; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09); }
   .dh-toggle-btn.active { color: #eef2f8; background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.4); }
   /* adjustment review modal */
@@ -2475,7 +2477,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     { k: 'model', label: 'Model', w: 90 }, { k: 'trim', label: 'Trim', w: 110 }, { k: 'msrp', label: 'MSRP', w: 66 },
     { k: 'orig_mo', label: 'Orig Mo', w: 64 }, { k: 'zero_down_mo', label: '0-Down', w: 66 }, { k: 'das', label: 'DAS', w: 56 },
     { k: 'term', label: 'Term', w: 48 }, { k: 'miles', label: 'Miles', w: 56 }, { k: 'tax_in_mo', label: 'Tax Mo', w: 60 },
-    { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
+    { k: 'broker_fee', label: 'BF', w: 50 }, { k: 'special', label: 'Special', w: 86 }, { k: 'dealer', label: 'Dealer', w: 110 }, { k: 'notes', label: 'Notes', w: 170 },
     { k: 'source', label: 'Source', w: 90 },
   ];
   function dh_status(t, type = '') { const e = $('dh_status'); e.textContent = t; e.className = 'status ' + type; }
@@ -2523,7 +2525,8 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   // Upsert by (contact + car): a dealer's new list updates their existing deals,
   // adds new ones, and never touches another dealer's deals.
   function dh_dealerNorm(s) { return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' '); }
-  function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d); }
+  // include the special tag so a loaner / one-off stays a STANDALONE deal and never merges with the normal one
+  function dh_dealerCarKey(d) { return dh_dealerNorm(d.dealer) + '||' + dh_carKey(d) + (d.special ? '||s:' + dh_dealerNorm(d.special) : ''); }
   function dh_sync(parsed, fromContact) {
     const today = new Date().toLocaleDateString();
     let updated = 0, added = 0;
@@ -2548,26 +2551,48 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   }
   // apply a plain-English instruction ("decrease Diana's payments $15", "9.75% tax included")
   // to deals ALREADY saved — find & edit, never delete.
-  const DH_FIELD_LABEL = { orig_mo: 'Monthly', tax_in_mo: 'Tax-in monthly', notes: 'Notes' };
-  // compute (but DON'T apply) the changes a command would make, so the user can review each first
+  const DH_FIELD_LABEL = { orig_mo: 'Monthly', tax_in_mo: 'Tax-in monthly', das: 'Due at signing', broker_fee: 'Broker fee', term: 'Term', miles: 'Miles/yr', msrp: 'MSRP', notes: 'Notes' };
+  const DH_ADJ_RAW = ['orig_mo', 'tax_in_mo', 'das', 'broker_fee', 'term', 'miles', 'msrp'];
+  function dh_numSigned(v) { const s = (v == null ? '' : String(v)).replace(/[^0-9.\-]/g, ''); return (s === '' || s === '-' || s === '.') ? null : parseFloat(s); }
+  function dh_adjScopeLabel(adj) { const m = adj.match || {}; return [m.contact, [m.year, m.make, m.model, m.trim].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || 'all deals'; }
+  // compute (but DON'T apply) the changes a command would make, so the user can review each first.
+  // scope by contact AND/OR car (year/make/model/trim); ops act on any field.
   function dh_planAdjust(adj) {
-    const cn = dh_dealerNorm(adj.scope_contact || '');
+    const m = adj.match || {};
+    const cn = dh_dealerNorm(m.contact || '');
+    const want = { year: dh_norm(m.year || ''), make: (DH_MAKE_ALIAS[dh_norm(m.make || '')] || dh_norm(m.make || '')), model: dh_norm(m.model || ''), trim: dh_norm(m.trim || '') };
+    const matches = d => {
+      if (cn && dh_dealerNorm(d.dealer) !== cn) return false;
+      for (const f of ['year', 'make', 'model', 'trim']) {
+        if (!want[f]) continue;
+        const have = f === 'make' ? (DH_MAKE_ALIAS[dh_norm(d.make)] || dh_norm(d.make)) : dh_norm(d[f]);
+        if (have !== want[f] && !have.includes(want[f]) && !want[f].includes(have)) return false;
+      }
+      return true;
+    };
+    const ops = Array.isArray(adj.ops) ? adj.ops : [];
     const taxPct = dh_num(adj.remove_tax_pct);
-    const deltaRaw = (adj.delta_mo == null) ? '' : String(adj.delta_mo).replace(/[^0-9.\-]/g, '');   // sign-aware ('-15')
-    const delta = (deltaRaw === '' || deltaRaw === '-') ? null : parseFloat(deltaRaw);
     const plans = [];
     dh_deals.forEach(d => {
-      if (cn && dh_dealerNorm(d.dealer) !== cn) return;
+      if (!matches(d)) return;
       const next = {}, changes = [];
+      const cur = k => (next[k] != null ? dh_num(next[k]) : dh_num(d[k]));
       const bump = (k, val) => { next[k] = val; const ex = changes.find(c => c.field === k); if (ex) ex.next = val; else changes.push({ field: k, prev: d[k], next: val }); };
       if (taxPct) {                                   // back the tax out of the monthly + drop the now-stale note
         const f = 1 + taxPct / 100;
         ['orig_mo', 'tax_in_mo'].forEach(k => { const v = dh_num(d[k]); if (v) bump(k, String(Math.round(v / f * 100) / 100)); });
         if (d.notes && /tax/i.test(d.notes)) bump('notes', d.notes.split(/[;,]/).map(s => s.trim()).filter(s => s && !/tax/i.test(s)).join(', '));
       }
-      if (delta != null) {
-        ['orig_mo', 'tax_in_mo'].forEach(k => { if (dh_num(d[k]) == null) return; const base = (next[k] != null) ? dh_num(next[k]) : dh_num(d[k]); bump(k, String(Math.round((base + delta) * 100) / 100)); });
-      }
+      ops.forEach(o => {
+        const targets = o.field === 'monthly' ? ['orig_mo', 'tax_in_mo'] : [o.field];
+        targets.forEach(k => {
+          if (!DH_ADJ_RAW.includes(k)) return;
+          if (o.op === 'set') { bump(k, String(o.value)); return; }
+          const base = cur(k); if (base == null) return;        // add/mult need an existing number
+          const v = dh_numSigned(o.value); if (v == null) return;
+          bump(k, String(Math.round((o.op === 'mult' ? base * v : base + v) * 100) / 100));
+        });
+      });
       if (changes.length) plans.push({ deal: d, changes, next });
     });
     return plans;
@@ -2575,7 +2600,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
   let dh_adjPlans = [];
   function dh_showAdjustReview(adj, plans) {
     dh_adjPlans = plans;
-    $('dhAdjSummary').textContent = plans.length + ' deal' + (plans.length > 1 ? 's' : '') + (adj.scope_contact ? ' · ' + adj.scope_contact : '');
+    $('dhAdjSummary').textContent = plans.length + ' deal' + (plans.length > 1 ? 's' : '') + ' · ' + dh_adjScopeLabel(adj);
     $('dhAdjList').innerHTML = plans.map((p, i) => {
       const chg = p.changes.map(c => {
         const lbl = DH_FIELD_LABEL[c.field] || c.field;
@@ -2615,7 +2640,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       if (d.kind === 'adjust') {
         const adj = d.adjust || {};
         const plans = dh_planAdjust(adj);
-        if (!plans.length) { dh_status('No saved deals matched' + (adj.scope_contact ? ' "' + adj.scope_contact + '"' : '') + '.', 'error'); return; }
+        if (!plans.length) { dh_status('No saved deals matched (' + dh_adjScopeLabel(adj) + ').', 'error'); return; }
         dh_showAdjustReview(adj, plans);
         return;
       }
@@ -2723,7 +2748,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
     el.style.display = '';
     el.innerHTML = `<div class="dh-best">
       <div class="dh-best-tag">🏆 Best Deal of the Month</div>
-      <div class="dh-best-main"><div class="dh-best-car">${dh_carLabel(best)}</div><div class="dh-best-meta">${meta}</div></div>
+      <div class="dh-best-main"><div class="dh-best-car">${dh_carLabel(best)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}</div><div class="dh-best-meta">${meta}</div></div>
       <div class="dh-best-price"><b>${dh_money(dh_zeroOf(best))}</b><small>0-down / mo</small></div>
     </div>`;
   }
@@ -2821,7 +2846,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
         const exp = dh_isExpired(d);
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td>${i === 0 ? '🏆 ' : ''}${(d.dealer || '—')}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td>${i === 0 ? '🏆 ' : ''}${(d.dealer || '—')}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (d.miles ? '/' + (dh_num(d.miles) / 1000) + 'k' : '')}</td>
           <td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td></tr>`;
       }).join('');
@@ -2830,7 +2855,7 @@ $2000 Down · 36 Month · 10k Miles · $1000 BF
       return `<div class="dh-car" onclick="this.classList.toggle('open')">
         <div class="dh-car-head">
           <div style="flex:1;min-width:0;">
-            <div class="dh-car-name">${cardLabel(g)}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
+            <div class="dh-car-name">${cardLabel(g)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
             <div class="dh-car-sub">${sub}</div>
           </div>
           <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>0-down</small></div>

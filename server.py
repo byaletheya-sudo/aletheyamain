@@ -832,7 +832,7 @@ def bulk_parse():
 DEALS_FILE = os.path.join(GENERATED_DIR, "deals.json")
 DEAL_FIELDS = ["year", "make", "model", "trim", "msrp", "orig_mo", "das", "term",
                "miles", "tax_in_mo", "broker_fee", "dealer", "notes", "source",
-               "active_from", "active_to"]
+               "active_from", "active_to", "special"]
 
 
 def _load_deals():
@@ -902,30 +902,46 @@ def deal_parse():
                 "required": DEAL_FIELDS, "properties": props}},
             "adjust": {
                 "type": "object", "additionalProperties": False,
-                "required": ["scope_contact", "delta_mo", "remove_tax_pct"],
+                "required": ["match", "ops", "remove_tax_pct"],
                 "properties": {
-                    "scope_contact": {"type": "string"},
-                    "delta_mo": {"type": "string"},
+                    "match": {
+                        "type": "object", "additionalProperties": False,
+                        "required": ["contact", "year", "make", "model", "trim"],
+                        "properties": {k: {"type": "string"} for k in ["contact", "year", "make", "model", "trim"]}},
+                    "ops": {
+                        "type": "array",
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["field", "op", "value"],
+                            "properties": {
+                                "field": {"type": "string", "enum": ["monthly", "das", "broker_fee", "term", "miles", "msrp"]},
+                                "op": {"type": "string", "enum": ["add", "mult", "set"]},
+                                "value": {"type": "string"}}}},
                     "remove_tax_pct": {"type": "string"}}},
         },
     }
     system = (
         "You read messy car lease/finance text. FIRST classify it with 'kind':\n"
         "- 'adjust' = an INSTRUCTION to change deals ALREADY saved, with NO new vehicle listings "
-        "(e.g. 'update all of Diana Santa Monica's deals by decreasing payments $15', 'lower "
-        "Mike's monthlies $20', 'Diana: 9.75% tax included'). Output an 'adjust' object and leave "
-        "'deals' empty.\n"
+        "(e.g. 'decrease all GLA 250 das by $1000', 'lower Diana Santa Monica's monthlies $15', "
+        "'Mike: 9.75% tax included'). Output an 'adjust' object and leave 'deals' empty.\n"
         "- 'deals' = an actual list/flyer of one or more vehicles. Output 'deals' and leave "
-        "'adjust' fields ''.\n"
-        "ADJUST object: scope_contact = whose saved deals to change (the named person; '' = ALL "
-        "deals). delta_mo = signed dollars to add to each monthly ('decrease $15'->'-15', 'add "
-        "$20'->'20'; else ''). remove_tax_pct = a tax rate to back OUT of the monthly when they "
-        "say it's tax-included (e.g. '9.75% tax included'->'9.75'; else '').\n"
+        "'adjust' empty (match all '', ops []).\n"
+        "ADJUST object: 'match' selects WHICH saved deals to change — set any of contact / year / "
+        "make / model / trim that the instruction names, leave the rest '' (all-'' = EVERY deal). "
+        "'ops' is a list of {field, op, value}: field is monthly|das|broker_fee|term|miles|msrp "
+        "(use 'monthly' for the payment); op is 'add' (value SIGNED, '-1000' to decrease, '20' to "
+        "add), 'mult' (multiply), or 'set' (replace). remove_tax_pct = a tax rate to back OUT of "
+        "the monthly when they say tax-included ('9.75% tax included'->'9.75'; else '').\n"
+        "  e.g. 'decrease all GLA 250 das by $1000' -> match:{model:'GLA 250'}, ops:[{field:'das',op:'add',value:'-1000'}].\n"
+        "  e.g. 'lower Diana's monthlies $15' -> match:{contact:'Diana'}, ops:[{field:'monthly',op:'add',value:'-15'}].\n"
         "For EACH vehicle (kind='deals') output: year, make, model, trim, msrp, orig_mo (base "
         "monthly payment), das (due at signing / cash to dealer), term (months), miles (annual "
         "mileage), tax_in_mo (monthly WITH tax, if quoted that way), broker_fee, dealer, notes "
         "(loyalty / conquest / credit tier / any other terms), source (short label for where it "
-        "came from), and active_from / active_to (validity window, only if stated).\n"
+        "came from), active_from / active_to (validity window, only if stated), and special (a "
+        "short tag like 'Loaner', '1 of 1', or 'Demo' ONLY if the deal is a loaner / courtesy / "
+        "demo / service-loaner / one-off special; else '').\n"
         "ALSO output top-level 'contact': the single person/broker/dealer the paste is from "
         "(sender at top, signature, or 'from X'). If unsure, ''. Put that name in each row's "
         "'dealer' field too.\n"
