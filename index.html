@@ -2857,12 +2857,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const best = valid.reduce((a, b) => dh_zeroOf(b) < dh_zeroOf(a) ? b : a);
     const finB = dh_isFinance(best);
     const tm = [best.term ? best.term + 'mo' : '', (!finB && best.miles) ? dh_mi(best.miles) + ' mi' : '', (finB && dh_num(best.apr) != null) ? dh_num(best.apr) + '% APR' : ''].filter(Boolean).join(' / ');
-    const meta = [(finB ? 'Finance' : ''), best.dealer, tm, dh_money(best.orig_mo || best.tax_in_mo) + '/mo' + (dh_num(best.das) ? ' + ' + dh_money(best.das) + (finB ? ' down' : ' DAS') : '')].filter(Boolean).join('  ·  ');
+    const meta = [(finB ? 'Finance' : ''), best.dealer, tm, (dh_num(best.das) ? dh_money(best.das) + (finB ? ' down' : ' DAS') : ''), (dh_zeroOf(best) != null ? dh_money(dh_zeroOf(best)) + ' eff' : '')].filter(Boolean).join('  ·  ');
     el.style.display = '';
     el.innerHTML = `<div class="dh-best">
       <div class="dh-best-tag">🏆 Best Deal of the Month</div>
       <div class="dh-best-main"><div class="dh-best-car">${dh_carLabel(best)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}</div><div class="dh-best-meta">${meta}</div></div>
-      <div class="dh-best-price"><b>${dh_money(dh_zeroOf(best))}</b><small>Effective / mo</small></div>
+      <div class="dh-best-price"><b>${dh_money(best.orig_mo || best.tax_in_mo)}</b><small>Monthly</small></div>
     </div>`;
   }
   function dh_setMode(m) {
@@ -2951,7 +2951,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const tags = [];
       if (fin) tags.push(`<span class="dh-tag fin">Finance</span>`);
       if (best.dealer) tags.push(`<button class="dh-tag lead" onclick="dh_openContact('${best.dealer.replace(/'/g, "\\'").replace(/</g, '&lt;')}', event)">${best.dealer}${dh_hasContactInfo(best.dealer) ? ' 📞' : ''}</button>`);
-      const mo = dh_money(best.orig_mo || best.tax_in_mo); if (mo) tags.push(`<span class="dh-tag">${mo}/mo</span>`);
+      const eff = dh_zeroOf(best); if (eff != null) tags.push(`<span class="dh-tag">${dh_money(eff)} eff</span>`);
       if (fin && dh_num(best.apr) != null) tags.push(`<span class="dh-tag">${dh_num(best.apr)}% APR</span>`);
       if (dh_num(best.das)) tags.push(`<span class="dh-tag">${dh_money(best.das)} ${fin ? 'down' : 'DAS'}</span>`);
       if (best.term) tags.push(`<span class="dh-tag">${best.term}mo</span>`);
@@ -2967,7 +2967,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
           <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
-          <td>${fin && dh_num(d.apr) != null ? dh_num(d.apr) + '%' : (dh_money(d.broker_fee) || '')}</td><td>${active}</td></tr>`;
+          <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td></tr>`;
       }).join('');
       const key = dh_carKey(best);
       const inCmp = dh_compare.has(key);
@@ -2977,12 +2977,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="dh-car-name">${cardLabel(g)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
             <div class="dh-car-sub">${sub}</div>
           </div>
-          <div class="dh-car-best"><b>${z != null ? dh_money(z) : '—'}</b><small>Effective</small></div>
+          <div class="dh-car-best"><b>${dh_money(best.orig_mo || best.tax_in_mo) || '—'}</b><small>Monthly</small></div>
           <button class="dh-cmp${inCmp ? ' on' : ''}" onclick="dh_cmpToggle('${key.replace(/'/g, "\\'")}', event)" title="Add to compare">${inCmp ? '✓' : '+'}</button>
           <span class="dh-car-caret">▾</span>
         </div>
         <div class="dh-car-deals">
-          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th><th>APR/BF</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th><th>APR</th><th>BF</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
     };
