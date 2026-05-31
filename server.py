@@ -685,6 +685,66 @@ def vdb_proxy():
         return jsonify({"error": str(e)}), 502
 
 
+@app.route("/remove-bg", methods=["POST"])
+def remove_bg():
+    """Deterministic background removal for studio/factory photos. The catalog
+    cars sit on a near-white seamless backdrop, so we flood-fill the backdrop
+    (only the region connected to the image border) to transparent and feather
+    the edge. It never alters the car — pure pixel ops, no AI regeneration — so
+    the factory photo comes back identical, just cut out."""
+    data = request.json or {}
+    src = (data.get("image_data") or "").strip()
+    if not src:
+        return jsonify({"error": "Missing image_data."}), 400
+    try:
+        import io
+        import numpy as np
+        from PIL import Image, ImageFilter
+    except Exception as e:
+        return jsonify({"error": f"Background remover not installed on server: {e}"}), 500
+    try:
+        raw = base64.b64decode(src.split(",", 1)[1] if "," in src else src)
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+        arr = np.asarray(im).astype(np.int16)
+        h, w = arr.shape[:2]
+
+        # backdrop colour = median of the four corners (studio shots are uniform)
+        c = 8
+        corners = np.concatenate([
+            arr[:c, :c].reshape(-1, 3), arr[:c, -c:].reshape(-1, 3),
+            arr[-c:, :c].reshape(-1, 3), arr[-c:, -c:].reshape(-1, 3),
+        ])
+        bg = np.median(corners, axis=0)
+        dist = np.sqrt(((arr - bg) ** 2).sum(axis=2))     # distance from backdrop colour
+        tol = float(data.get("tol", 32))
+        near = dist < tol
+
+        # keep only the backdrop *connected to the border*, so white parts of the
+        # car (headlights, a white body) are never punched out. Morphological
+        # reconstruction by iterative 4-neighbour dilation, masked by `near`.
+        reach = np.zeros((h, w), bool)
+        reach[0, :] |= near[0, :]; reach[-1, :] |= near[-1, :]
+        reach[:, 0] |= near[:, 0]; reach[:, -1] |= near[:, -1]
+        for _ in range(6000):
+            d = reach.copy()
+            d[1:, :] |= reach[:-1, :]; d[:-1, :] |= reach[1:, :]
+            d[:, 1:] |= reach[:, :-1]; d[:, :-1] |= reach[:, 1:]
+            d &= near
+            if np.array_equal(d, reach):
+                break
+            reach = d
+
+        alpha = np.where(reach, 0, 255).astype(np.uint8)
+        a_img = Image.fromarray(alpha, "L").filter(ImageFilter.GaussianBlur(float(data.get("feather", 1.0))))
+        out = im.convert("RGBA")
+        out.putalpha(a_img)
+        buf = io.BytesIO()
+        out.save(buf, "PNG")
+        return jsonify({"image_data": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()})
+    except Exception as e:
+        return jsonify({"error": f"Background removal failed: {e}"}), 500
+
+
 @app.route("/vdb-options", methods=["POST"])
 def vdb_options_route():
     """Cascading dropdown source: return VDB's real make/model/trim lists so the

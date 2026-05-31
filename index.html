@@ -1890,16 +1890,17 @@
     const hex = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.hex;
     if (hex) { sw.style.background = hex; sw.style.display = ''; } else { sw.style.display = 'none'; }
   }
-  // Remove the background from a data-URL photo. imgly is reliable with a Blob
-  // (the upload flow's working path) but flaky with a raw data-URL string, so
-  // convert to a Blob first. Throws if the remover isn't loaded.
+  // Remove the background from a factory photo. Done server-side (deterministic
+  // flood-fill of the studio backdrop) — reliable, free, and it never alters the
+  // car. Replaces the flaky in-browser library that couldn't resolve its runtime.
   async function t_removeBgFrom(dataUrl) {
-    if (!window.__removeBg) {
-      throw new Error(window.__removeBgError ? 'remover failed to load' : 'remover still loading');
-    }
-    const inBlob = await (await fetch(dataUrl)).blob();
-    const outBlob = await window.__removeBg(inBlob);
-    return await blobToDataURL(outBlob);
+    const r = await fetch('/remove-bg', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_data: dataUrl }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    return d.image_data;
   }
   async function t_pickColor() {
     t_updateSwatch();
