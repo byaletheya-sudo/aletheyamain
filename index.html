@@ -81,6 +81,9 @@
 
   .checkbox { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #aaa; cursor: pointer; }
   .checkbox input { width: 16px; height: 16px; accent-color: #4a9eff; }
+  .seg { display: inline-flex; gap: 0; background: #0a0d12; border: 1px solid #2a2f3a; border-radius: 9px; padding: 3px; }
+  .seg-btn { background: transparent; border: none; color: #9aa3b2; padding: 7px 20px; border-radius: 7px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
+  .seg-btn.active { background: #2f7ff0; color: #fff; }
 
   .status { font-size: 0.88rem; color: #888; margin-top: 14px; min-height: 22px; }
   .status.active { color: #4a9eff; } .status.error { color: #ff4a4a; } .status.done { color: #4aff7b; }
@@ -642,10 +645,21 @@
 
             <div class="panel">
               <h2>Deal</h2>
-              <div class="row3">
+              <div class="seg" style="margin-bottom:14px;">
+                <button type="button" class="seg-btn active" id="t_segLease" onclick="t_setDeal('lease')">Lease</button>
+                <button type="button" class="seg-btn" id="t_segFinance" onclick="t_setDeal('finance')">Finance</button>
+              </div>
+              <div class="row">
                 <div><label for="t_monthly">Per month ($)</label><input type="text" id="t_monthly" value="799" oninput="t_render()"></div>
-                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
                 <div><label for="t_term">Term (months)</label><input type="text" id="t_term" value="24" oninput="t_render()"></div>
+              </div>
+              <div class="row" id="t_leaseFields">
+                <div><label for="t_das">Due at signing ($)</label><input type="text" id="t_das" value="3,500" oninput="t_render()"></div>
+                <div></div>
+              </div>
+              <div class="row" id="t_financeFields" style="display:none;">
+                <div><label for="t_down">Down payment ($)</label><input type="text" id="t_down" value="" placeholder="e.g. 5,000" oninput="t_render()"></div>
+                <div><label for="t_apr">APR (%)</label><input type="text" id="t_apr" value="" placeholder="e.g. 4.9" oninput="t_render()"></div>
               </div>
               <label for="t_badge">Badge</label>
               <input type="text" id="t_badge" value="Loaner Special" oninput="t_render()">
@@ -1677,6 +1691,15 @@
   // ===================== TEST: lease ad from Vehicle Databases photos =====================
   let t_titleEdited = false;
   let t_engineSuffix = '';   // e.g. the "i" of 430i — merged onto the model in the headline
+  let t_dealType = 'lease';  // 'lease' | 'finance' (lease selected first)
+  function t_setDeal(type) {
+    t_dealType = type;
+    $('t_segLease').classList.toggle('active', type === 'lease');
+    $('t_segFinance').classList.toggle('active', type === 'finance');
+    $('t_leaseFields').style.display = type === 'lease' ? '' : 'none';
+    $('t_financeFields').style.display = type === 'finance' ? '' : 'none';
+    t_render();
+  }
   function setVdb(t, type = '') { const e = $('vdbStatus'); e.textContent = t; e.className = 'status ' + type; }
   function setT(t, type = '') { const e = $('t_status'); e.textContent = t; e.className = 'status ' + type; }
   function t_vehName() {
@@ -1738,14 +1761,32 @@
     $('t_adTitle').textContent = $('t_title').value || t_vehName();
     const sub = $('t_bodystyle').value.trim();
     $('t_adSub').textContent = sub; $('t_adSub').style.display = sub ? '' : 'none';
-    $('t_adPrice').textContent = `$${money($('t_monthly').value)} Per Month`;
-    $('t_adTerms').textContent = `$${money($('t_das').value)} Due at Signing • ${$('t_term').value} Month Lease`;
+    // price line (hidden if no monthly entered)
+    const monthly = $('t_monthly').value.trim();
+    $('t_adPrice').textContent = monthly ? `$${money(monthly)} Per Month` : '';
+    $('t_adPrice').style.display = monthly ? '' : 'none';
+    // terms line — build only from the fields the user actually filled in
+    const term = $('t_term').value.trim();
+    const parts = [];
+    if (t_dealType === 'finance') {
+      const down = $('t_down').value.trim(), apr = $('t_apr').value.trim();
+      if (down) parts.push(`$${money(down)} Down`);
+      if (term) parts.push(`${term} Months`);
+      if (apr) parts.push(`${apr}% APR`);
+    } else {
+      const das = $('t_das').value.trim();
+      if (das) parts.push(`$${money(das)} Due at Signing`);
+      if (term) parts.push(`${term} Month Lease`);
+    }
+    const terms = parts.join(' • ');
+    $('t_adTerms').textContent = terms;
+    $('t_adTerms').style.display = terms ? '' : 'none';
     $('t_adPhone').textContent = `Text ${$('t_phone').value}`;
     $('t_adFine').innerHTML = boldify($('t_fine').value);
     // auto-fit the lines that can overflow with long trims / names
     fitText($('t_adTitle'), 78, 48, 1);
     if (sub) fitText($('t_adSub'), 52, 28, 2);
-    fitText($('t_adTerms'), 44, 30, 1);
+    if (terms) fitText($('t_adTerms'), 44, 30, 1);
   }
   // ---- cascading dropdowns sourced from the real Vehicle Databases catalog ----
   function t_fillYears() {
@@ -1990,6 +2031,7 @@
   async function t_runBulk() {
     const rows = t_parseBulk($('t_bulkInput').value);
     if (!rows.length) { setTB('No rows — add at least one vehicle.', 'error'); return; }
+    t_setDeal('lease');   // bulk columns are lease-format (monthly | DAS | term)
     const def = { monthly: $('t_monthly').value, das: $('t_das').value, term: $('t_term').value, bodystyle: $('t_bodystyle').value };
     t_bulkAbort = false; t_trimAllChoice = null;
     $('t_bulkBtn').disabled = true; $('vdbBtn').disabled = true; $('t_bulkStopBtn').disabled = false;
