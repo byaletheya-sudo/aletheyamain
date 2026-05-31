@@ -84,6 +84,13 @@
   .seg { display: inline-flex; gap: 0; background: #0a0d12; border: 1px solid #2a2f3a; border-radius: 9px; padding: 3px; }
   .seg-btn { background: transparent; border: none; color: #9aa3b2; padding: 7px 20px; border-radius: 7px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
   .seg-btn.active { background: #2f7ff0; color: #fff; }
+  .bg-thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+  .bg-thumb { width: 60px; cursor: pointer; text-align: center; }
+  .bg-thumb .ph { width: 60px; height: 90px; border-radius: 8px; background-size: cover; background-position: center; border: 2px solid transparent; transition: border-color .15s; }
+  .bg-thumb:hover .ph { border-color: #3a4254; }
+  .bg-thumb.active .ph { border-color: #2f7ff0; }
+  .bg-thumb span { display: block; font-size: 0.7rem; color: #9aa3b2; margin-top: 4px; }
+  .bg-thumb.soon { opacity: 0.45; cursor: default; }
 
   .status { font-size: 0.88rem; color: #888; margin-top: 14px; min-height: 22px; }
   .status.active { color: #4a9eff; } .status.error { color: #ff4a4a; } .status.done { color: #4aff7b; }
@@ -679,15 +686,20 @@
               <h2>Ad Copy <span style="font-weight:400;opacity:.6;font-size:.8rem;">(auto-filled — edit if needed)</span></h2>
               <label for="t_title">Headline</label>
               <input type="text" id="t_title" placeholder="2025 Mercedes-Benz GLC 300" oninput="t_titleEdited=true; t_render()">
-              <label for="t_bodystyle">Subtitle (from trim)</label>
-              <input type="text" id="t_bodystyle" value="SUV" oninput="t_render()">
-              <label for="t_bg">Background <span style="font-weight:400;opacity:.6;font-size:.78rem;">(placeholders — real ones coming soon)</span></label>
-              <select id="t_bg" onchange="t_setBg()">
-                <option value="default">Nova Default</option>
-                <option value="ph1">Placeholder — Midnight</option>
-                <option value="ph2">Placeholder — Slate</option>
-                <option value="ph3">Placeholder — Charcoal</option>
-              </select>
+              <label for="t_bodystyle">Subtitle <span style="font-weight:400;opacity:.6;font-size:.78rem;">(optional)</span></label>
+              <input type="text" id="t_bodystyle" value="" placeholder="e.g. Convertible RWD" oninput="t_render()">
+              <label>Background</label>
+              <div class="bg-thumbs" id="t_bgThumbs">
+                <div class="bg-thumb active" data-bg="default" onclick="t_setBg('default')" title="Nova Default">
+                  <div class="ph" style="background-image:url('background.png')"></div><span>Default</span>
+                </div>
+                <div class="bg-thumb" data-bg="economy" onclick="t_setBg('economy')" title="Economy">
+                  <div class="ph" style="background-image:url('bg-economy.png')"></div><span>Economy</span>
+                </div>
+                <div class="bg-thumb soon" title="Coming soon">
+                  <div class="ph" style="background:linear-gradient(160deg,#242424,#0c0c0c)"></div><span>Soon</span>
+                </div>
+              </div>
             </div>
 
             <div class="panel">
@@ -1737,15 +1749,14 @@
     t_render();
   }
 
-  // ---- Background (placeholders for now; real backdrops swap in later) ----
+  // ---- Background picker (thumbnails) ----
   const T_BACKGROUNDS = {
-    default: '',                                                            // revert to the CSS .ad default
-    ph1: 'radial-gradient(80% 60% at 50% 28%, #15233f, #060a12)',
-    ph2: 'linear-gradient(160deg, #1b2330, #0a0e16)',
-    ph3: 'linear-gradient(160deg, #242424, #0c0c0c)',
+    default: '',                                                            // revert to the CSS .ad default (background.png)
+    economy: "#050a12 url('bg-economy.png') center / cover no-repeat",
   };
-  function t_setBg() {
-    $('t_ad').style.background = T_BACKGROUNDS[$('t_bg').value] || '';
+  function t_setBg(key) {
+    $('t_ad').style.background = T_BACKGROUNDS[key] || '';
+    document.querySelectorAll('#t_bgThumbs .bg-thumb').forEach(t => t.classList.toggle('active', t.dataset.bg === key));
   }
   function setVdb(t, type = '') { const e = $('vdbStatus'); e.textContent = t; e.className = 'status ' + type; }
   function setT(t, type = '') { const e = $('t_status'); e.textContent = t; e.className = 'status ' + type; }
@@ -1903,9 +1914,8 @@
   function t_onTrim() {
     const trim = $('t_trim').value;
     if (trim) {
-      const c = t_cleanTrim(trim, $('t_model').value);
-      t_engineSuffix = c.suffix;                 // headline becomes e.g. "… 430i"
-      $('t_bodystyle').value = c.sub;            // subtitle = cleaned trim ("Convertible RWD Automatic")
+      t_engineSuffix = t_cleanTrim(trim, $('t_model').value).suffix;   // headline becomes e.g. "… 430i"
+      // subtitle is NOT auto-filled — left for the user to type if they want one
     }
     t_syncTitle();
     if (trim) vdbGenerate();                      // auto-generate the image
