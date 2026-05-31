@@ -219,6 +219,21 @@
   .dh-adj-chg .new { color: var(--dh-price); font-weight: 700; }
   .dh-sync-new { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 5px; background: rgba(140,225,195,0.16); color: var(--dh-price); margin-right: 4px; }
   .dh-sync-upd { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 5px; background: rgba(150,200,255,0.16); color: #9cc4f5; margin-right: 4px; }
+  /* customize deal */
+  .dh-custom-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 7px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #9aa1ac; font-size: 0.9rem; cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
+  .dh-custom-btn:hover { border-color: rgba(150,200,255,0.45); color: #eaeef4; }
+  .dh-cust-body { padding: 16px 18px 6px; }
+  .dh-cust-readout { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .dh-cust-readout > div { flex: 1; text-align: center; }
+  .dh-cust-readout b { display: block; font-size: 1.5rem; font-weight: 800; color: var(--dh-price); }
+  .dh-cust-readout small { display: block; color: #8a909b; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+  .dh-cust-arrow { flex: 0 0 auto !important; color: #6b7280; font-size: 1.1rem; }
+  .dh-cust-slider { width: 100%; accent-color: #8fe3c4; margin: 4px 0 14px; cursor: pointer; }
+  .dh-cust-field { display: flex; align-items: center; gap: 10px; }
+  .dh-cust-field label { color: #8a909b; font-size: 0.78rem; white-space: nowrap; }
+  .dh-cust-field input { flex: 1; }
+  .dh-cust-note { color: #767c86; font-size: 0.74rem; line-height: 1.5; margin-top: 12px; }
+  .dh-cust-note b { color: #c7ccd4; }
   .dh-modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
   /* smart-search chip */
   .dh-search-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; color: #b9c2cc; background: rgba(150,200,255,0.08); border: 1px solid rgba(150,200,255,0.16); border-radius: 999px; padding: 4px 10px; }
@@ -1061,6 +1076,27 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     <div class="dh-modal-foot">
       <button class="btn-ghost" onclick="dh_syncCancel()">Cancel</button>
       <button class="btn-start" onclick="dh_syncApply()">Apply selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- customize a deal: trade down payment <-> monthly -->
+<div class="dh-modal" id="dhCustModal">
+  <div class="dh-modal-card" style="max-width:420px;">
+    <div class="dh-modal-head">⚙ Customize <span id="dhCustCar"></span></div>
+    <div class="dh-cust-body">
+      <div class="dh-cust-readout">
+        <div><b id="dhCustMo">$0</b><small>Monthly</small></div>
+        <div class="dh-cust-arrow">⇄</div>
+        <div><b id="dhCustDown">$0</b><small id="dhCustDownLabel">Due at signing</small></div>
+      </div>
+      <input type="range" id="dhCustSlider" class="dh-cust-slider" min="0" max="100" value="0" oninput="dh_custSlide(this.value)">
+      <div class="dh-cust-field"><label>Down payment</label><input type="text" id="dhCustDownInput" oninput="dh_custInput(this.value)"></div>
+      <div class="dh-cust-note" id="dhCustNote"></div>
+    </div>
+    <div class="dh-modal-foot">
+      <button class="btn-ghost" onclick="dh_custReset()">Reset</button>
+      <button class="btn-start" onclick="dh_custClose()">Done</button>
     </div>
   </div>
 </div>
@@ -2970,6 +3006,37 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_dateShort(s) { if (!s) return ''; const t = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(t) ? '' : (t.getMonth() + 1) + '/' + t.getDate(); }
   function dh_money(v) { const n = dh_num(v); return n == null ? '' : '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
   function dh_mi(v) { const n = dh_num(v); return n == null ? '' : n.toLocaleString(); }   // full miles, no "k"
+  // ---- customize a deal: slide the down payment, monthly adjusts (effective held constant) ----
+  let dh_cust = null, dh_custMax = 0;
+  function dh_openCustomize(idx, ev) {
+    if (ev) ev.stopPropagation();
+    const d = dh_deals[idx]; if (!d) return;
+    const eff = dh_zeroOf(d), term = dh_num(d.term);
+    if (eff == null || !term) { alert('This deal needs a monthly payment and term to customize.'); return; }
+    dh_cust = { eff, term, das: dh_num(d.das) || 0, origDas: dh_num(d.das) || 0, fin: dh_isFinance(d) };
+    dh_custMax = Math.max(Math.round(eff * term), dh_cust.das);   // down where the monthly would hit $0
+    $('dhCustCar').textContent = dh_carLabel(d) + (d.dealer ? ' · ' + d.dealer : '');
+    $('dhCustSlider').max = dh_custMax;
+    $('dhCustDownLabel').textContent = dh_cust.fin ? 'Down payment' : 'Due at signing';
+    dh_custSet(dh_cust.das);
+    $('dhCustModal').style.display = 'flex';
+  }
+  function dh_custSet(das) {
+    das = Math.max(0, Math.min(dh_custMax, Math.round(das || 0)));
+    const mo = Math.max(0, dh_cust.eff - das / dh_cust.term);
+    dh_cust.das = das;
+    $('dhCustMo').textContent = '$' + Math.round(mo).toLocaleString();
+    $('dhCustDown').textContent = '$' + das.toLocaleString();
+    $('dhCustSlider').value = das;
+    $('dhCustDownInput').value = das.toLocaleString();
+    const per1k = 1000 / dh_cust.term;
+    const delta = das === dh_cust.origDas ? '' : ((mo <= 0 ? ' (monthly floored at $0)' : ''));
+    $('dhCustNote').innerHTML = 'Effective stays <b>$' + Math.round(dh_cust.eff).toLocaleString() + '/mo</b> over ' + dh_cust.term + ' months — every $1,000 down moves the monthly ~$' + per1k.toFixed(0) + '.' + delta;
+  }
+  function dh_custSlide(v) { dh_custSet(dh_num(v) || 0); }
+  function dh_custInput(v) { dh_custSet(dh_num(v) || 0); }
+  function dh_custReset() { dh_custSet(dh_cust.origDas); }
+  function dh_custClose() { $('dhCustModal').style.display = 'none'; dh_cust = null; }
   function dh_noteIcon(notes) { const n = (notes || '').trim(); return n ? `<span class="dh-note">📝<span class="dh-note-pop">${escapeHtml(n)}</span></span>` : ''; }
   function dh_renderByCar() {
     const q = ($('dh_search').value || '').toLowerCase().trim();
@@ -3024,7 +3091,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
           <td>${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_noteIcon(d.notes)}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
-          <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td></tr>`;
+          <td>${dh_num(d.apr) != null ? dh_num(d.apr) + '%' : ''}</td><td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
+          <td><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
       }).join('');
       const key = dh_carKey(best);
       const inCmp = dh_compare.has(key);
@@ -3039,7 +3107,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
           <span class="dh-car-caret">▾</span>
         </div>
         <div class="dh-car-deals">
-          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th><th>APR</th><th>BF</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th><th>APR</th><th>BF</th><th>Active</th><th></th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
     };
