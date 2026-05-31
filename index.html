@@ -2191,13 +2191,19 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
     else { $('t_showBadge').checked = false; }
     t_render();
   }
+  // bulk prefers neutral, readily-available colors (white/black/grey), then any
+  const T_BULK_COLORS = ['white', 'black', 'gray', ''];
   async function t_bulkDownloadOne(i) {
     const row = t_bulkRows[i];
     if (!(row.make && row.model)) { t_bulkDot(i, 'error'); return false; }
     t_applyBulkRow(row); t_bulkDot(i, 'loading');
     try {
-      const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: '' });
-      if (d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
+      let d = null;
+      for (const c of T_BULK_COLORS) {
+        d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c });
+        if (d && !d.error && d.found !== false && d.image_data) break;
+      }
+      if (!d || d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
       await t_download();
       t_bulkDot(i, 'done'); return true;
