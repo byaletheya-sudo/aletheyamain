@@ -301,6 +301,11 @@
   .dh-cmp { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: 7px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #9aa1ac; font-size: 0.95rem; line-height: 1; cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
   .dh-cmp:hover { border-color: rgba(150,200,255,0.4); color: #dfe4ea; }
   .dh-cmp.on { background: rgba(120,150,200,0.22); border-color: rgba(140,170,220,0.5); color: #eef2f8; }
+  /* select mode: tap a whole card to add it to the compare / ad stack */
+  .dh-selecting .dh-car { cursor: pointer; }
+  .dh-selecting .dh-car:not(.selected) { opacity: 0.82; }
+  .dh-car.selected { border-color: rgba(150,200,255,0.55); background: rgba(120,150,200,0.07); box-shadow: 0 0 0 1px rgba(150,200,255,0.3), 0 8px 24px rgba(0,0,0,0.3); opacity: 1; }
+  .dh-car.selected:hover { box-shadow: 0 0 0 1px rgba(150,200,255,0.45), 0 10px 30px rgba(0,0,0,0.36); }
   .dh-cmp-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 90; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 18px; border-radius: 12px; background: linear-gradient(180deg,#1b1d22,#141518); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 14px 40px rgba(0,0,0,0.5); }
   .dh-cmp-bar > div { display: flex; gap: 8px; }
   .dh-cmp-bar span { font-size: 0.84rem; color: #cdd2da; }
@@ -1165,7 +1170,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
 <!-- compare tray + side-by-side modal -->
 <div id="dhCmpBar" class="dh-cmp-bar" style="display:none;">
-  <span><b id="dhCmpCount">0</b> selected</span>
+  <span><b id="dhCmpCount">0</b> selected <span style="opacity:.55;">· tap cars to add</span></span>
   <div>
     <button class="btn-ghost" onclick="dh_cmpClear()">Clear</button>
     <button class="btn-ghost" onclick="dh_sendCarsToAd()">🎨 Make Ads</button>
@@ -2986,7 +2991,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function dh_clearSearch() { dh_searchKeys = null; $('dh_search').value = ''; const c = $('dh_searchChip'); c.style.display = 'none'; c.innerHTML = ''; dh_renderByCar(); }
   // ---- compare mode ----
-  function dh_cmpToggle(key, ev) { if (ev) ev.stopPropagation(); if (dh_compare.has(key)) dh_compare.delete(key); else { if (dh_compare.size >= 4) { alert('Compare up to 4 at a time.'); return; } dh_compare.add(key); } dh_cmpBar(); dh_renderByCar(); }
+  function dh_cmpToggle(key, ev) { if (ev) ev.stopPropagation(); if (dh_compare.has(key)) dh_compare.delete(key); else dh_compare.add(key); dh_cmpBar(); dh_renderByCar(); }
+  // once anything is selected, the whole card becomes a select target (the caret still expands)
+  function dh_cardClick(el, key, ev) { if (dh_compare.size > 0) dh_cmpToggle(key, ev); else el.classList.toggle('open'); }
   function dh_cmpClear() { dh_compare.clear(); dh_cmpBar(); dh_renderByCar(); }
   function dh_cmpBar() { const bar = $('dhCmpBar'); if (!bar) return; const onDeals = $('view-deals') && getComputedStyle($('view-deals')).display !== 'none'; bar.style.display = (dh_compare.size && onDeals) ? 'flex' : 'none'; const c = $('dhCmpCount'); if (c) c.textContent = dh_compare.size; }
   function dh_cmpCancel() { $('dhCmpModal').style.display = 'none'; }
@@ -3246,18 +3253,19 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
           <td class="dh-row-actions"><button class="dh-custom-btn" onclick="dh_sendToAd(${dh_deals.indexOf(d)}, event)" title="Make an ad from this deal">🎨</button><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
       }).join('');
       const key = dh_carKey(best);
+      const ekey = key.replace(/'/g, "\\'");
       const inCmp = dh_compare.has(key);
-      return `<div class="dh-car" onclick="this.classList.toggle('open')">
+      return `<div class="dh-car${inCmp ? ' selected' : ''}" onclick="dh_cardClick(this, '${ekey}', event)">
         <div class="dh-car-head">
           <div style="flex:1;min-width:0;">
             <div class="dh-car-name">${cardLabel(g, nested)}${best.special ? '<span class="dh-pill dh-pill-special">' + best.special + '</span>' : ''}${dh_isExpired(best) ? '<span class="dh-pill dh-pill-exp">expired</span>' : (dh_isStale(best) ? '<span class="dh-pill">stale</span>' : '')}</div>
             <div class="dh-car-sub">${sub}</div>
           </div>
           <div class="dh-car-best"><b>${dh_money(best.orig_mo || best.tax_in_mo) || '—'}</b><small>Monthly</small></div>
-          <button class="dh-cmp${inCmp ? ' on' : ''}" onclick="dh_cmpToggle('${key.replace(/'/g, "\\'")}', event)" title="Add to compare">${inCmp ? '✓' : '+'}</button>
-          <span class="dh-car-caret">▾</span>
+          <button class="dh-cmp${inCmp ? ' on' : ''}" onclick="dh_cmpToggle('${ekey}', event)" title="Add to compare / ad stack">${inCmp ? '✓' : '+'}</button>
+          <span class="dh-car-caret" onclick="event.stopPropagation(); this.closest('.dh-car').classList.toggle('open')" title="Expand">▾</span>
         </div>
-        <div class="dh-car-deals">
+        <div class="dh-car-deals" onclick="event.stopPropagation()">
           <table class="dh-deals-tbl"><thead><tr><th>Dealer</th><th>Monthly</th><th>Down</th><th>Effective</th><th>Term/Mi</th>${hasFin ? '<th>APR</th>' : ''}<th>BF</th><th>Active</th><th></th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </div>`;
@@ -3306,6 +3314,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         <div class="dh-make-body">${body}</div>
       </section>`;
     }).join('');
+    el.classList.toggle('dh-selecting', dh_compare.size > 0);   // select mode: tap a card to add/remove
     dh_cmpBar();
   }
 
