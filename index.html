@@ -355,6 +355,40 @@
   .ad-stage { width: min(456px, 100%); height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .ad-scaler { transform-origin: top left; }
 
+  /* ===== Review Generator ===== */
+  .rv-stage { width: min(456px, 100%); height: 570px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .rv-scaler { transform-origin: top left; width: 1080px; }
+  .rv { width: 1080px; height: 1350px; position: relative; overflow: hidden; display: flex; flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+        --rv-bg: radial-gradient(125% 90% at 50% 0%, #16243f, #0a0e17 70%); --rv-fg: #fff; --rv-muted: #aeb7c6; --rv-star: #ffc83d; --rv-accent: #4a9eff; --rv-line: rgba(255,255,255,0.12); }
+  .rv.theme-light { --rv-bg: #f4f6fa; --rv-fg: #11151c; --rv-muted: #5d6675; --rv-star: #f5a623; --rv-accent: #2563eb; --rv-line: rgba(0,0,0,0.1); }
+  .rv.theme-brand { --rv-bg: linear-gradient(158deg, #1b3a86, #0c1830 78%); --rv-fg: #fff; --rv-muted: #b9c6e0; --rv-star: #ffd166; --rv-accent: #6db3ff; --rv-line: rgba(255,255,255,0.14); }
+  .rv.theme-mono  { --rv-bg: linear-gradient(165deg, #1c1c1f, #050506 82%); --rv-fg: #fff; --rv-muted: #9aa0aa; --rv-star: #ffffff; --rv-accent: #c9a14a; --rv-line: rgba(255,255,255,0.12); }
+  .rv { background: var(--rv-bg); color: var(--rv-fg); }
+  .rv-photo { display: none; }
+  .rv.layout-hero .rv-photo { display: block; height: 560px; flex: 0 0 auto; background-size: cover; background-position: center; background-color: #0a0e17; }
+  .rv-body { flex: 1; display: flex; flex-direction: column; padding: 88px 90px 44px; position: relative; min-height: 0; }
+  .rv.layout-hero .rv-body { padding: 60px 90px 44px; }
+  .rv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 44px; flex: 0 0 auto; }
+  .rv-logo { height: 62px; width: auto; object-fit: contain; }
+  .rv-tag { font-size: 23px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rv-accent); border: 2px solid var(--rv-accent); border-radius: 999px; padding: 11px 24px; }
+  .rv-stars { font-size: 74px; letter-spacing: 10px; color: var(--rv-star); line-height: 1; margin-bottom: 30px; flex: 0 0 auto; }
+  .rv-bigquote { position: absolute; top: 158px; right: 84px; font-family: Georgia, 'Times New Roman', serif; font-size: 320px; line-height: 1; color: var(--rv-fg); opacity: 0.06; pointer-events: none; }
+  .rv-revtext { font-size: 52px; line-height: 1.32; font-weight: 600; color: var(--rv-fg); flex: 1 1 auto; overflow: hidden; min-height: 0; }
+  .rv-by { display: flex; align-items: center; gap: 26px; margin-top: 36px; padding-top: 38px; border-top: 2px solid var(--rv-line); flex: 0 0 auto; }
+  .rv-avatar { width: 96px; height: 96px; border-radius: 50%; background: var(--rv-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; flex: 0 0 auto; background-size: cover; background-position: center; }
+  .rv-byname { font-size: 40px; font-weight: 800; }
+  .rv-bysrc { font-size: 29px; color: var(--rv-muted); margin-top: 4px; }
+  .rv-foot { text-align: center; padding: 0 0 58px; font-size: 25px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--rv-muted); flex: 0 0 auto; }
+  /* form controls */
+  .rv-starpick { display: flex; gap: 7px; font-size: 1.7rem; }
+  .rv-starpick span { color: #3a3f49; cursor: pointer; transition: color .1s, transform .1s; }
+  .rv-starpick span.on { color: #ffc83d; }
+  .rv-starpick span:hover { transform: scale(1.18); }
+  .rv-themes { display: flex; gap: 10px; flex-wrap: wrap; }
+  .rv-theme { width: 52px; height: 52px; border-radius: 10px; cursor: pointer; border: 2px solid transparent; padding: 0; }
+  .rv-theme.active { border-color: #4a9eff; box-shadow: 0 0 0 2px rgba(74,158,255,0.3); }
+
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
   .gallery-item { position: relative; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
   .gallery-item:hover { border-color: #4a9eff; }
@@ -570,6 +604,10 @@
     <div class="nav-item" id="nav-deals" onclick="showView('deals')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
       Deal Hub
+    </div>
+    <div class="nav-item" id="nav-review" onclick="showView('review')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></span>
+      Review Generator
     </div>
   </aside>
 
@@ -1096,6 +1134,93 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       </div>
     </section><!-- /#view-deals -->
 
+    <section class="view" id="view-review">
+      <div class="view-inner">
+        <h1>Review Generator</h1>
+        <p class="subtitle">Turn a 5-star Google or Yelp review into a ready-to-post Instagram graphic.</p>
+        <div class="layout">
+          <div>
+            <div class="panel">
+              <h2>✨ Smart Fill <span style="font-weight:400;opacity:.6;font-size:.8rem;">(optional)</span></h2>
+              <label for="rv_paste">Paste a review from Google / Yelp</label>
+              <textarea id="rv_paste" style="min-height:90px;" placeholder="Paste the raw review… the AI pulls out the name, stars, source, and cleans it up for a post."></textarea>
+              <div class="controls" style="margin-top:10px;">
+                <button class="btn-ghost" id="rv_fillBtn" onclick="rv_smartFill()">✨ Auto-fill from review</button>
+              </div>
+              <div class="status" id="rv_fillStatus"></div>
+            </div>
+            <div class="panel">
+              <h2>Review</h2>
+              <label>Star rating</label>
+              <div class="rv-starpick" id="rv_starPick"></div>
+              <label for="rv_text" style="margin-top:12px;">Review text</label>
+              <textarea id="rv_text" style="min-height:120px;" oninput="rv_render()">Best experience I've ever had buying a car. The team made the whole process easy and got me an unbeatable deal. Highly recommend!</textarea>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div><label for="rv_name">Reviewer name</label><input type="text" id="rv_name" value="Jordan M." oninput="rv_render()"></div>
+                <div><label for="rv_source">Source</label>
+                  <select id="rv_source" onchange="rv_render()">
+                    <option value="Google">Google</option>
+                    <option value="Yelp">Yelp</option>
+                    <option value="DealerRater">DealerRater</option>
+                    <option value="Cars.com">Cars.com</option>
+                    <option value="">Verified Customer</option>
+                  </select>
+                </div>
+              </div>
+              <label for="rv_vehicle">Vehicle <span style="opacity:.55;font-weight:400;">(optional)</span></label>
+              <input type="text" id="rv_vehicle" placeholder="e.g. 2024 BMW X5" oninput="rv_render()">
+            </div>
+            <div class="panel">
+              <h2>Photo &amp; Style</h2>
+              <div id="rv_drop" class="dh-drop" onclick="$('rv_file').click()">
+                <span>📷 Drop a customer / car photo, or <u>browse</u> <span style="opacity:.6;">(optional)</span></span>
+                <input type="file" id="rv_file" accept="image/*" style="display:none;" onchange="rv_onPhoto(this.files[0]); this.value='';">
+              </div>
+              <div id="rv_photoBar" style="display:none;margin-top:8px;"></div>
+              <label style="margin-top:14px;">Layout</label>
+              <div class="seg" id="rv_layoutSeg">
+                <button type="button" class="seg-btn active" onclick="rv_setLayout('card')">Quote Card</button>
+                <button type="button" class="seg-btn" onclick="rv_setLayout('hero')">Photo Hero</button>
+              </div>
+              <label style="margin-top:14px;">Theme</label>
+              <div class="rv-themes" id="rv_themes"></div>
+            </div>
+            <div class="panel">
+              <h2>Export</h2>
+              <div class="controls"><button class="btn-start" onclick="rv_download()">Download Review</button></div>
+              <div class="status" id="rv_status"></div>
+            </div>
+          </div>
+          <div class="preview-col">
+            <div class="rv-stage">
+              <div class="rv-scaler" id="rvScaler">
+                <div class="rv layout-card theme-dark" id="rv">
+                  <div class="rv-photo" id="rv_photo"></div>
+                  <div class="rv-body">
+                    <div class="rv-top">
+                      <img class="rv-logo" src="logo.png" alt="Nova" crossorigin="anonymous">
+                      <span class="rv-tag">Customer Review</span>
+                    </div>
+                    <div class="rv-stars" id="rv_stars">★★★★★</div>
+                    <div class="rv-bigquote">“</div>
+                    <div class="rv-revtext" id="rv_revtext"></div>
+                    <div class="rv-by">
+                      <div class="rv-avatar" id="rv_avatar"></div>
+                      <div class="rv-byinfo">
+                        <div class="rv-byname" id="rv_byname"></div>
+                        <div class="rv-bysrc" id="rv_bysrc"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rv-foot">Nova Auto Pros</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section><!-- /#view-review -->
+
   </main>
 </div>
 
@@ -1269,6 +1394,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     fitStageEl(document.querySelector('#view-ads .ad-stage'), 'adScaler', 1920);
     fitStageEl(document.querySelector('#view-sold .sp-stage'), 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
     fitStageEl(document.querySelector('#view-test .ad-stage'), 't_adScaler', 1920);
+    fitStageEl(document.querySelector('#view-review .rv-stage'), 'rvScaler', 1350);
   }
   window.addEventListener('resize', fitPreviews);
 
@@ -1757,9 +1883,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('scrim').classList.remove('show');
   }
   // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
-  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub' };
-  const PATH_VIEW = { '/': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals' };
-  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub' };
+  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator' };
+  const PATH_VIEW = { '/': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review' };
+  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator' };
   // ---- restricted second-tier password gate (Lease Ad — TEST + Deal Hub) ----
   let restrictedUnlocked = false, lockPendingView = null;
   const RESTRICTED_VIEWS = new Set(['test', 'deals']);
@@ -1798,6 +1924,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     document.title = (VIEW_TITLE[name] || 'nova') + ' — nova.byAletheya';
     if (typeof dh_cmpBar === 'function') dh_cmpBar();        // float the compare tray only on the Deal Hub
     if (typeof dh_agentSync === 'function') dh_agentSync();  // float the import orb only on the Deal Hub
+    if (name === 'review' && typeof rv_render === 'function') requestAnimationFrame(rv_render);   // re-fit the review text now it's visible
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -3343,7 +3470,82 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (ta) ta.addEventListener('paste', e => { const imgs = [...(e.clipboardData ? e.clipboardData.files : [])].filter(f => f.type.startsWith('image/')); if (imgs.length) { e.preventDefault(); dh_onFiles(imgs); } });
   })();
 
+  // ===================== REVIEW GENERATOR =====================
+  let rv_rating = 5, rv_layout = 'card', rv_theme = 'dark', rv_photoData = null;
+  const RV_THEMES = [
+    { k: 'dark', bg: 'radial-gradient(125% 90% at 50% 0%, #16243f, #0a0e17 70%)' },
+    { k: 'light', bg: '#f4f6fa' },
+    { k: 'brand', bg: 'linear-gradient(158deg,#1b3a86,#0c1830)' },
+    { k: 'mono', bg: 'linear-gradient(165deg,#1c1c1f,#050506)' },
+  ];
+  function rv_setStatus(t, type = '') { const e = $('rv_status'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function rv_setFillStatus(t, type = '') { const e = $('rv_fillStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function rv_initials(name) { const p = (name || '').trim().split(/\s+/).filter(Boolean); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '★'; }
+  function rv_renderStarPick() {
+    const w = $('rv_starPick'); if (!w) return; w.innerHTML = '';
+    for (let i = 1; i <= 5; i++) { const s = document.createElement('span'); s.textContent = '★'; if (i <= rv_rating) s.className = 'on'; s.onclick = () => { rv_rating = i; rv_renderStarPick(); rv_render(); }; w.appendChild(s); }
+  }
+  function rv_renderThemes() {
+    const w = $('rv_themes'); if (!w) return; w.innerHTML = '';
+    RV_THEMES.forEach(t => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rv-theme' + (t.k === rv_theme ? ' active' : ''); b.style.background = t.bg; b.title = t.k; b.onclick = () => { rv_theme = t.k; rv_renderThemes(); rv_render(); }; w.appendChild(b); });
+  }
+  function rv_setLayout(l) { rv_layout = l; const b = $('rv_layoutSeg').querySelectorAll('.seg-btn'); b[0].classList.toggle('active', l === 'card'); b[1].classList.toggle('active', l === 'hero'); if (typeof slideSeg === 'function') slideSeg($('rv_layoutSeg')); rv_render(); }
+  function rv_onPhoto(file) { if (!file) return; const r = new FileReader(); r.onload = () => { rv_photoData = r.result; rv_renderPhotoBar(); if (rv_layout === 'card') rv_setLayout('hero'); else rv_render(); }; r.readAsDataURL(file); }
+  function rv_renderPhotoBar() { const el = $('rv_photoBar'); if (!el) return; if (!rv_photoData) { el.style.display = 'none'; el.innerHTML = ''; return; } el.style.display = ''; el.innerHTML = '<span class="dh-search-chip">📷 photo attached <button onclick="rv_clearPhoto()" title="Remove">✕</button></span>'; }
+  function rv_clearPhoto() { rv_photoData = null; rv_renderPhotoBar(); rv_render(); }
+  function rv_fitText(el, base, min) { el.style.fontSize = base + 'px'; if (!el.clientHeight) return; let s = base; while (el.scrollHeight > el.clientHeight && s > min) { s -= 2; el.style.fontSize = s + 'px'; } }
+  function rv_render() {
+    const rv = $('rv'); if (!rv) return;
+    rv.className = 'rv layout-' + rv_layout + ' theme-' + rv_theme;
+    $('rv_stars').innerHTML = '★'.repeat(rv_rating) + (rv_rating < 5 ? '<span style="opacity:.22">' + '★'.repeat(5 - rv_rating) + '</span>' : '');
+    const name = ($('rv_name').value || '').trim();
+    const src = $('rv_source').value, veh = ($('rv_vehicle').value || '').trim();
+    $('rv_revtext').textContent = ($('rv_text').value || '').trim();
+    $('rv_byname').textContent = name || 'Verified Customer';
+    $('rv_bysrc').textContent = [src ? 'via ' + src : 'Verified Customer', veh].filter(Boolean).join('  ·  ');
+    const av = $('rv_avatar');
+    if (rv_photoData && rv_layout === 'card') { av.style.backgroundImage = 'url(' + rv_photoData + ')'; av.textContent = ''; }
+    else { av.style.backgroundImage = ''; av.textContent = rv_initials(name); }
+    $('rv_photo').style.backgroundImage = (rv_photoData && rv_layout === 'hero') ? 'url(' + rv_photoData + ')' : '';
+    rv_fitText($('rv_revtext'), 52, 26);
+  }
+  async function rv_smartFill() {
+    const text = ($('rv_paste').value || '').trim();
+    if (!text) { rv_setFillStatus('Paste a review first.', 'error'); return; }
+    const btn = $('rv_fillBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Reading…';
+    rv_setFillStatus('Reading the review…', 'active');
+    try {
+      const r = await fetch('/review-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const d = await r.json();
+      if (d.error) { rv_setFillStatus('✕ ' + d.error, 'error'); return; }
+      if (d.review) $('rv_text').value = d.review;
+      if (d.name) $('rv_name').value = d.name;
+      if (d.vehicle) $('rv_vehicle').value = d.vehicle;
+      if (d.source) { const opt = [...$('rv_source').options].find(o => o.value.toLowerCase() === String(d.source).toLowerCase()); if (opt) $('rv_source').value = opt.value; }
+      if (d.rating) { rv_rating = Math.max(1, Math.min(5, d.rating)); rv_renderStarPick(); }
+      rv_render();
+      rv_setFillStatus('Filled ✓ — tweak anything below.', 'done');
+    } catch (e) { rv_setFillStatus('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Auto-fill from review'; }
+  }
+  function rv_filename() { const n = (($('rv_name').value || 'review').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')) || 'review'; return 'nova_review_' + n + '.png'; }
+  async function rv_download() {
+    rv_setStatus('Rendering…', 'active');
+    try {
+      await document.fonts.ready;
+      const scaler = $('rvScaler'), stage = scaler.parentElement;
+      const prev = { t: scaler.style.transform, pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
+      scaler.style.transform = 'none';
+      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = '1350px';
+      const canvas = await html2canvas($('rv'), { width: 1080, height: 1350, scale: 2, backgroundColor: null, useCORS: true, logging: false });
+      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
+      const a = document.createElement('a'); a.download = rv_filename(); a.href = canvas.toDataURL('image/png'); a.click();
+      rv_setStatus('Downloaded ✓', 'done');
+    } catch (e) { rv_setStatus('Render failed: ' + e.message, 'error'); }
+  }
+
   renderSold();
+  rv_renderStarPick(); rv_renderThemes(); rv_render();
   // open the view that matches the URL the page was loaded at (deep-link support).
   // check the restricted-unlock state first so an already-unlocked deep link doesn't prompt.
   checkUnlock().then(() => {

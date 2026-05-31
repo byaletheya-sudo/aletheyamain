@@ -316,6 +316,7 @@ def car_slug(vehicle, bodystyle, color):
 @app.route("/sold")
 @app.route("/leasead-test")
 @app.route("/deal-hub")
+@app.route("/review-generator")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
@@ -498,6 +499,50 @@ def caption():
         info = classify_error(e)
         print(f"[caption] error: {info['reason']} | {info['detail']}")
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
+
+
+@app.route("/review-parse", methods=["POST"])
+def review_parse():
+    """Smart-fill: read a raw review pasted from Google/Yelp and pull out the reviewer
+    name, star rating, source, and a clean version of the text for an Instagram graphic."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    text = ((request.json or {}).get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Paste a review first."}), 400
+    schema = {
+        "type": "object", "additionalProperties": False,
+        "required": ["name", "rating", "source", "review", "vehicle"],
+        "properties": {
+            "name": {"type": "string"},
+            "rating": {"type": "integer"},
+            "source": {"type": "string"},
+            "review": {"type": "string"},
+            "vehicle": {"type": "string"},
+        },
+    }
+    system = (
+        "You read a customer review copied from Google, Yelp, DealerRater, or Cars.com and structure "
+        "it for a social-media testimonial graphic. Output: name (the reviewer's name or first name + "
+        "last initial like 'John D.'; '' if unknown), rating (1-5 integer; if not stated, 5), source "
+        "(Google / Yelp / DealerRater / Cars.com / '' if unknown), review (clean the text up for a "
+        "post: fix obvious typos/caps, trim filler, keep it authentic and in the customer's voice, no "
+        "longer than ~320 characters; do NOT invent content), and vehicle (the car they bought if "
+        "mentioned, e.g. '2024 BMW X5'; else '')."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "review", "strict": True, "schema": schema}},
+        )
+        out = json.loads(resp.choices[0].message.content)
+        r = out.get("rating") or 5
+        out["rating"] = max(1, min(5, int(r) if str(r).isdigit() else 5))
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read that review: {e}"}), 502
 
 
 def _carsxe_dataurl(url):
