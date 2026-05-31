@@ -597,25 +597,37 @@ def carsxe_image():
             _CARSXE_ALLOWED.add(o["url"])
         return jsonify({**cached, "cached": True})
 
-    params = {"key": CARSXE_API_KEY, "make": make, "model": model,
-              "transparent": "true", "size": "Large", "format": "json"}
+    base = {"key": CARSXE_API_KEY, "make": make, "model": model,
+            "transparent": "true", "size": "Large", "format": "json"}
     if year:
-        params["year"] = year
+        base["year"] = year
     if trim:
-        params["trim"] = trim
+        base["trim"] = trim
     if color:
-        params["color"] = color
-    url = "https://api.carsxe.com/images?" + urllib.parse.urlencode(params)
+        base["color"] = color
+
+    # Best-first attempts: ask for exterior-only studio shots (needs year+trim),
+    # then fall back to the unfiltered set so we always return something.
+    attempts = []
+    if year and trim:
+        attempts.append({**base, "photoType": "exterior"})
+    attempts.append(base)
+
+    imgs, body = [], {}
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            body = json.loads(r.read().decode("utf-8", "ignore"))
+        for p in attempts:
+            url = "https://api.carsxe.com/images?" + urllib.parse.urlencode(p)
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                body = json.loads(r.read().decode("utf-8", "ignore"))
+            imgs = [im for im in (body.get("images") or []) if im.get("link")]
+            if imgs:
+                break
     except urllib.error.HTTPError as e:
         return jsonify({"error": f"the catalog error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
     except Exception as e:
         return jsonify({"error": f"the catalog request failed: {e}"}), 502
 
-    imgs = [im for im in (body.get("images") or []) if im.get("link")]
     if not imgs:
         return jsonify({"found": False, "message": body.get("error") or "No images returned by the catalog."})
     for im in imgs:
