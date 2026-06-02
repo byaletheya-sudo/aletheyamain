@@ -1046,11 +1046,11 @@
             <div class="panel">
               <h2>Vehicle</h2>
               <div class="row" style="grid-template-columns:84px 1fr;">
-                <div><label for="t_year">Year</label><select id="t_year" onchange="t_syncTitle()"></select></div>
-                <div><label for="t_make">Make</label><select id="t_make" onchange="t_syncTitle()"></select></div>
+                <div><label for="t_year">Year</label><select id="t_year" onchange="t_vehChanged()"></select></div>
+                <div><label for="t_make">Make</label><select id="t_make" onchange="t_vehChanged()"></select></div>
               </div>
               <div class="row">
-                <div><label for="t_model">Model</label><input type="text" id="t_model" placeholder="e.g. M4, GLC 300" oninput="t_syncTitle()"></div>
+                <div><label for="t_model">Model</label><input type="text" id="t_model" placeholder="e.g. M4, GLC 300" oninput="t_vehChanged()"></div>
                 <div><label for="t_trim">Trim <span style="opacity:.55;font-weight:400;">(optional)</span></label><input type="text" id="t_trim" list="t_trimList" placeholder="e.g. Competition" oninput="t_onTrimInput()"><datalist id="t_trimList"></datalist></div>
               </div>
               <div id="t_colorWrap" style="display:none;">
@@ -1116,6 +1116,7 @@
 
             <div class="controls" style="margin-bottom:13px;">
               <button class="btn-start" id="vdbBtn" onclick="t_build()">⚡ Generate Ad</button>
+              <button class="btn-ghost" id="t_newPhotoBtn" onclick="t_newPhoto()" title="Get a different photo for this same vehicle">🔄 New photo</button>
               <label class="toggle"><input type="checkbox" id="t_autoDl" checked><span class="tg-track"></span> Auto-download</label>
             </div>
 
@@ -1133,6 +1134,22 @@
                 <button class="btn-start" id="t_dlBtn" onclick="t_download()" disabled>Download Ad</button>
               </div>
               <div class="status" id="t_status"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Or Upload Your Own Car Photo</h2>
+              <p class="hint" style="margin-bottom:12px;">
+                Upload a photo — the background is removed automatically and the car drops straight onto the ad.
+                Fill in the <b>Vehicle</b> above first so it's named in your gallery.
+                <i>(First use downloads a one-time background-removal model, ~a few seconds.)</i>
+              </p>
+              <input type="file" id="t_carUpload" accept="image/*" onchange="t_handleUpload(event)" style="font-size:0.85rem; color:#aaa;">
+              <div class="status" id="t_uploadStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Previously Generated Cars <span style="font-weight:400;opacity:.6;font-size:.8rem;">(click to reuse)</span></h2>
+              <div class="gallery" id="t_gallery"></div>
             </div>
             </div><!-- /t_singlePanels -->
 
@@ -2488,8 +2505,20 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // trim typed/picked -> mirror a cleaned version into the subtitle (unless edited)
   function t_onTrimInput() {
     if (!t_subEdited) $('t_bodystyle').value = t_cleanTrim($('t_trim').value);
+    t_clearPhotoState();      // a different trim is a different photo query
     t_syncTitle();
   }
+  // A vehicle field changed (year/make/model) — invalidate the previous car's
+  // colour filter + photo options so the next Generate isn't constrained by a
+  // stale colour that only existed for the old vehicle.
+  function t_clearPhotoState() {
+    const sel = $('t_color'); if (sel) { sel.value = ''; }
+    if (typeof t_updateSwatch === 'function') t_updateSwatch();
+    const thumbs = $('t_photoThumbs'); if (thumbs) thumbs.innerHTML = '';
+    const wrap = $('t_carsxeWrap'); if (wrap) wrap.style.display = 'none';
+    t_singleColorIdx = -1;
+  }
+  function t_vehChanged() { t_clearPhotoState(); t_syncTitle(); }
   // triple-click a fixed field (phone / fine print) to unlock it for editing
   function t_tripleUnlock(el) {
     el._clk = (el._clk || 0) + 1;
@@ -2520,6 +2549,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('t_singlePanels').style.display = mode === 'single' ? '' : 'none';
     $('t_bulkPanels').style.display = mode === 'bulk' ? '' : 'none';
     slideSeg($('t_modeSingle').closest('.seg'));
+    if (mode === 'single' && typeof t_resetCrop === 'function') t_resetCrop();   // don't inherit a bulk row's zoom/pan
     if (typeof t_bulkNavSync === 'function') t_bulkNavSync();
     if (typeof fitPreviews === 'function') fitPreviews();
   }
@@ -2692,6 +2722,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
+      t_resetCrop();
       $('t_dlBtn').disabled = false;
       setVdb('Photo updated ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
@@ -2799,6 +2830,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       t_setPhotoOptions(d.options);
       $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
       await waitForImage($('t_adCar'));
+      t_resetCrop();
       $('t_dlBtn').disabled = false;
       setVdb('Color updated ✓', 'done');
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
@@ -2819,6 +2851,87 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const a = document.createElement('a'); a.download = base + '_ad.png'; a.href = canvas.toDataURL('image/png'); a.click();
       setT('Ad downloaded ✓', 'done');
     } catch (e) { setT('Render failed: ' + e.message, 'error'); }
+  }
+
+  // ---- Single mode: get a DIFFERENT photo for the same vehicle (cycle colours, skip the cache) ----
+  let t_singleColorIdx = -1;
+  async function t_newPhoto() {
+    const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
+    if (!(make && model)) { setVdb('Pick a make and type a model first.', 'error'); return; }
+    const btn = $('t_newPhotoBtn'); if (btn) btn.disabled = true;
+    t_singleColorIdx = (t_singleColorIdx + 1) % T_REFRESH_COLORS.length;
+    const color = T_REFRESH_COLORS[t_singleColorIdx];
+    setVdb('Getting a new photo…', 'active');
+    try {
+      const d = await t_fetchPhoto({ year, make, model, trim, color, nocache: true });
+      if (d.error || d.found === false) { setVdb('✕ ' + (d.error || d.message || 'No more photos for this vehicle.'), 'error'); return; }
+      t_setPhotoOptions(d.options);
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
+      await waitForImage($('t_adCar'));
+      t_resetCrop();
+      $('t_dlBtn').disabled = false;
+      setVdb('New photo ✓' + (color ? ' (' + color + ')' : ''), 'done');
+    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+    finally { if (btn) btn.disabled = false; }
+  }
+
+  // ---- Single mode: upload your own photo -> remove background -> place + save to gallery ----
+  function t_blobToDataURL(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); }); }
+  function setTUpload(t, type = '') { const el = $('t_uploadStatus'); if (el) { el.textContent = t; el.className = 'status ' + type; } }
+  async function t_handleUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      if (!window.__removeBg) throw new Error(window.__removeBgError ? 'Background remover failed to load — check your connection and refresh.' : 'Background remover still loading — wait a moment and try again.');
+      setTUpload('Removing background… (first run downloads a one-time model, please wait)', 'active');
+      const blob = await window.__removeBg(file);
+      const dataUrl = await t_blobToDataURL(blob);
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = dataUrl;
+      await waitForImage($('t_adCar'));
+      t_resetCrop();
+      $('t_dlBtn').disabled = false;
+      const save = await fetch('/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_data: dataUrl, vehicle: t_vehName() }) });
+      const sd = await save.json();
+      if (sd.filename) await t_loadGallery();
+      setTUpload('Background removed & placed on the ad ✓ Update pricing, then Download.', 'done');
+    } catch (err) { setTUpload('Upload failed: ' + err.message, 'error'); }
+    finally { e.target.value = ''; }   // allow re-uploading the same file
+  }
+
+  // ---- Single mode: gallery of previously generated / uploaded cars (shared with the main tool) ----
+  async function t_loadGallery() {
+    try {
+      const files = await (await fetch('/images')).json();
+      const g = $('t_gallery'); if (!g) return; g.innerHTML = '';
+      if (!files.length) { g.innerHTML = '<p class="hint">No saved cars yet.</p>'; return; }
+      files.forEach(f => {
+        const d = document.createElement('div'); d.className = 'gallery-item';
+        d.innerHTML = '<button class="del" title="Delete">&times;</button><img src="/images/' + f + '" loading="lazy"><div class="cap">' + f + '</div>';
+        d.querySelector('img').onclick = () => t_selectCar(f, d);
+        d.querySelector('.cap').onclick = () => t_selectCar(f, d);
+        d.querySelector('.del').onclick = (e) => { e.stopPropagation(); t_deleteImage(f); };
+        g.appendChild(d);
+      });
+    } catch (e) { /* gallery is best-effort */ }
+  }
+  async function t_selectCar(filename, card) {
+    document.querySelectorAll('#t_gallery .gallery-item.selected').forEach(x => x.classList.remove('selected'));
+    if (card) card.classList.add('selected');
+    $('t_adCar').crossOrigin = 'anonymous';
+    $('t_adCar').src = '/images/' + filename;
+    await waitForImage($('t_adCar'));
+    t_resetCrop();
+    $('t_dlBtn').disabled = false;
+    setVdb('Loaded ' + filename + ' onto the ad ✓ Update pricing, then Download.', 'done');
+  }
+  async function t_deleteImage(filename) {
+    if (!confirm('Delete "' + filename + '"? This can\'t be undone.')) return;
+    try {
+      const r = await fetch('/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
+      const d = await r.json();
+      if (d.error) { setVdb('Delete failed: ' + d.error, 'error'); return; }
+      await t_loadGallery();
+    } catch (e) { setVdb('Delete failed: ' + e.message, 'error'); }
   }
 
   // ---- Smart Bulk Import (AI parse -> editable grid -> download) ----
@@ -3850,6 +3963,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   t_fillMakes();
   t_renderBadgeChips();
   t_render();
+  t_loadGallery();
   dh_setMode('car');
   // dh_load() is triggered by checkUnlock()/lockSubmit() once the restricted area is unlocked
   (function dhWireDrop() {
