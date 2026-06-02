@@ -381,6 +381,12 @@
   .preview-col { position: sticky; top: 24px; }
   .ad-stage { width: min(456px, 100%); height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .ad-scaler { transform-origin: top left; }
+  .t-preview-wrap { position: relative; }
+  .t-nav-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 6; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.16); background: rgba(16,20,28,0.82); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); box-shadow: 0 6px 20px rgba(0,0,0,0.45); transition: background .14s, transform .12s; }
+  .t-nav-arrow.left { left: 10px; } .t-nav-arrow.right { right: 10px; }
+  .t-nav-arrow:hover { background: rgba(74,158,255,0.9); transform: translateY(-50%) scale(1.08); }
+  .t-nav-arrow:active { transform: translateY(-50%) scale(0.96); }
+  .t-bulk-nav { text-align: center; margin-top: 12px; color: #9aa0aa; font-size: 0.84rem; font-weight: 600; letter-spacing: 0.02em; }
 
   /* ===== Review Generator ===== */
   .rv-stage { width: min(456px, 100%); height: 570px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
@@ -1076,6 +1082,9 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
           </div>
 
           <div class="preview-col">
+            <div class="t-preview-wrap">
+              <button class="t-nav-arrow left" id="t_navPrev" onclick="t_bulkPrev()" title="Previous ad" style="display:none;">‹</button>
+              <button class="t-nav-arrow right" id="t_navNext" onclick="t_bulkNext()" title="Next ad" style="display:none;">›</button>
             <div class="ad-stage">
               <div class="ad-scaler" id="t_adScaler">
                 <div class="ad" id="t_ad">
@@ -1095,6 +1104,8 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
                 </div>
               </div>
             </div>
+            </div><!-- /.t-preview-wrap -->
+            <div id="t_bulkNav" class="t-bulk-nav" style="display:none;"><span id="t_bulkNavLabel">1 of 1</span></div>
           </div>
         </div>
       </div>
@@ -2427,6 +2438,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('t_singlePanels').style.display = mode === 'single' ? '' : 'none';
     $('t_bulkPanels').style.display = mode === 'bulk' ? '' : 'none';
     slideSeg($('t_modeSingle').closest('.seg'));
+    if (typeof t_bulkNavSync === 'function') t_bulkNavSync();
     if (typeof fitPreviews === 'function') fitPreviews();
   }
 
@@ -2748,7 +2760,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!t_bulkRows.length) { setTB('No vehicles found in that text.', 'error'); $('t_bulkResultPanel').style.display = 'none'; return; }
       t_renderBulkGrid();
       $('t_bulkResultPanel').style.display = '';
-      setTB('Found ' + t_bulkRows.length + ' vehicle(s) — review & download.', 'done');
+      t_bulkPreview(0);                                 // show the first ad in the preview
+      setTB('Found ' + t_bulkRows.length + ' vehicle(s) — flip through with the arrows, then download.', 'done');
     } catch (e) { setTB('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse with AI'; }
   }
@@ -2782,6 +2795,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       grid.appendChild(strip);
       if (row.photoOptions) t_renderBulkPhotos(i);
     });
+    t_bulkNavSync();
   }
   async function t_bulkLoadPhotos(i) {
     const row = t_bulkRows[i]; if (!(row.make && row.model)) return;
@@ -2806,6 +2820,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const row = t_bulkRows[i], o = (row.photoOptions || [])[j]; if (!o) return;
     row.photoUrl = o.url; row.photoData = null;
     t_renderBulkPhotos(i);
+    t_bulkPreviewIdx = i; t_bulkNavSync();               // the row you're choosing for becomes the previewed ad
     t_applyBulkRow(row);                                 // drop this vehicle onto the ad template
     setTB('Loading that photo onto the ad…', 'active');
     try {
@@ -2822,9 +2837,39 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     for (let i = 0; i < t_bulkRows.length; i++) { if (!t_bulkRows[i].photoOptions) await t_bulkLoadPhotos(i); }
     btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '📷 Load all photos';
   }
+  // ---- flip through the bulk ads in the preview ----
+  let t_bulkPreviewIdx = 0;
+  function t_bulkNavSync() {
+    const multi = t_mode === 'bulk' && t_bulkRows.length > 1;
+    const nav = $('t_bulkNav'), prev = $('t_navPrev'), next = $('t_navNext');
+    if (nav) nav.style.display = multi ? '' : 'none';
+    if (prev) prev.style.display = multi ? 'flex' : 'none';
+    if (next) next.style.display = multi ? 'flex' : 'none';
+    const lbl = $('t_bulkNavLabel'); if (lbl && t_bulkRows.length) lbl.textContent = (Math.min(t_bulkPreviewIdx, t_bulkRows.length - 1) + 1) + ' of ' + t_bulkRows.length;
+  }
+  async function t_bulkPreview(idx) {
+    if (!t_bulkRows.length) return;
+    t_bulkPreviewIdx = ((idx % t_bulkRows.length) + t_bulkRows.length) % t_bulkRows.length;
+    t_bulkNavSync();
+    const row = t_bulkRows[t_bulkPreviewIdx];
+    t_applyBulkRow(row);
+    if (row.photoData) { $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = row.photoData; try { await waitForImage($('t_adCar')); } catch (e) { } return; }
+    if (!(row.make && row.model)) return;
+    setTB('Loading ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length + '…', 'active');
+    try {
+      let imgData = null;
+      if (row.photoUrl) { const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: row.photoUrl }) }); const d = await r.json(); if (!d.error) imgData = d.image_data; }
+      if (!imgData) { for (const c of T_BULK_COLORS) { const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c }); if (d && !d.error && d.found !== false && d.image_data) { imgData = d.image_data; break; } } }
+      if (imgData) { row.photoData = imgData; $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = imgData; await waitForImage($('t_adCar')); setTB('Ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length, ''); }
+      else setTB('No photo found for this vehicle.', 'error');
+    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+  }
+  function t_bulkPrev() { t_bulkPreview(t_bulkPreviewIdx - 1); }
+  function t_bulkNext() { t_bulkPreview(t_bulkPreviewIdx + 1); }
   function t_bulkEdit(el) {
     const i = +el.dataset.i, k = el.dataset.k;
     t_bulkRows[i][k] = el.value;
+    if (['year', 'make', 'model', 'trim'].includes(k)) { t_bulkRows[i].photoData = null; t_bulkRows[i].photoUrl = null; t_bulkRows[i].photoOptions = null; }   // vehicle changed -> refetch its photo
     if (k === 'dealType') t_renderBulkGrid();   // swap DAS / Down / APR fields for the new type
   }
   function t_bulkDot(i, state) { const d = $('bdot-' + i); if (d) d.className = 'bulk-dot ' + (state || ''); }
@@ -3528,7 +3573,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('t_bulkInput').value = deals.map(d => [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].filter(Boolean).join(' ')).join('\n');
     if (typeof t_renderBulkGrid === 'function') t_renderBulkGrid();
     const panel = $('t_bulkResultPanel'); if (panel) panel.style.display = '';
-    if (typeof setTB === 'function') setTB(deals.length + ' deal(s) sent from the Deal Hub — review & generate.', 'done');
+    if (typeof t_bulkPreview === 'function') t_bulkPreview(0);
+    if (typeof setTB === 'function') setTB(deals.length + ' deal(s) sent from the Deal Hub — flip through with the arrows, then generate.', 'done');
   }
   function dh_sendCarsToAd() {              // each selected car's best (active, cheapest) deal -> ad bulk
     const deals = [...dh_compare].map(k => { const arr = dh_deals.filter(d => dh_carKey(d) === k); return arr.slice().sort((a, b) => (dh_isExpired(a) - dh_isExpired(b)) || ((dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)))[0]; }).filter(Boolean);
