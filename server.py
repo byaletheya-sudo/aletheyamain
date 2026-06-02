@@ -10,6 +10,9 @@ import secrets
 import urllib.request
 import urllib.parse
 import urllib.error
+import socket
+import ipaddress
+from html import unescape as _html_unescape
 
 app = Flask(__name__)
 
@@ -36,7 +39,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -1363,6 +1366,68 @@ def upload_image():
         return jsonify({"success": True, "filename": filename})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---- Verify live site: fetch the public deals page so we can reconcile it ----
+def _host_is_public(host):
+    """True only if every address the host resolves to is a public IP — blocks
+    SSRF to localhost / private networks / link-local / cloud metadata."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except Exception:
+            return False
+        if (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+            return False
+    return bool(infos)
+
+
+def _html_to_text(h):
+    """Crude HTML -> readable text: drop scripts/styles, turn block tags into
+    line breaks, strip the rest, decode entities, collapse whitespace."""
+    h = re.sub(r'(?is)<(script|style|noscript|head|svg)[^>]*>.*?</\1>', ' ', h)
+    h = re.sub(r'(?i)<br\s*/?>', '\n', h)
+    h = re.sub(r'(?i)</(p|div|li|tr|h[1-6]|section|article)>', '\n', h)
+    h = re.sub(r'(?s)<[^>]+>', ' ', h)
+    h = _html_unescape(h)
+    h = re.sub(r'[ \t ]+', ' ', h)
+    h = re.sub(r'\n[ \t]*\n+', '\n', h)
+    return h.strip()
+
+
+@app.route("/verify-fetch", methods=["POST"])
+def verify_fetch():
+    """Fetch the client-facing deals page (server-side, so no CORS) and return its
+    readable text for the Deal Hub to reconcile against. SSRF-guarded."""
+    url = (request.json or {}).get("url", "").strip()
+    if not url:
+        return jsonify({"error": "Enter the live site URL first."}), 400
+    if not re.match(r'^https?://', url, re.I):
+        url = "https://" + url
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return jsonify({"error": "That doesn't look like a valid web address."}), 400
+    if not _host_is_public(parsed.hostname):
+        return jsonify({"error": "That address can't be fetched (private or unreachable host)."}), 400
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (NovaVerify)"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            ctype = (r.headers.get_content_type() or "").lower()
+            raw = r.read(3_000_000)            # cap at ~3 MB
+    except urllib.error.HTTPError as e:
+        return jsonify({"error": f"The site returned HTTP {e.code}."}), 502
+    except Exception as e:
+        return jsonify({"error": f"Couldn't reach the site: {e}"}), 502
+    body = raw.decode("utf-8", "ignore")
+    text = _html_to_text(body) if ("html" in ctype or "<" in body[:300]) else body
+    if not text.strip():
+        return jsonify({"found": False, "message": "The page loaded but had no readable text (it may be image-only or JS-rendered — use Paste instead)."})
+    return jsonify({"found": True, "text": text[:60000], "url": url})
 
 
 if __name__ == "__main__":

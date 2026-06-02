@@ -315,6 +315,21 @@
   .dh-make-head:hover .dh-make-caret, .dh-model-head:hover .dh-model-caret { color: #aab2c0; }
   @media (prefers-reduced-motion: reduce) { .dh-car.open > .dh-car-deals, .dh-model:not(.collapsed) > .dh-model-body, .dh-modal, .dh-modal-card, .dh-agent-fab { animation: none !important; } }
   .dh-modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
+  /* verify-live-site report */
+  .dh-verify-result { overflow-y: auto; padding: 0 18px; }
+  .dh-verify-result:not(:empty) { padding: 4px 18px 10px; }
+  .dh-vsum { display: flex; gap: 14px; align-items: center; font-size: .82rem; font-weight: 700; padding: 8px 0 12px; flex-wrap: wrap; }
+  .dh-vsum .ok { color: #46d488; }
+  .dh-vsum .err { color: #ff8a8a; }
+  .dh-vlist { display: flex; flex-direction: column; gap: 6px; }
+  .dh-vrow { font-size: .82rem; color: #c2c7cf; padding: 8px 11px; border-radius: 9px; border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); line-height: 1.4; }
+  .dh-vrow b { color: #fff; font-weight: 700; }
+  .dh-vrow.ok { color: #9fdfb6; }
+  .dh-vrow.err { color: #ffc0c0; border-color: rgba(255,90,90,.34); background: rgba(255,90,90,.08); }
+  .dh-vrow.warn { color: #ffd9a8; border-color: rgba(255,170,70,.3); background: rgba(255,170,70,.07); }
+  .dh-vrow.orphan { color: #c9c2a0; border-color: rgba(200,180,90,.26); background: rgba(200,180,90,.05); }
+  .dh-vrow.miss { color: #a8c8ef; border-color: rgba(74,158,255,.3); background: rgba(74,158,255,.07); }
+  .dh-vdelta { opacity: .8; font-weight: 600; }
   .dh-exp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; padding: 8px 18px 12px; max-height: 320px; overflow-y: auto; }
   .dh-exp-col { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #d2d6dc; cursor: pointer; }
   .dh-exp-col input { flex: 0 0 auto; }
@@ -1254,6 +1269,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             </div>
             <div class="controls" style="margin:0;">
               <span id="dh_count" style="opacity:.5;font-size:.78rem;"></span>
+              <button class="btn-ghost" onclick="dh_verifyOpen()" title="Check the live site against these deals">🔍 Verify site</button>
               <button class="btn-ghost" onclick="dh_export()">Export CSV</button>
               <button class="btn-ghost" onclick="dh_clear()">Clear all</button>
             </div>
@@ -1459,6 +1475,31 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     <div class="dh-modal-foot">
       <button class="btn-ghost" onclick="dh_exportCancel()">Cancel</button>
       <button class="btn-start" onclick="dh_exportRun()">Download CSV</button>
+    </div>
+  </div>
+</div>
+<!-- verify the live site against the hub's deals -->
+<div class="dh-modal" id="dhVerifyModal">
+  <div class="dh-modal-card" style="max-width:640px;">
+    <div class="dh-modal-head">🔍 Verify Live Site <span>checks what's published against your current deals</span></div>
+    <div style="padding:16px 18px 4px;">
+      <label style="font-size:.74rem;color:#8a909b;display:block;margin-bottom:6px;">Live deals page URL</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="dhVerifyUrl" placeholder="novaautopros.com/specials" style="flex:1;min-width:220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();dh_verifyRun();}">
+        <button class="btn-start" id="dhVerifyBtn" onclick="dh_verifyRun()">Verify now</button>
+      </div>
+      <div style="margin-top:8px;font-size:.74rem;">
+        <button type="button" class="dh-link" onclick="$('dhVerifyPasteWrap').style.display = $('dhVerifyPasteWrap').style.display==='none'?'':'none'">Can't fetch it? Paste the page instead ▾</button>
+      </div>
+      <div id="dhVerifyPasteWrap" style="display:none;margin-top:8px;">
+        <textarea id="dhVerifyPaste" style="min-height:110px;width:100%;" placeholder="Paste everything from the live deals page here — the AI will read each deal and reconcile it."></textarea>
+        <div class="controls" style="margin-top:8px;"><button class="btn-ghost" onclick="dh_verifyPasteRun()">Reconcile pasted text</button></div>
+      </div>
+      <div class="status" id="dhVerifyStatus" style="margin-top:10px;"></div>
+    </div>
+    <div class="dh-verify-result" id="dhVerifyResult"></div>
+    <div class="dh-modal-foot">
+      <button class="btn-ghost" onclick="dh_verifyCancel()">Close</button>
     </div>
   </div>
 </div>
@@ -3246,6 +3287,109 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     await dh_savePublished();
     dh_cmpClear(); dh_refresh();
     dh_status(n + ' deal' + (n !== 1 ? 's' : '') + ' marked pushed to the site ✓', 'done');
+  }
+  // ===================== VERIFY LIVE SITE =====================
+  // Read the live deals page (fetch or paste) and reconcile every deal on it
+  // against the hub's current best deal per car, flagging anything wrong.
+  function dh_vStatus(t, type = '') { const e = $('dhVerifyStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function dh_verifyOpen() {
+    $('dhVerifyUrl').value = localStorage.getItem('dh_verify_url') || '';
+    $('dhVerifyResult').innerHTML = '';
+    $('dhVerifyPaste').value = '';
+    $('dhVerifyPasteWrap').style.display = 'none';
+    dh_vStatus('');
+    $('dhVerifyModal').style.display = 'flex';
+    setTimeout(() => $('dhVerifyUrl').focus(), 50);
+  }
+  function dh_verifyCancel() { $('dhVerifyModal').style.display = 'none'; }
+  async function dh_verifyRun() {
+    const url = $('dhVerifyUrl').value.trim();
+    if (!url) { dh_vStatus('Enter your live site URL — or use Paste below.', 'error'); $('dhVerifyPasteWrap').style.display = ''; return; }
+    localStorage.setItem('dh_verify_url', url);
+    const btn = $('dhVerifyBtn'); btn.disabled = true; dh_vStatus('Fetching the live site…', 'active');
+    try {
+      const r = await fetch('/verify-fetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      const d = await r.json();
+      if (d.error || d.found === false) {
+        dh_vStatus('✕ ' + (d.error || d.message || 'Could not read the site.') + ' Paste the page below instead.', 'error');
+        $('dhVerifyPasteWrap').style.display = ''; return;
+      }
+      dh_vStatus('Reading the deals…', 'active');
+      await dh_verifyText(d.text);
+    } catch (e) { dh_vStatus('✕ ' + e.message, 'error'); $('dhVerifyPasteWrap').style.display = ''; }
+    finally { btn.disabled = false; }
+  }
+  async function dh_verifyPasteRun() {
+    const text = $('dhVerifyPaste').value.trim();
+    if (!text) { dh_vStatus('Paste the live page text first.', 'error'); return; }
+    dh_vStatus('Reading the deals…', 'active');
+    await dh_verifyText(text);
+  }
+  async function dh_verifyText(text) {
+    try {
+      const r = await fetch('/bulk-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const d = await r.json();
+      if (d.error) { dh_vStatus('✕ ' + d.error, 'error'); return; }
+      const rows = (d.rows || []).filter(x => x.make && x.model);
+      if (!rows.length) { dh_vStatus('No deals could be read off that page.', 'error'); $('dhVerifyResult').innerHTML = ''; return; }
+      const items = dh_verifyReconcile(rows);
+      dh_verifyRender(items);
+      const probs = items.filter(i => i.state !== 'match').length;
+      dh_vStatus(probs ? (probs + ' issue' + (probs > 1 ? 's' : '') + ' to fix') : ('All ' + items.length + ' deals match ✓'), probs ? 'error' : 'done');
+    } catch (e) { dh_vStatus('✕ ' + e.message, 'error'); }
+  }
+  function dh_matchHubCar(row, hubCars) {
+    let mk = dh_norm(row.make); mk = DH_MAKE_ALIAS[mk] || mk;
+    const md = dh_norm(row.model), yr = (row.year || '').toString().trim();
+    let cands = hubCars.filter(c => c.mk === mk && (c.md === md || c.md.includes(md) || md.includes(c.md)));
+    if (yr) { const y = cands.filter(c => c.year === yr); if (y.length) cands = y; }
+    if (!cands.length) return null;
+    const sm = dh_num(row.monthly);
+    if (sm != null) cands = cands.slice().sort((a, b) => Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm));
+    return cands[0];
+  }
+  function dh_verifyReconcile(rows) {
+    const bests = dh_bestByCar();
+    const hubCars = Object.entries(bests).map(([key, v]) => {
+      let mk = dh_norm(v.best.make); mk = DH_MAKE_ALIAS[mk] || mk;
+      return { key, best: v.best, anyActive: v.anyActive, mk, md: dh_norm(v.best.model), year: (v.best.year || '').toString().trim(), label: dh_carLabel(v.best), bestMonthly: dh_num(v.best.orig_mo || v.best.tax_in_mo) };
+    });
+    const matched = new Set(), items = [];
+    rows.forEach(row => {
+      const siteMo = dh_num(row.monthly);
+      const siteLabel = [row.year, row.make, row.model, row.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || '(unnamed)';
+      const c = dh_matchHubCar(row, hubCars);
+      if (!c) { items.push({ state: 'orphan', siteLabel }); return; }
+      matched.add(c.key);
+      if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, hub: c }); return; }
+      const hubMo = c.bestMonthly;
+      if (siteMo == null || hubMo == null) { items.push({ state: 'match', siteLabel, hub: c }); return; }
+      const diff = siteMo - hubMo;
+      if (Math.abs(diff) <= 1) items.push({ state: 'match', siteLabel, hub: c });
+      else items.push({ state: diff > 0 ? 'stale' : 'mismatch', siteLabel, hub: c, siteMo, hubMo, diff });
+    });
+    hubCars.forEach(c => { if (c.anyActive && !dh_isExpired(c.best) && !matched.has(c.key)) items.push({ state: 'missing', hub: c }); });
+    return items;
+  }
+  function dh_verifyRender(items) {
+    const el = $('dhVerifyResult'); if (!el) return;
+    const ok = items.filter(i => i.state === 'match').length;
+    const probs = items.filter(i => i.state !== 'match').length;
+    const onSite = items.filter(i => i.state !== 'missing').length;
+    const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, missing: 4, match: 5 };
+    const sorted = items.slice().sort((a, b) => order[a.state] - order[b.state]);
+    const M = v => dh_money(v);
+    const rowHTML = it => {
+      if (it.state === 'match') return `<div class="dh-vrow ok">✅ <b>${it.siteLabel}</b> — matches (${M(it.hub.bestMonthly)}/mo)</div>`;
+      if (it.state === 'stale') return `<div class="dh-vrow err">🔴 <b>${it.siteLabel}</b> — out of date: site ${M(it.siteMo)}/mo, best now ${M(it.hubMo)}/mo <span class="dh-vdelta">(${M(Math.abs(it.diff))} cheaper available)</span></div>`;
+      if (it.state === 'mismatch') return `<div class="dh-vrow err">🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo</div>`;
+      if (it.state === 'expired') return `<div class="dh-vrow warn">⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub</div>`;
+      if (it.state === 'orphan') return `<div class="dh-vrow orphan">❓ <b>${it.siteLabel}</b> — on the site but not in the hub (stale or unknown)</div>`;
+      if (it.state === 'missing') return `<div class="dh-vrow miss">🆕 <b>${it.hub.label}</b> — current best (${M(it.hub.bestMonthly)}/mo), not found on the site</div>`;
+      return '';
+    };
+    const summary = `<div class="dh-vsum"><span class="${probs ? 'err' : 'ok'}">${probs ? probs + ' to fix' : 'All good'}</span><span class="ok">${ok} OK</span><span style="opacity:.55;font-weight:600;">${onSite} on site</span></div>`;
+    el.innerHTML = summary + '<div class="dh-vlist">' + sorted.map(rowHTML).join('') + '</div>';
   }
   function dh_ago(iso) { const t = new Date(iso); if (isNaN(t)) return ''; const m = Math.floor((Date.now() - t.getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago'; }
   function dh_renderUpdates() {
