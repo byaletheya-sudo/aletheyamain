@@ -233,9 +233,12 @@
   .dh-upd-alert { background: linear-gradient(180deg, rgba(255,120,80,0.09), rgba(255,120,80,0.02)); border: 1px solid rgba(255,140,90,0.30); }
   .dh-upd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-weight: 600; font-size: 0.86rem; color: #ffceb0; margin-bottom: 10px; }
   .dh-upd-list { display: flex; flex-direction: column; gap: 6px; }
-  .dh-upd-row { font-size: 0.8rem; color: #c2c7cf; }
+  .dh-upd-row { font-size: 0.8rem; color: #c2c7cf; display: flex; align-items: center; gap: 10px; }
+  .dh-upd-row .dh-upd-txt { flex: 1; min-width: 0; }
   .dh-upd-row.beat { color: #ffcaa0; }
   .dh-upd-row b { color: #fff; font-weight: 700; }
+  .dh-upd-push { flex: 0 0 auto; font-size: 0.72rem; font-weight: 600; color: #cfe8ff; background: rgba(74,158,255,.14); border: 1px solid rgba(74,158,255,.34); border-radius: 7px; padding: 4px 9px; cursor: pointer; white-space: nowrap; }
+  .dh-upd-push:hover { background: rgba(74,158,255,.26); color: #fff; }
   .dh-badge-special { font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; background: rgba(170,130,255,0.18); color: #c4a9ff; margin-left: 4px; }
   .dh-toggle-btn { padding: 7px 12px; font-size: 0.78rem; border-radius: 9px; cursor: pointer; color: #9aa1ac; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09); }
   .dh-toggle-btn.active { color: #eef2f8; background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.4); }
@@ -1486,6 +1489,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   <div>
     <button class="btn-ghost" onclick="dh_cmpClear()">Clear</button>
     <button class="btn-ghost" onclick="dh_export('sel')">⬇ CSV</button>
+    <button class="btn-ghost" onclick="dh_publishSelected()" title="Mark just these as pushed to your live site">🚀 Mark pushed</button>
     <button class="btn-ghost" onclick="dh_sendCarsToAd()">🎨 Make Ads</button>
     <button class="btn-start" onclick="dh_openCompare()">Compare →</button>
   </div>
@@ -3218,11 +3222,37 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     await dh_savePublished(); dh_refresh();
     dh_status('Live snapshot saved — ' + Object.keys(snap).length + ' cars marked current ✓', 'done');
   }
+  // record one car's current best into the live snapshot (without touching the rest)
+  function dh_snapEntry(d) { return { eff: dh_zeroOf(d), mo: dh_num(d.orig_mo || d.tax_in_mo), dealer: d.dealer || '', label: dh_carLabel(d) }; }
+  let dh_lastUpdates = [];                              // the items shown in the updates banner (for per-row buttons)
+  // mark a SINGLE car from the updates banner as pushed/live
+  async function dh_publishOne(i) {
+    const it = dh_lastUpdates[i]; if (!it) return;
+    const v = dh_bestByCar()[it.key]; if (!v) return;
+    const snap = { ...(dh_published.snapshot || {}) };
+    if (dh_isExpired(v.best)) delete snap[it.key];     // expired → you've pulled it from the site
+    else snap[it.key] = dh_snapEntry(v.best);
+    dh_published = { snapshot: snap, at: dh_published.at || new Date().toISOString() };
+    await dh_savePublished(); dh_refresh();
+    dh_status('“' + it.label + '” marked pushed ✓', 'done');
+  }
+  // mark just the SELECTED cars as pushed/live (merges into the existing snapshot)
+  async function dh_publishSelected() {
+    const bests = dh_selectedBests(); if (!bests.length) return;
+    const snap = { ...(dh_published.snapshot || {}) };
+    let n = 0;
+    bests.forEach(d => { if (dh_isExpired(d)) return; snap[dh_carKey(d)] = dh_snapEntry(d); n++; });
+    if (!n) { dh_status('Those deals are expired — nothing to mark live.', 'error'); return; }
+    dh_published = { snapshot: snap, at: dh_published.at || new Date().toISOString() };
+    await dh_savePublished();
+    dh_cmpClear(); dh_refresh();
+    dh_status(n + ' deal' + (n !== 1 ? 's' : '') + ' marked pushed to the site ✓', 'done');
+  }
   function dh_ago(iso) { const t = new Date(iso); if (isNaN(t)) return ''; const m = Math.floor((Date.now() - t.getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago'; }
   function dh_renderUpdates() {
     const el = $('dh_updates'); if (!el) return;
     if (!dh_published.at) {
-      el.innerHTML = dh_deals.length ? `<div class="dh-upd dh-upd-set"><span>Pushing these to your live site? <b>Mark them as live</b> and I'll alert you whenever a better deal beats one.</span><button class="btn-ghost" onclick="dh_publishLive()">🚀 Mark all as live</button></div>` : '';
+      el.innerHTML = dh_deals.length ? `<div class="dh-upd dh-upd-set"><span>Pushing these to your live site? <b>Mark them as live</b> and I'll alert you whenever a better deal beats one. <span style="opacity:.7;">Tap cars to select and mark just those, or mark all.</span></span><button class="btn-ghost" onclick="dh_publishLive()">🚀 Mark all as live</button></div>` : '';
       return;
     }
     const bests = dh_bestByCar(), items = [];
@@ -3231,12 +3261,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     items.sort((a, b) => (order[a.st.state] - order[b.st.state]) || ((b.st.delta || 0) - (a.st.delta || 0)));
     const ago = dh_ago(dh_published.at);
     if (!items.length) { el.innerHTML = `<div class="dh-upd dh-upd-ok"><span>✓ Live site is current — nothing has changed since you pushed ${ago}.</span><button class="btn-ghost" onclick="dh_publishLive()">Re-mark live</button></div>`; return; }
-    const rows = items.slice(0, 8).map(it => {
+    dh_lastUpdates = items;                             // per-row "Pushed" buttons index into this
+    const pushBtn = (i, exp) => `<button class="dh-upd-push" onclick="dh_publishOne(${i})">${exp ? 'Pulled ✓' : '✓ Pushed'}</button>`;
+    const rows = items.slice(0, 8).map((it, i) => {
       const s = it.st;
-      if (s.state === 'beat') return `<div class="dh-upd-row beat">🔥 <b>${it.label}</b> beaten — now ${dh_money(dh_zeroOf(it.best))} eff (was ${dh_money(s.snap.eff)}) · <b>${dh_money(s.delta)} better</b> · ${it.best.dealer || '—'}</div>`;
-      if (s.state === 'expired') return `<div class="dh-upd-row exp">⏰ <b>${it.label}</b> — your live deal expired, pull or update it</div>`;
-      if (s.state === 'changed') return `<div class="dh-upd-row chg">⚠ <b>${it.label}</b> changed — best is now ${dh_money(dh_zeroOf(it.best))} eff (live shows ${dh_money(s.snap.eff)})</div>`;
-      return `<div class="dh-upd-row new">🆕 <b>${it.label}</b> — new, not on the site yet (${dh_money(dh_zeroOf(it.best))} eff)</div>`;
+      if (s.state === 'beat') return `<div class="dh-upd-row beat"><span class="dh-upd-txt">🔥 <b>${it.label}</b> beaten — now ${dh_money(dh_zeroOf(it.best))} eff (was ${dh_money(s.snap.eff)}) · <b>${dh_money(s.delta)} better</b> · ${it.best.dealer || '—'}</span>${pushBtn(i)}</div>`;
+      if (s.state === 'expired') return `<div class="dh-upd-row exp"><span class="dh-upd-txt">⏰ <b>${it.label}</b> — your live deal expired, pull or update it</span>${pushBtn(i, true)}</div>`;
+      if (s.state === 'changed') return `<div class="dh-upd-row chg"><span class="dh-upd-txt">⚠ <b>${it.label}</b> changed — best is now ${dh_money(dh_zeroOf(it.best))} eff (live shows ${dh_money(s.snap.eff)})</span>${pushBtn(i)}</div>`;
+      return `<div class="dh-upd-row new"><span class="dh-upd-txt">🆕 <b>${it.label}</b> — new, not on the site yet (${dh_money(dh_zeroOf(it.best))} eff)</span>${pushBtn(i)}</div>`;
     }).join('');
     el.innerHTML = `<div class="dh-upd dh-upd-alert">
       <div class="dh-upd-head"><span>🔔 ${items.length} update${items.length > 1 ? 's' : ''} since your last push <span style="opacity:.6;font-weight:400;">· ${ago}</span></span><button class="btn-start" onclick="dh_publishLive()">Mark all pushed ✓</button></div>
