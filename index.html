@@ -131,9 +131,9 @@
   .bulk-dot.error { background: #ff6b6b; }
   .bulk-photos { padding: 8px 11px; background: rgba(255,255,255,0.06); color: #e6e7ea; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; font-size: 0.95rem; cursor: pointer; }
   .bulk-photos:hover { background: rgba(120,150,200,0.18); }
-  .bulk-photostrip { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px; margin: -4px 0 10px; }
-  .bulk-ph { position: relative; width: 90px; height: 62px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; flex: 0 0 auto; transition: border-color .15s, transform .1s; }
-  .bulk-ph:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.2); }
+  .bulk-photostrip { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px; margin: -4px 0 10px; overflow: visible; }
+  .bulk-ph { position: relative; width: 90px; height: 62px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; flex: 0 0 auto; transition: border-color .15s, transform .14s cubic-bezier(.34,1.4,.64,1), box-shadow .14s; }
+  .bulk-ph:hover { transform: scale(2.4); z-index: 40; border-color: #4a9eff; box-shadow: 0 14px 38px rgba(0,0,0,0.65); }
   .bulk-ph img { width: 100%; height: 100%; object-fit: cover; }
   .bulk-ph .chk { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background: #4a9eff; color: #fff; font-size: 11px; display: none; align-items: center; justify-content: center; }
   .bulk-ph.active { border-color: #4a9eff; }
@@ -2804,7 +2804,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const row = t_bulkRows[i], o = (row.photoOptions || [])[j]; if (!o) return;
     row.photoUrl = o.url; row.photoData = null;
     t_renderBulkPhotos(i);
-    try { const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) }); const d = await r.json(); if (!d.error) row.photoData = d.image_data; } catch (e) { }
+    t_applyBulkRow(row);                                 // drop this vehicle onto the ad template
+    setTB('Loading that photo onto the ad…', 'active');
+    try {
+      const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) });
+      const d = await r.json();
+      if (d.error) { setTB('✕ ' + d.error, 'error'); return; }
+      row.photoData = d.image_data;
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
+      setTB('Photo loaded onto the ad ✓', 'done');
+    } catch (e) { setTB('✕ ' + e.message, 'error'); }
   }
   async function t_bulkLoadAllPhotos() {
     const btn = $('t_loadPhotosBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Loading…';
