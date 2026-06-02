@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>byAletheya</title>
+<style>
+  :root{
+    --bg:#05080d; --panel:#0e1218; --line:#1d222e; --line2:#262c3a;
+    --text:#eef2f8; --muted:#7a8696; --accent:#4a9eff; --accent2:#327fe0;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    background-image:
+      radial-gradient(60% 45% at 50% 0%, rgba(52,118,222,.22), rgba(8,16,30,0) 70%),
+      radial-gradient(50% 40% at 85% 100%, rgba(74,158,255,.10), rgba(8,16,30,0) 70%);
+    -webkit-font-smoothing:antialiased;
+  }
+  /* top bar */
+  .top{ width:100%; max-width:1080px; display:flex; align-items:center; justify-content:space-between;
+    padding:26px 28px; }
+  .wordmark{ font-size:1.18rem; font-weight:800; letter-spacing:-.4px; }
+  .wordmark span{ color:var(--accent); }
+  .top .login{ color:var(--muted); text-decoration:none; font-size:.84rem; font-weight:600;
+    border:1px solid var(--line2); padding:8px 16px; border-radius:9px; transition:.15s; }
+  .top .login:hover{ color:var(--text); border-color:var(--accent); }
+
+  /* hero */
+  .hero{ width:100%; max-width:1080px; padding:60px 28px 30px; text-align:center; }
+  .eyebrow{ color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.22em;
+    text-transform:uppercase; margin-bottom:18px; }
+  .hero h1{ font-size:clamp(2.1rem,6vw,3.6rem); font-weight:800; letter-spacing:-1.5px; line-height:1.04; }
+  .hero h1 .g{ background:linear-gradient(90deg,#fff,#9cc4ff); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero p{ color:var(--muted); font-size:1.02rem; max-width:520px; margin:20px auto 0; line-height:1.6; }
+
+  /* workspaces */
+  .ws-label{ width:100%; max-width:1080px; padding:38px 28px 14px; color:var(--muted);
+    font-size:.7rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; }
+  .grid{ width:100%; max-width:1080px; padding:0 28px 60px; display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+
+  .card{ position:relative; display:block; text-decoration:none; color:inherit;
+    background:linear-gradient(180deg,#11151c,#0c0f15); border:1px solid var(--line);
+    border-radius:18px; padding:26px 24px; overflow:hidden; transition:.2s; }
+  .card:hover{ transform:translateY(-3px); border-color:var(--accent); box-shadow:0 24px 60px rgba(0,0,0,.45); }
+  .card.live::after{ content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(120% 80% at 0% 0%, rgba(74,158,255,.10), transparent 60%); }
+  .card .ico{ width:48px; height:48px; border-radius:13px; display:flex; align-items:center; justify-content:center;
+    background:rgba(74,158,255,.12); border:1px solid rgba(74,158,255,.3); margin-bottom:18px; }
+  .card .ico svg{ width:24px; height:24px; }
+  .card h3{ font-size:1.22rem; font-weight:750; letter-spacing:-.4px; display:flex; align-items:center; gap:9px; }
+  .pill{ font-size:.6rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    padding:3px 8px; border-radius:99px; }
+  .pill.on{ background:rgba(46,204,113,.14); color:#46d488; border:1px solid rgba(46,204,113,.3); }
+  .pill.soon{ background:rgba(122,134,150,.12); color:var(--muted); border:1px solid var(--line2); }
+  .card p{ color:var(--muted); font-size:.9rem; line-height:1.55; margin-top:10px; }
+  .card .go{ margin-top:20px; display:inline-flex; align-items:center; gap:7px; color:var(--accent);
+    font-size:.86rem; font-weight:700; }
+  .card .go svg{ width:15px; height:15px; transition:transform .2s; }
+  .card:hover .go svg{ transform:translateX(4px); }
+  .card.soon{ cursor:default; opacity:.62; }
+  .card.soon:hover{ transform:none; border-color:var(--line); box-shadow:none; }
+  .card.soon .go{ color:var(--muted); }
+
+  footer{ margin-top:auto; width:100%; max-width:1080px; padding:24px 28px 34px;
+    border-top:1px solid var(--line); color:#566072; font-size:.74rem;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  footer b{ color:#8a94a3; font-weight:700; }
+  @media(max-width:560px){ .top,.hero{ padding-left:20px; padding-right:20px; } .grid,.ws-label{ padding-left:20px; padding-right:20px; } }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wordmark">by<span>Aletheya</span></div>
+    <a class="login" href="/login">Sign in</a>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">Aletheya · Applied AI Studio</div>
+    <h1><span class="g">Tools that do the work,</span><br>not just talk about it.</h1>
+    <p>Custom, in-house software built for the way your team actually operates. Pick a workspace to get started.</p>
+  </div>
+
+  <div class="ws-label">Workspaces</div>
+  <div class="grid">
+
+    <!-- Novauto -->
+    <a class="card live" href="/novauto">
+      <div class="ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 13l1.5-4.5A2 2 0 0 1 8.4 7h7.2a2 2 0 0 1 1.9 1.5L19 13"/>
+          <path d="M4 13h16v4a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4z"/>
+          <circle cx="7.5" cy="15.5" r="1"/><circle cx="16.5" cy="15.5" r="1"/>
+        </svg>
+      </div>
+      <h3>Novauto <span class="pill on">Live</span></h3>
+      <p>The Nova Auto Pros marketing suite — lease &amp; sold ad builder, the Deal Hub, bulk ad generator, and the review post maker.</p>
+      <span class="go">Open Novauto
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </span>
+    </a>
+
+    <!-- Placeholder for future workspaces -->
+    <div class="card soon">
+      <div class="ico" style="background:rgba(122,134,150,.1);border-color:var(--line2)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7a8696" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+      <h3>New workspace <span class="pill soon">Soon</span></h3>
+      <p>More in-house tools are on the way. Got an idea for what should live here? Let's build it.</p>
+      <span class="go">Coming soon</span>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>© <b>Aletheya</b> · byaletheya.com</span>
+    <span><b>Confidential &amp; Proprietary.</b> Authorized use only.</span>
+  </footer>
+</body>
+</html>

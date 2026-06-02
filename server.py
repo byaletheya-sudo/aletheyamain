@@ -49,8 +49,10 @@ def _client_ip():
     return (xff.split(",")[0].strip() if xff else (request.remote_addr or "?"))
 
 
-def login_page(message=""):
+def login_page(message="", next_path="/novauto"):
     msg = f'<p class="err">{message}</p>' if message else ""
+    safe_next = next_path if next_path.startswith("/") else "/novauto"
+    nxt = f'<input type="hidden" name="next" value="{safe_next}">'
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nova.byAletheya</title>
 <style>
@@ -75,6 +77,7 @@ def login_page(message=""):
     <div class="brand"><span>nova</span>.byAletheya</div>
     <div class="sub">nova.byaletheya.com</div>
     {msg}
+    {nxt}
     <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
     <button type="submit">Enter</button>
     <p class="legal"><b>Confidential &amp; Proprietary.</b> This application and all concepts, designs, workflows, data, and content within are the exclusive property of <b>Nova Auto Pros</b> and are intended solely for authorized internal use by its personnel. Unauthorized access, use, copying, reproduction, distribution, or disclosure of any ideas or materials herein is strictly prohibited and may result in legal action.</p>
@@ -96,16 +99,20 @@ def login():
             session.clear()                          # new session id on login (anti-fixation)
             session["ok"] = True
             _LOGIN_FAILS.pop(ip, None)
-            return redirect("/")
+            nxt = request.args.get("next") or request.form.get("next") or "/novauto"
+            if not nxt.startswith("/"):              # only allow local redirects
+                nxt = "/novauto"
+            return redirect(nxt)
         _LOGIN_FAILS[ip] = (cnt + 1, t0)
-        return login_page("Incorrect password — try again."), 401
-    return login_page()
+        return login_page("Incorrect password — try again.",
+                          request.form.get("next", "/novauto")), 401
+    return login_page(next_path=request.args.get("next", "/novauto"))
 
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
+    return redirect("/")
 
 
 @app.route("/unlock", methods=["GET", "POST"])
@@ -119,12 +126,19 @@ def unlock():
     return jsonify({"unlocked": bool(session.get("restricted_ok"))})
 
 
+# Paths anyone can reach without logging in: the public byAletheya home page,
+# the login screen, and the brand asset the home page shows.
+PUBLIC_PATHS = ("/", "/login", "/logo.png")
+
 @app.before_request
 def require_login():
-    if request.path == "/login":
+    if request.path in PUBLIC_PATHS:
         return None
     if session.get("ok"):
         return None
+    # remember where they were headed so login can send them straight back
+    if request.method == "GET":
+        return redirect("/login?next=" + request.path)
     return redirect("/login")
 
 
@@ -308,10 +322,18 @@ def car_slug(vehicle, bodystyle, color):
     return re.sub(r'[^\w\s-]', '', key).strip().replace(' ', '_')[:90]
 
 
+# The public byAletheya home page — the front door at byaletheya.com. Anyone can
+# see it; the "Open Novauto" button links to /novauto, which is behind the login.
+@app.route("/")
+def home():
+    return send_file(os.path.join(BASE_DIR, "home.html"))
+
+
 # Each tool has its own clean URL. They all serve the same single-page app; the
 # client reads the path on load to open the right view (and pushState keeps the
 # URL in sync as you switch tools). Deep-linkable and bookmarkable.
-@app.route("/")
+# /novauto is the entry point reached from the home page.
+@app.route("/novauto")
 @app.route("/lease")
 @app.route("/sold")
 @app.route("/leasead-test")
