@@ -3346,22 +3346,51 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       dh_vStatus(probs ? (probs + ' issue' + (probs > 1 ? 's' : '') + ' to fix') : ('All ' + items.length + ' deals match ✓'), probs ? 'error' : 'done');
     } catch (e) { dh_vStatus('✕ ' + e.message, 'error'); }
   }
+  // --- tolerant vehicle matching (site naming vs hub naming) ---
+  // "tight" key: just the alphanumerics, lowercased — so "CX-90", "CX 90" and
+  // "CX90" all collapse to "cx90", while "CX5" ("cx5") stays distinct from
+  // "CX50" ("cx50"). Spacing/punctuation differences vanish; real digits don't.
+  const dh_tightKey = s => (s || '').toString().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const dh_tokens = s => (s || '').toString().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  function dh_makeKey(make) { let m = dh_norm(make); m = DH_MAKE_ALIAS[m] || m; return m.replace(/\s+/g, ''); }
+  // Do two model strings refer to the same model? Equal tight keys (handles the
+  // spacing case), OR one's words are a subset of the other's (handles the site
+  // carrying extra words like "Mazda3 Sedan" vs a dealer's bare "Mazda3"). Word-
+  // level subset — not substring — so "CX5" never matches into "CX50".
+  function dh_modelMatch(a, b) {
+    const ta = dh_tightKey(a), tb = dh_tightKey(b);
+    if (!ta || !tb) return false;
+    if (ta === tb) return true;                             // "CX 90" === "CX90"
+    const A = dh_tokens(a), B = dh_tokens(b), As = new Set(A), Bs = new Set(B);
+    if (B.length && B.every(t => As.has(t))) return true;   // hub ⊆ site ("Mazda3" ⊆ "Mazda3 Sedan")
+    if (A.length && A.every(t => Bs.has(t))) return true;   // site ⊆ hub
+    // one tight key is a prefix of the other, but only at a non-digit boundary —
+    // so "mazda3"→"mazda3sedan" matches yet "cx5"→"cx50" never does.
+    const pref = (long, short) => long.length > short.length && long.startsWith(short) && !/[0-9]/.test(long[short.length]);
+    return pref(ta, tb) || pref(tb, ta);
+  }
   function dh_matchHubCar(row, hubCars) {
-    let mk = dh_norm(row.make); mk = DH_MAKE_ALIAS[mk] || mk;
-    const md = dh_norm(row.model), yr = (row.year || '').toString().trim();
-    let cands = hubCars.filter(c => c.mk === mk && (c.md === md || c.md.includes(md) || md.includes(c.md)));
-    if (yr) { const y = cands.filter(c => c.year === yr); if (y.length) cands = y; }
+    const mkt = dh_makeKey(row.make);
+    let cands = hubCars.filter(c => c.mkt === mkt && dh_modelMatch(row.model, c.model));
     if (!cands.length) return null;
-    const sm = dh_num(row.monthly);
-    if (sm != null) cands = cands.slice().sort((a, b) => Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm));
-    return cands[0];
+    const yr = (row.year || '').toString().trim();
+    const sameYear = yr ? cands.filter(c => c.year === yr) : [];
+    if (sameYear.length) cands = sameYear;                  // prefer the matching year if there is one
+    const siteTrim = dh_tightKey(row.trim), sm = dh_num(row.monthly);
+    const trimOverlaps = c => { const t = dh_tightKey(c.best.trim); return (t && siteTrim && (siteTrim.includes(t) || t.includes(siteTrim))) ? 0 : 1; };
+    return cands.slice().sort((a, b) =>
+      (trimOverlaps(a) - trimOverlaps(b)) ||               // same trim wins the tie (LE vs SE etc.)
+      (sm != null ? (Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm)) : 0)
+    )[0];
   }
   function dh_verifyReconcile(rows) {
     const bests = dh_bestByCar();
-    const hubCars = Object.entries(bests).map(([key, v]) => {
-      let mk = dh_norm(v.best.make); mk = DH_MAKE_ALIAS[mk] || mk;
-      return { key, best: v.best, anyActive: v.anyActive, mk, md: dh_norm(v.best.model), year: (v.best.year || '').toString().trim(), label: dh_carLabel(v.best), bestMonthly: dh_num(v.best.orig_mo || v.best.tax_in_mo) };
-    });
+    const hubCars = Object.entries(bests).map(([key, v]) => ({
+      key, best: v.best, anyActive: v.anyActive,
+      mkt: dh_makeKey(v.best.make), model: v.best.model || '',
+      year: (v.best.year || '').toString().trim(), label: dh_carLabel(v.best),
+      bestMonthly: dh_num(v.best.orig_mo || v.best.tax_in_mo),
+    }));
     const matched = new Set(), items = [];
     rows.forEach(row => {
       const siteMo = dh_num(row.monthly);
