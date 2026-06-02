@@ -700,12 +700,13 @@ def carsxe_image():
     year = str(data.get("year", "")).strip()
     trim = data.get("trim", "").strip()
     color = data.get("color", "").strip().lower()    # the catalog expects a lowercase basic colour
+    nocache = bool(data.get("nocache"))              # "get new batch" -> skip the cache, re-query
     if not (make and model):
         return jsonify({"error": "Pick a make and model first."}), 400
 
     key = "|".join([year, make.lower(), model.lower(), trim.lower(), color])
     cached = _CARSXE_IMG_CACHE.get(key)
-    if cached is not None:
+    if cached is not None and not nocache:
         for o in cached.get("options", []):           # keep proxy allow-list warm
             _CARSXE_ALLOWED.add(o["url"])
         return jsonify({**cached, "cached": True})

@@ -387,6 +387,11 @@
   .t-nav-arrow:hover { background: rgba(74,158,255,0.9); transform: translateY(-50%) scale(1.08); }
   .t-nav-arrow:active { transform: translateY(-50%) scale(0.96); }
   .t-bulk-nav { text-align: center; margin-top: 12px; color: #9aa0aa; font-size: 0.84rem; font-weight: 600; letter-spacing: 0.02em; }
+  .t-nav-mini { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #cdd2da; border-radius: 8px; padding: 4px 11px; font-size: 0.74rem; cursor: pointer; margin-right: 12px; transition: background .14s, color .14s; }
+  .t-nav-mini:hover { background: rgba(120,150,200,0.18); color: #fff; }
+  .t-crop-ctl { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .t-crop-ctl input[type=range] { flex: 1; accent-color: #4a9eff; cursor: pointer; }
+  .bulk-act-row { display: flex; gap: 6px; }
 
   /* ===== Review Generator ===== */
   .rv-stage { width: min(456px, 100%); height: 570px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
@@ -480,7 +485,8 @@
   .ad__price { font-size: 78px; font-weight: 700; margin-top: 34px; line-height: 1.05; }
   .ad__terms { font-size: 44px; font-weight: 400; margin-top: 6px; }
 
-  .ad__car { flex: 1; position: relative; }
+  .ad__car { flex: 1; position: relative; cursor: grab; }
+  .ad__car.grabbing { cursor: grabbing; }
   .ad__car img {
     position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
     width: 1000px; max-height: 760px; object-fit: contain;
@@ -1105,7 +1111,8 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
               </div>
             </div>
             </div><!-- /.t-preview-wrap -->
-            <div id="t_bulkNav" class="t-bulk-nav" style="display:none;"><span id="t_bulkNavLabel">1 of 1</span></div>
+            <div id="t_bulkNav" class="t-bulk-nav" style="display:none;"><button class="t-nav-mini" onclick="t_bulkRefreshPhotos(t_bulkPreviewIdx)" title="Get a new photo for this ad">🔄 New photo</button><span id="t_bulkNavLabel">1 of 1</span></div>
+            <div id="t_cropCtl" class="t-crop-ctl"><span style="font-size:1rem;">🔍</span><input type="range" id="t_zoom" min="1" max="3" step="0.02" value="1" oninput="t_setCropZoom(this.value)" title="Zoom — then drag the photo in the preview to reframe"><button class="btn-ghost" onclick="t_resetCrop()">Reset</button></div>
           </div>
         </div>
       </div>
@@ -2678,6 +2685,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
     if (!(make && model)) { setVdb('Pick a make and type a model.', 'error'); return; }
     if (!t_titleEdited) $('t_title').value = t_vehName();
+    t_resetCrop();                                        // fresh vehicle -> start un-cropped
     t_render();
     $('vdbBtn').disabled = true; $('vdbBtn').classList.add('loading'); $('vdbBtn').textContent = 'Generating…';
     setVdb('Finding the best photo…', 'active');
@@ -2789,7 +2797,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             inp('badge', 'Badge') +
           '</div>' +
         '</div>' +
-        '<div class="bulk-actions"><button class="bulk-photos" onclick="t_bulkLoadPhotos(' + i + ')" title="See & choose the photo">📷</button><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
+        '<div class="bulk-actions"><div class="bulk-act-row"><button class="bulk-photos" onclick="t_bulkLoadPhotos(' + i + ')" title="See & choose the photo">📷</button><button class="bulk-photos" onclick="t_bulkRefreshPhotos(' + i + ')" title="Get a new batch of photos">🔄</button></div><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
       grid.appendChild(card);
       const strip = document.createElement('div'); strip.className = 'bulk-photostrip'; strip.id = 'bphotos-' + i; strip.style.display = 'none';
       grid.appendChild(strip);
@@ -2821,7 +2829,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     row.photoUrl = o.url; row.photoData = null;
     t_renderBulkPhotos(i);
     t_bulkPreviewIdx = i; t_bulkNavSync();               // the row you're choosing for becomes the previewed ad
-    t_applyBulkRow(row);                                 // drop this vehicle onto the ad template
+    t_applyBulkRow(row); t_loadCrop(row);                // drop this vehicle onto the ad template
     setTB('Loading that photo onto the ad…', 'active');
     try {
       const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) });
@@ -2852,7 +2860,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     t_bulkPreviewIdx = ((idx % t_bulkRows.length) + t_bulkRows.length) % t_bulkRows.length;
     t_bulkNavSync();
     const row = t_bulkRows[t_bulkPreviewIdx];
-    t_applyBulkRow(row);
+    t_applyBulkRow(row); t_loadCrop(row);
     if (row.photoData) { $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = row.photoData; try { await waitForImage($('t_adCar')); } catch (e) { } return; }
     if (!(row.make && row.model)) return;
     setTB('Loading ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length + '…', 'active');
@@ -2866,6 +2874,33 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function t_bulkPrev() { t_bulkPreview(t_bulkPreviewIdx - 1); }
   function t_bulkNext() { t_bulkPreview(t_bulkPreviewIdx + 1); }
+  // "get new batch" — cycle through colours (each returns a different photo set), forcing a fresh fetch
+  const T_REFRESH_COLORS = ['white', 'black', 'gray', 'silver', 'blue', 'red', 'gunmetal', ''];
+  async function t_bulkRefreshPhotos(i) {
+    const row = t_bulkRows[i]; if (!row || !(row.make && row.model)) return;
+    row.colorIdx = ((row.colorIdx == null ? -1 : row.colorIdx) + 1) % T_REFRESH_COLORS.length;
+    const color = T_REFRESH_COLORS[row.colorIdx];
+    const strip = $('bphotos-' + i); if (strip) { strip.style.display = ''; strip.innerHTML = '<span class="bulk-ph-msg">Getting new photos…</span>'; }
+    setTB('Getting a new batch of photos…', 'active');
+    try {
+      const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color, nocache: true });
+      if (d && d.options && d.options.length) {
+        row.photoOptions = d.options; row.photoUrl = d.options[0].url; row.photoData = d.image_data || null;
+        t_renderBulkPhotos(i);
+        t_bulkPreviewIdx = i; t_bulkNavSync(); t_applyBulkRow(row);
+        if (row.photoData) { $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = row.photoData; await waitForImage($('t_adCar')); }
+        t_loadCrop(row);
+        setTB('New photos ✓' + (color ? ' (' + color + ')' : ''), 'done');
+      } else { if (strip) strip.innerHTML = '<span class="bulk-ph-msg">No more photos for this vehicle.</span>'; setTB('No more photos found.', 'error'); }
+    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+  }
+  // ---- crop / zoom / reframe the ad photo (per bulk row; single = session) ----
+  let t_zoom = 1, t_px = 0, t_py = 0;
+  function t_applyCrop() { const img = $('t_adCar'); if (img) img.style.transform = `translateX(-50%) translate(${t_px}px, ${t_py}px) scale(${t_zoom})`; }
+  function t_saveCrop() { if (t_mode === 'bulk' && t_bulkRows[t_bulkPreviewIdx]) { const r = t_bulkRows[t_bulkPreviewIdx]; r.zoom = t_zoom; r.px = t_px; r.py = t_py; } }
+  function t_loadCrop(row) { t_zoom = (row && row.zoom) || 1; t_px = (row && row.px) || 0; t_py = (row && row.py) || 0; const z = $('t_zoom'); if (z) z.value = t_zoom; t_applyCrop(); }
+  function t_setCropZoom(v) { t_zoom = parseFloat(v) || 1; t_applyCrop(); t_saveCrop(); }
+  function t_resetCrop() { t_zoom = 1; t_px = 0; t_py = 0; const z = $('t_zoom'); if (z) z.value = 1; t_applyCrop(); t_saveCrop(); }
   function t_bulkEdit(el) {
     const i = +el.dataset.i, k = el.dataset.k;
     t_bulkRows[i][k] = el.value;
@@ -3869,6 +3904,20 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     ph.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
     ph.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
     ph.addEventListener('touchend', end);
+  })();
+  (function tWireCropDrag() {                              // drag the ad photo to reframe it
+    const car = document.querySelector('#view-test .ad__car'); if (!car) return;
+    let dragging = false, lx = 0, ly = 0;
+    const scaleOf = () => { const s = document.querySelector('#view-test .ad-stage'); return s && s.clientWidth ? s.clientWidth / 1080 : 1; };
+    const start = (x, y) => { if (!$('t_adCar').getAttribute('src')) return; dragging = true; lx = x; ly = y; car.classList.add('grabbing'); };
+    const move = (x, y) => { if (!dragging) return; const s = scaleOf(); t_px += (x - lx) / s; t_py += (y - ly) / s; lx = x; ly = y; t_applyCrop(); };
+    const end = () => { if (dragging) { dragging = false; car.classList.remove('grabbing'); t_saveCrop(); } };
+    car.addEventListener('mousedown', e => { e.preventDefault(); start(e.clientX, e.clientY); });
+    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    window.addEventListener('mouseup', end);
+    car.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    car.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+    car.addEventListener('touchend', end);
   })();
   // open the view that matches the URL the page was loaded at (deep-link support).
   // check the restricted-unlock state first so an already-unlocked deep link doesn't prompt.
