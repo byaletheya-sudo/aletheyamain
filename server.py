@@ -80,7 +80,7 @@ def login_page(message="", next_path="/novauto"):
     {nxt}
     <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
     <button type="submit">Enter</button>
-    <p class="legal"><b>Confidential &amp; Proprietary.</b> This application and all concepts, designs, workflows, data, and content within are the exclusive property of <b>Nova Auto Pros</b> and are intended solely for authorized internal use by its personnel. Unauthorized access, use, copying, reproduction, distribution, or disclosure of any ideas or materials herein is strictly prohibited and may result in legal action.</p>
+    <p class="legal"><b>Confidential &amp; Proprietary.</b> This application and all concepts, designs, workflows, data, and content within are the exclusive property of <b>NovAuto</b> and are intended solely for authorized internal use by its personnel. Unauthorized access, use, copying, reproduction, distribution, or disclosure of any ideas or materials herein is strictly prohibited and may result in legal action.</p>
   </form>
 </body></html>"""
 
@@ -581,7 +581,7 @@ def review_caption():
     if not review:
         return jsonify({"error": "Add the review text first."}), 400
     prompt = (
-        "Write a short, warm Instagram caption for a luxury car dealership, Nova Auto Pros, that is "
+        "Write a short, warm Instagram caption for a luxury car dealership, NovAuto, that is "
         "RESHARING a happy customer's review/testimonial.\n"
         f"Reviewer: {name or 'a happy customer'}. Rating: {rating}/5 stars"
         + (f" on their {vehicle}" if vehicle else "")
