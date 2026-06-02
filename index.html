@@ -549,6 +549,29 @@
     h1 { font-size: 1.55rem; }
   }
 
+  /* ================= NOVA HOME / TOOL LAUNCHER ================= */
+  .nv-hero { margin-bottom: 30px; }
+  .nv-hero .eyebrow { color: #4a9eff; font-size: .7rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; margin-bottom: 12px; }
+  .nv-hero h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); font-weight: 800; letter-spacing: -1px; line-height: 1.06; }
+  .nv-hero p { color: #7a8696; font-size: 1rem; max-width: 560px; margin-top: 14px; line-height: 1.6; }
+  .nv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .nv-tile {
+    position: relative; text-align: left; cursor: pointer; overflow: hidden;
+    background: linear-gradient(180deg, #11151c, #0c0f15); border: 1px solid #1d222e;
+    border-radius: 16px; padding: 22px 20px; color: inherit; font: inherit;
+    transition: transform .18s, border-color .18s, box-shadow .18s; display: block; width: 100%;
+  }
+  .nv-tile:hover { transform: translateY(-3px); border-color: #4a9eff; box-shadow: 0 22px 54px rgba(0,0,0,.45); }
+  .nv-tile .ico { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    background: rgba(74,158,255,.12); border: 1px solid rgba(74,158,255,.3); margin-bottom: 15px; color: #4a9eff; }
+  .nv-tile h3 { font-size: 1.12rem; font-weight: 750; letter-spacing: -.3px; color: #eef2f8; display: flex; align-items: center; gap: 8px; }
+  .nv-tile p { color: #7a8696; font-size: .86rem; line-height: 1.5; margin-top: 8px; }
+  .nv-tile .go { margin-top: 16px; display: inline-flex; align-items: center; gap: 6px; color: #4a9eff; font-size: .82rem; font-weight: 700; }
+  .nv-tile .go svg { width: 14px; height: 14px; transition: transform .18s; }
+  .nv-tile:hover .go svg { transform: translateX(4px); }
+  .nv-tag { font-size: .56rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 3px 7px; border-radius: 99px;
+    background: rgba(255,179,71,.14); color: #ffb347; border: 1px solid rgba(255,179,71,.3); }
+
   /* ================= SOLD POST TEMPLATE (1080x1920) ================= */
   .sp-stage { width: min(456px, 100%); height: 811px; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .sp-scaler { transform-origin: top left; }
@@ -627,14 +650,18 @@
     <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()" aria-label="Menu">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
-    <div class="topbar-brand"><span>nova</span>.byAletheya</div>
+    <div class="topbar-brand" onclick="showView('home')" style="cursor:pointer"><span>nova</span>.byAletheya</div>
   </header>
 
   <div class="scrim" id="scrim" onclick="closeSidebar()"></div>
   <aside class="sidebar" id="sidebar">
     <div class="brand"><span>nova</span>.byAletheya</div>
     <div class="brand-sub">Tools Built for Nova</div>
-    <div class="nav-item active" id="nav-ads" onclick="showView('ads')">
+    <div class="nav-item active" id="nav-home" onclick="showView('home')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></span>
+      Home
+    </div>
+    <div class="nav-item" id="nav-ads" onclick="showView('ads')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></span>
       Lease Ad Generator
     </div>
@@ -658,7 +685,55 @@
 
   <main class="main">
 
-    <section class="view active" id="view-ads">
+    <section class="view active" id="view-home">
+      <div class="view-inner">
+        <div class="nv-hero">
+          <div class="eyebrow">Nova Auto Pros · Marketing Suite</div>
+          <h1>Pick a tool to get started.</h1>
+          <p>Everything you need to build and post Nova's ads — lease &amp; sold creatives, the live Deal Hub, bulk ad runs, and review graphics. Tap any tool below.</p>
+        </div>
+        <div class="nv-grid">
+
+          <button class="nv-tile" onclick="showView('ads')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></div>
+            <h3>Lease Ad Generator</h3>
+            <p>Type a vehicle + pricing → generates the car, drops it in the template, and downloads the finished lease ad.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <button class="nv-tile" onclick="showView('sold')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg></div>
+            <h3>Sold Posts</h3>
+            <p>Upload a photo of a car you sold, pick a badge, and download a branded "just sold" post for Instagram.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <button class="nv-tile" onclick="showView('deals')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></div>
+            <h3>Deal Hub <span class="nv-tag">PW</span></h3>
+            <p>The live deal board — track the best lease per car, spot when you've been beat, and push the lineup to the client site.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <button class="nv-tile" onclick="showView('test')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 3h8"/></svg></div>
+            <h3>Lease Ad — TEST <span class="nv-tag">PW</span></h3>
+            <p>Bulk lease ads — pull the best deals, choose &amp; refresh photos, zoom/reframe each car, and download the whole batch.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <button class="nv-tile" onclick="showView('review')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></div>
+            <h3>Review Generator</h3>
+            <p>Turn a Google or Yelp review into a polished Instagram graphic — feed post or story, with an auto caption &amp; hashtags.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-ads">
       <div class="view-inner">
         <h1>Nova Ad Generator</h1>
         <p class="subtitle">Type a vehicle + pricing → generates the car, drops it in the template, auto-downloads the finished ad.</p>
@@ -1979,9 +2054,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('scrim').classList.remove('show');
   }
   // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
-  const VIEW_PATH = { ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator' };
-  const PATH_VIEW = { '/novauto': 'ads', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review' };
-  const VIEW_TITLE = { ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator' };
+  const VIEW_PATH = { home: '/novauto', ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator' };
+  const PATH_VIEW = { '/novauto': 'home', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review' };
+  const VIEW_TITLE = { home: 'Nova Tools', ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator' };
   // ---- restricted second-tier password gate (Lease Ad — TEST + Deal Hub) ----
   let restrictedUnlocked = false, lockPendingView = null;
   const RESTRICTED_VIEWS = new Set(['test', 'deals']);
