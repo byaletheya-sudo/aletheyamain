@@ -300,6 +300,9 @@
   .dh-make-head:hover .dh-make-caret, .dh-model-head:hover .dh-model-caret { color: #aab2c0; }
   @media (prefers-reduced-motion: reduce) { .dh-car.open > .dh-car-deals, .dh-model:not(.collapsed) > .dh-model-body, .dh-modal, .dh-modal-card, .dh-agent-fab { animation: none !important; } }
   .dh-modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .dh-exp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; padding: 8px 18px 12px; max-height: 320px; overflow-y: auto; }
+  .dh-exp-col { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #d2d6dc; cursor: pointer; }
+  .dh-exp-col input { flex: 0 0 auto; }
   /* smart-search chip */
   .dh-search-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; color: #b9c2cc; background: rgba(150,200,255,0.08); border: 1px solid rgba(150,200,255,0.16); border-radius: 999px; padding: 4px 10px; }
   .dh-search-chip em { font-style: normal; color: #fff; }
@@ -1310,6 +1313,28 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   </div>
 </div>
 
+<!-- export CSV: pick scope + columns -->
+<div class="dh-modal" id="dhExportModal">
+  <div class="dh-modal-card" style="max-width:460px;">
+    <div class="dh-modal-head">Export CSV</div>
+    <div style="padding:14px 18px 2px;">
+      <label style="font-size:.74rem;color:#8a909b;display:block;margin-bottom:6px;">Which deals</label>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button type="button" class="dh-toggle-btn active" id="dhExpAll" onclick="dh_exportSetScope('all')">All deals</button>
+        <button type="button" class="dh-toggle-btn" id="dhExpWin" onclick="dh_exportSetScope('win')">Best per car</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label style="font-size:.74rem;color:#8a909b;">Columns</label>
+        <span><button type="button" class="dh-link" onclick="dh_exportToggleAll(true)">All</button><button type="button" class="dh-link" onclick="dh_exportToggleAll(false)">None</button></span>
+      </div>
+    </div>
+    <div class="dh-exp-cols" id="dhExpCols"></div>
+    <div class="dh-modal-foot">
+      <button class="btn-ghost" onclick="dh_exportCancel()">Cancel</button>
+      <button class="btn-start" onclick="dh_exportRun()">Download CSV</button>
+    </div>
+  </div>
+</div>
 <!-- customize a deal: trade down payment <-> monthly -->
 <div class="dh-modal" id="dhCustModal">
   <div class="dh-modal-card" style="max-width:420px;">
@@ -3171,15 +3196,30 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dh_deals.forEach(d => { const k = dh_carKey(d); (groups[k] = groups[k] || []).push(d); });
     return Object.values(groups).map(arr => arr.slice().sort((a, b) => (dh_isExpired(a) - dh_isExpired(b)) || ((dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)))[0]);
   }
-  function dh_export() {
+  const DH_EXPORT_KEY = 'dh_export_cols';
+  let dh_exportScope = 'all';
+  function dh_exportColSet() { try { const s = localStorage.getItem(DH_EXPORT_KEY); if (s) return new Set(JSON.parse(s)); } catch (e) { } return new Set(DH_COLS.map(c => c.k)); }
+  function dh_export() {                                  // opens the picker (scope + columns) instead of exporting everything
     if (!dh_deals.length) return;
-    const winnersOnly = !confirm('Export ALL deals?\n\nOK = every deal\nCancel = only the best (winning) deal per car');
-    const rows = winnersOnly ? dh_winners() : dh_deals;
+    const sel = dh_exportColSet();
+    $('dhExpCols').innerHTML = DH_COLS.map(c => `<label class="dh-exp-col"><input type="checkbox" class="dh-exp-cb" value="${c.k}"${sel.has(c.k) ? ' checked' : ''}> ${c.label}</label>`).join('');
+    dh_exportSetScope(dh_exportScope);
+    $('dhExportModal').style.display = 'flex';
+  }
+  function dh_exportSetScope(s) { dh_exportScope = s; const a = $('dhExpAll'), w = $('dhExpWin'); if (a) a.classList.toggle('active', s === 'all'); if (w) w.classList.toggle('active', s === 'win'); }
+  function dh_exportToggleAll(on) { document.querySelectorAll('#dhExpCols .dh-exp-cb').forEach(cb => cb.checked = on); }
+  function dh_exportCancel() { $('dhExportModal').style.display = 'none'; }
+  function dh_exportRun() {
+    const cols = DH_COLS.filter(c => { const cb = document.querySelector('#dhExpCols .dh-exp-cb[value="' + c.k + '"]'); return cb && cb.checked; });
+    if (!cols.length) { alert('Pick at least one column.'); return; }
+    try { localStorage.setItem(DH_EXPORT_KEY, JSON.stringify(cols.map(c => c.k))); } catch (e) { }
+    const rows = dh_exportScope === 'win' ? dh_winners() : dh_deals;
     const esc = v => { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    const head = DH_COLS.map(c => c.label).join(',');
-    const lines = rows.map(d => DH_COLS.map(c => esc(d[c.k])).join(','));
-    const a = document.createElement('a'); a.download = winnersOnly ? 'best-deals.csv' : 'deals.csv';
+    const head = cols.map(c => c.label).join(',');
+    const lines = rows.map(d => cols.map(c => esc(d[c.k])).join(','));
+    const a = document.createElement('a'); a.download = dh_exportScope === 'win' ? 'best-deals.csv' : 'deals.csv';
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
+    $('dhExportModal').style.display = 'none';
   }
   // ---- By Car view ----
   let dh_mode = 'car', dh_sort = 'best', dh_showExpired = false, dh_searchKeys = null;
