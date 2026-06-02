@@ -1332,9 +1332,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     <div class="dh-modal-head">Export CSV</div>
     <div style="padding:14px 18px 2px;">
       <label style="font-size:.74rem;color:#8a909b;display:block;margin-bottom:6px;">Which deals</label>
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" class="dh-toggle-btn active" id="dhExpAll" onclick="dh_exportSetScope('all')">All deals</button>
         <button type="button" class="dh-toggle-btn" id="dhExpWin" onclick="dh_exportSetScope('win')">Best per car</button>
+        <button type="button" class="dh-toggle-btn" id="dhExpSel" onclick="dh_exportSetScope('sel')" style="display:none;">Selected only</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <label style="font-size:.74rem;color:#8a909b;">Columns</label>
@@ -1374,6 +1375,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   <span><b id="dhCmpCount">0</b> selected <span style="opacity:.55;">· tap cars to add</span></span>
   <div>
     <button class="btn-ghost" onclick="dh_cmpClear()">Clear</button>
+    <button class="btn-ghost" onclick="dh_export('sel')">⬇ CSV</button>
     <button class="btn-ghost" onclick="dh_sendCarsToAd()">🎨 Make Ads</button>
     <button class="btn-start" onclick="dh_openCompare()">Compare →</button>
   </div>
@@ -3262,25 +3264,30 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   const DH_EXPORT_KEY = 'dh_export_cols';
   let dh_exportScope = 'all';
   function dh_exportColSet() { try { const s = localStorage.getItem(DH_EXPORT_KEY); if (s) return new Set(JSON.parse(s)); } catch (e) { } return new Set(DH_COLS.map(c => c.k)); }
-  function dh_export() {                                  // opens the picker (scope + columns) instead of exporting everything
+  function dh_selectedBests() { return [...dh_compare].map(k => { const arr = dh_deals.filter(d => dh_carKey(d) === k); return arr.slice().sort((a, b) => (dh_isExpired(a) - dh_isExpired(b)) || ((dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9)))[0]; }).filter(Boolean); }
+  function dh_export(presetScope) {                       // opens the picker (scope + columns) instead of exporting everything
     if (!dh_deals.length) return;
     const sel = dh_exportColSet();
     $('dhExpCols').innerHTML = DH_COLS.map(c => `<label class="dh-exp-col"><input type="checkbox" class="dh-exp-cb" value="${c.k}"${sel.has(c.k) ? ' checked' : ''}> ${c.label}</label>`).join('');
+    const hasSel = dh_compare.size > 0;
+    $('dhExpSel').style.display = hasSel ? '' : 'none';
+    if (presetScope === 'sel' && hasSel) dh_exportScope = 'sel';
+    if (dh_exportScope === 'sel' && !hasSel) dh_exportScope = 'all';
     dh_exportSetScope(dh_exportScope);
     $('dhExportModal').style.display = 'flex';
   }
-  function dh_exportSetScope(s) { dh_exportScope = s; const a = $('dhExpAll'), w = $('dhExpWin'); if (a) a.classList.toggle('active', s === 'all'); if (w) w.classList.toggle('active', s === 'win'); }
+  function dh_exportSetScope(s) { dh_exportScope = s; const a = $('dhExpAll'), w = $('dhExpWin'), e = $('dhExpSel'); if (a) a.classList.toggle('active', s === 'all'); if (w) w.classList.toggle('active', s === 'win'); if (e) e.classList.toggle('active', s === 'sel'); }
   function dh_exportToggleAll(on) { document.querySelectorAll('#dhExpCols .dh-exp-cb').forEach(cb => cb.checked = on); }
   function dh_exportCancel() { $('dhExportModal').style.display = 'none'; }
   function dh_exportRun() {
     const cols = DH_COLS.filter(c => { const cb = document.querySelector('#dhExpCols .dh-exp-cb[value="' + c.k + '"]'); return cb && cb.checked; });
     if (!cols.length) { alert('Pick at least one column.'); return; }
     try { localStorage.setItem(DH_EXPORT_KEY, JSON.stringify(cols.map(c => c.k))); } catch (e) { }
-    const rows = dh_exportScope === 'win' ? dh_winners() : dh_deals;
+    const rows = dh_exportScope === 'sel' ? dh_selectedBests() : dh_exportScope === 'win' ? dh_winners() : dh_deals;
     const esc = v => { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const head = cols.map(c => c.label).join(',');
     const lines = rows.map(d => cols.map(c => esc(d[c.k])).join(','));
-    const a = document.createElement('a'); a.download = dh_exportScope === 'win' ? 'best-deals.csv' : 'deals.csv';
+    const a = document.createElement('a'); a.download = dh_exportScope === 'sel' ? 'selected-deals.csv' : dh_exportScope === 'win' ? 'best-deals.csv' : 'deals.csv';
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
     $('dhExportModal').style.display = 'none';
   }
