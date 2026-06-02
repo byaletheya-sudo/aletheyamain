@@ -3371,12 +3371,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // trim "grade" tokens: drop body/drivetrain/powertrain noise so what's left is
   // the part that actually distinguishes one trim from another (L / LE / SE / XSE…).
-  const DH_TRIM_NOISE = new Set(['hybrid', 'phev', 'plugin', 'plug', 'in', 'ev', 'drive', 'wheel', 'front', 'rear', 'all', 'four', '2wd', '4wd', 'awd', 'fwd', 'rwd', '4x4', 'cvt', 'automatic', 'auto', 'manual', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'i', 'ii']);
+  // Body/drivetrain/transmission words don't distinguish trims. Powertrain words
+  // (hybrid, phev, ev, prime) DO — the hub & site use them to tell e.g. a gas XLE
+  // apart from a Hybrid XLE — so they stay as meaningful grade tokens.
+  const DH_TRIM_NOISE = new Set(['plugin', 'plug', 'in', 'drive', 'wheel', 'front', 'rear', 'all', 'four', '2wd', '4wd', 'awd', 'fwd', 'rwd', '4x4', 'cvt', 'automatic', 'auto', 'manual', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'i', 'ii']);
   const dh_trimTokens = s => dh_tokens(s).filter(t => t && !DH_TRIM_NOISE.has(t));
-  function dh_trimScore(siteTrim, hubTrim) {
-    const a = new Set(dh_trimTokens(siteTrim)); let n = 0;
-    dh_trimTokens(hubTrim).forEach(t => { if (a.has(t)) n++; });
-    return n;
+  // Similarity of two trims by their grade tokens: how many overlap (inter), and
+  // how many are left over on either side (sym). More overlap + fewer leftovers =
+  // a closer trim, so "Hybrid XLE" prefers "XLE Hybrid" over a bare gas "XLE".
+  function dh_trimSim(siteTrim, hubTrim) {
+    const a = new Set(dh_trimTokens(siteTrim)), b = new Set(dh_trimTokens(hubTrim));
+    let inter = 0; a.forEach(t => { if (b.has(t)) inter++; });
+    return { inter, sym: (a.size - inter) + (b.size - inter) };
   }
   function dh_matchHubCar(row, hubCars) {
     const mkt = dh_makeKey(row.make);
@@ -3393,13 +3399,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (sameYear.length) cands = sameYear;
     if (cands.length === 1) return cands[0];                // one deal for this model — compare to it
     // several trims of the same model: match the site's trim grade to the right one
-    const scored = cands.map(c => ({ c, s: dh_trimScore(row.trim, c.best.trim) }));
-    const top = Math.max(...scored.map(x => x.s));
-    if (top > 0) {
-      let best = scored.filter(x => x.s === top).map(x => x.c);
-      const sm = dh_num(row.monthly);
-      if (sm != null && best.length > 1) best = best.slice().sort((a, b) => Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm));
-      return best[0];
+    const sm = dh_num(row.monthly);
+    const scored = cands.map(c => { const t = dh_trimSim(row.trim, c.best.trim); return { c, inter: t.inter, sym: t.sym }; });
+    const top = Math.max(...scored.map(x => x.inter));
+    if (top > 0) {                                          // best overlap, then fewest leftover tokens, then closest price
+      return scored.filter(x => x.inter === top)
+        .sort((a, b) => (a.sym - b.sym) || (sm != null ? (Math.abs((a.c.bestMonthly ?? 1e9) - sm) - Math.abs((b.c.bestMonthly ?? 1e9) - sm)) : 0))[0].c;
     }
     return { _notrim: true };                               // model's in the hub, but not this trim
   }
