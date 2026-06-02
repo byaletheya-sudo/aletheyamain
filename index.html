@@ -3369,19 +3369,39 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const pref = (long, short) => long.length > short.length && long.startsWith(short) && !/[0-9]/.test(long[short.length]);
     return pref(ta, tb) || pref(tb, ta);
   }
+  // trim "grade" tokens: drop body/drivetrain/powertrain noise so what's left is
+  // the part that actually distinguishes one trim from another (L / LE / SE / XSE…).
+  const DH_TRIM_NOISE = new Set(['hybrid', 'phev', 'plugin', 'plug', 'in', 'ev', 'drive', 'wheel', 'front', 'rear', 'all', 'four', '2wd', '4wd', 'awd', 'fwd', 'rwd', '4x4', 'cvt', 'automatic', 'auto', 'manual', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'i', 'ii']);
+  const dh_trimTokens = s => dh_tokens(s).filter(t => t && !DH_TRIM_NOISE.has(t));
+  function dh_trimScore(siteTrim, hubTrim) {
+    const a = new Set(dh_trimTokens(siteTrim)); let n = 0;
+    dh_trimTokens(hubTrim).forEach(t => { if (a.has(t)) n++; });
+    return n;
+  }
   function dh_matchHubCar(row, hubCars) {
     const mkt = dh_makeKey(row.make);
-    let cands = hubCars.filter(c => c.mkt === mkt && dh_modelMatch(row.model, c.model));
+    const sameMake = hubCars.filter(c => c.mkt === mkt);
+    if (!sameMake.length) return null;
+    // Prefer an EXACT model match (so "Corolla" never grabs "Corolla Cross"); only
+    // fall back to fuzzy model matching when the hub has nothing exact.
+    const siteTight = dh_tightKey(row.model);
+    let cands = sameMake.filter(c => dh_tightKey(c.model) === siteTight);
+    if (!cands.length) cands = sameMake.filter(c => dh_modelMatch(row.model, c.model));
     if (!cands.length) return null;
     const yr = (row.year || '').toString().trim();
     const sameYear = yr ? cands.filter(c => c.year === yr) : [];
-    if (sameYear.length) cands = sameYear;                  // prefer the matching year if there is one
-    const siteTrim = dh_tightKey(row.trim), sm = dh_num(row.monthly);
-    const trimOverlaps = c => { const t = dh_tightKey(c.best.trim); return (t && siteTrim && (siteTrim.includes(t) || t.includes(siteTrim))) ? 0 : 1; };
-    return cands.slice().sort((a, b) =>
-      (trimOverlaps(a) - trimOverlaps(b)) ||               // same trim wins the tie (LE vs SE etc.)
-      (sm != null ? (Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm)) : 0)
-    )[0];
+    if (sameYear.length) cands = sameYear;
+    if (cands.length === 1) return cands[0];                // one deal for this model — compare to it
+    // several trims of the same model: match the site's trim grade to the right one
+    const scored = cands.map(c => ({ c, s: dh_trimScore(row.trim, c.best.trim) }));
+    const top = Math.max(...scored.map(x => x.s));
+    if (top > 0) {
+      let best = scored.filter(x => x.s === top).map(x => x.c);
+      const sm = dh_num(row.monthly);
+      if (sm != null && best.length > 1) best = best.slice().sort((a, b) => Math.abs((a.bestMonthly ?? 1e9) - sm) - Math.abs((b.bestMonthly ?? 1e9) - sm));
+      return best[0];
+    }
+    return { _notrim: true };                               // model's in the hub, but not this trim
   }
   function dh_verifyReconcile(rows) {
     const bests = dh_bestByCar();
@@ -3397,6 +3417,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const siteLabel = [row.year, row.make, row.model, row.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || '(unnamed)';
       const c = dh_matchHubCar(row, hubCars);
       if (!c) { items.push({ state: 'orphan', siteLabel }); return; }
+      if (c._notrim) { items.push({ state: 'notrim', siteLabel }); return; }
       matched.add(c.key);
       if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, hub: c }); return; }
       const hubMo = c.bestMonthly;
@@ -3413,7 +3434,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const ok = items.filter(i => i.state === 'match').length;
     const probs = items.filter(i => i.state !== 'match').length;
     const onSite = items.filter(i => i.state !== 'missing').length;
-    const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, missing: 4, match: 5 };
+    const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, notrim: 4, missing: 5, match: 6 };
     const sorted = items.slice().sort((a, b) => order[a.state] - order[b.state]);
     const M = v => dh_money(v);
     const rowHTML = it => {
@@ -3422,6 +3443,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (it.state === 'mismatch') return `<div class="dh-vrow err">🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo</div>`;
       if (it.state === 'expired') return `<div class="dh-vrow warn">⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub</div>`;
       if (it.state === 'orphan') return `<div class="dh-vrow orphan">❓ <b>${it.siteLabel}</b> — on the site but not in the hub (stale or unknown)</div>`;
+      if (it.state === 'notrim') return `<div class="dh-vrow orphan">➕ <b>${it.siteLabel}</b> — on the site, but you have no deal for this exact trim in the hub</div>`;
       if (it.state === 'missing') return `<div class="dh-vrow miss">🆕 <b>${it.hub.label}</b> — current best (${M(it.hub.bestMonthly)}/mo), not found on the site</div>`;
       return '';
     };
