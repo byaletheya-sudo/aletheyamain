@@ -129,6 +129,16 @@
   .bulk-dot.loading { background: #ffd166; animation: btnpulse 1s infinite; }
   .bulk-dot.done { background: #4aff7b; }
   .bulk-dot.error { background: #ff6b6b; }
+  .bulk-photos { padding: 8px 11px; background: rgba(255,255,255,0.06); color: #e6e7ea; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; font-size: 0.95rem; cursor: pointer; }
+  .bulk-photos:hover { background: rgba(120,150,200,0.18); }
+  .bulk-photostrip { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px; margin: -4px 0 10px; }
+  .bulk-ph { position: relative; width: 90px; height: 62px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid rgba(255,255,255,0.06); background: #0d0e10; flex: 0 0 auto; transition: border-color .15s, transform .1s; }
+  .bulk-ph:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.2); }
+  .bulk-ph img { width: 100%; height: 100%; object-fit: cover; }
+  .bulk-ph .chk { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background: #4a9eff; color: #fff; font-size: 11px; display: none; align-items: center; justify-content: center; }
+  .bulk-ph.active { border-color: #4a9eff; }
+  .bulk-ph.active .chk { display: flex; }
+  .bulk-ph-msg { font-size: 0.78rem; color: #8a909b; padding: 4px 2px; }
   /* Deal Hub spreadsheet */
   .dh-grid-wrap { overflow-x: auto; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
   .dh-grid { border-collapse: collapse; width: 100%; }
@@ -1057,6 +1067,7 @@ Toyota Camry SE finance 419 2.9% apr 5000 down"></textarea>
               <h2>Review &amp; Download <span id="t_bulkCount" style="font-weight:400;opacity:.55;"></span></h2>
               <div id="t_bulkGrid"></div>
               <div class="controls" style="margin-top:14px;">
+                <button class="btn-ghost" id="t_loadPhotosBtn" onclick="t_bulkLoadAllPhotos()">📷 Load all photos</button>
                 <button class="btn-start" id="t_dlAllBtn" onclick="t_bulkDownloadAll()">⬇ Download All</button>
                 <button class="btn-ghost" id="t_bulkStopBtn" onclick="t_bulkAbort=true" disabled>Stop</button>
               </div>
@@ -2763,9 +2774,42 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             inp('badge', 'Badge') +
           '</div>' +
         '</div>' +
-        '<div class="bulk-actions"><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
+        '<div class="bulk-actions"><button class="bulk-photos" onclick="t_bulkLoadPhotos(' + i + ')" title="See & choose the photo">📷</button><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
       grid.appendChild(card);
+      const strip = document.createElement('div'); strip.className = 'bulk-photostrip'; strip.id = 'bphotos-' + i; strip.style.display = 'none';
+      grid.appendChild(strip);
+      if (row.photoOptions) t_renderBulkPhotos(i);
     });
+  }
+  async function t_bulkLoadPhotos(i) {
+    const row = t_bulkRows[i]; if (!(row.make && row.model)) return;
+    const strip = $('bphotos-' + i); if (!strip) return;
+    strip.style.display = ''; strip.innerHTML = '<span class="bulk-ph-msg">Loading photos…</span>';
+    let opts = [];
+    for (const c of T_BULK_COLORS) {
+      const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c });
+      if (d && d.options && d.options.length) { opts = d.options; break; }
+    }
+    row.photoOptions = opts;
+    t_renderBulkPhotos(i);
+  }
+  function t_renderBulkPhotos(i) {
+    const row = t_bulkRows[i], strip = $('bphotos-' + i); if (!strip) return;
+    const opts = row.photoOptions || [];
+    strip.style.display = '';
+    if (!opts.length) { strip.innerHTML = '<span class="bulk-ph-msg">No photos found for this vehicle.</span>'; return; }
+    strip.innerHTML = opts.map((o, j) => `<div class="bulk-ph${(row.photoUrl ? row.photoUrl === o.url : j === 0) ? ' active' : ''}" onclick="t_bulkPickPhoto(${i}, ${j})"><img src="${(o.thumb || o.url).replace(/"/g, '&quot;')}" loading="lazy" alt=""><span class="chk">✓</span></div>`).join('');
+  }
+  async function t_bulkPickPhoto(i, j) {
+    const row = t_bulkRows[i], o = (row.photoOptions || [])[j]; if (!o) return;
+    row.photoUrl = o.url; row.photoData = null;
+    t_renderBulkPhotos(i);
+    try { const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) }); const d = await r.json(); if (!d.error) row.photoData = d.image_data; } catch (e) { }
+  }
+  async function t_bulkLoadAllPhotos() {
+    const btn = $('t_loadPhotosBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Loading…';
+    for (let i = 0; i < t_bulkRows.length; i++) { if (!t_bulkRows[i].photoOptions) await t_bulkLoadPhotos(i); }
+    btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '📷 Load all photos';
   }
   function t_bulkEdit(el) {
     const i = +el.dataset.i, k = el.dataset.k;
@@ -2798,13 +2842,21 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (!(row.make && row.model)) { t_bulkDot(i, 'error'); return false; }
     t_applyBulkRow(row); t_bulkDot(i, 'loading');
     try {
-      let d = null;
-      for (const c of T_BULK_COLORS) {
-        d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c });
-        if (d && !d.error && d.found !== false && d.image_data) break;
+      let imgData = row.photoData;                       // a photo the user chose for this row
+      if (!imgData && row.photoUrl) {
+        const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: row.photoUrl }) });
+        const dd = await r.json(); if (!dd.error) imgData = dd.image_data;
       }
-      if (!d || d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
+      if (!imgData) {                                    // no choice -> auto-pick across neutral colors
+        let d = null;
+        for (const c of T_BULK_COLORS) {
+          d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c });
+          if (d && !d.error && d.found !== false && d.image_data) break;
+        }
+        if (!d || d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
+        imgData = d.image_data;
+      }
+      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = imgData; await waitForImage($('t_adCar'));
       await t_download();
       t_bulkDot(i, 'done'); return true;
     } catch (e) { t_bulkDot(i, 'error'); return false; }
