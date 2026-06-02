@@ -3028,7 +3028,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // compute (but DON'T apply) the changes a command would make, so the user can review each first.
   // scope by contact AND/OR car (year/make/model/trim); ops act on any field.
   function dh_planAdjust(adj) {
-    const m = adj.match || {};
+    const m = { ...(adj.match || {}) };
+    // the AI sometimes drops a bare brand ("update all Toyota deals") into model or contact — treat it as the make
+    const isMake = s => s && (T_MAKES.some(mk => dh_norm(mk) === dh_norm(s)) || DH_MAKE_ALIAS[dh_norm(s)]);
+    if (!m.make && isMake(m.model)) { m.make = m.model; m.model = ''; }
+    if (!m.make && isMake(m.contact)) { m.make = m.contact; m.contact = ''; }
     const cn = dh_dealerNorm(m.contact || '');
     const want = { year: dh_norm(m.year || ''), make: (DH_MAKE_ALIAS[dh_norm(m.make || '')] || dh_norm(m.make || '')), model: dh_norm(m.model || ''), trim: dh_norm(m.trim || '') };
     const matches = d => {
@@ -3227,7 +3231,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // once anything is selected, the whole card becomes a select target (the caret still expands)
   function dh_cardClick(el, key, ev) { if (dh_compare.size > 0) dh_cmpToggle(key, ev); else el.classList.toggle('open'); }
-  function dh_cmpClear() { dh_compare.clear(); dh_cmpBar(); dh_renderByCar(); }
+  function dh_cmpClear() {
+    dh_compare.clear();
+    const list = $('dh_carList');                       // clear the visual state directly (no full re-render -> robust + keeps expand state)
+    if (list) { list.classList.remove('dh-selecting'); list.querySelectorAll('.dh-car.selected').forEach(c => { c.classList.remove('selected'); const b = c.querySelector('.dh-cmp'); if (b) { b.classList.remove('on'); b.textContent = '+'; } }); }
+    dh_cmpBar();
+  }
   function dh_cmpBar() { const bar = $('dhCmpBar'); if (!bar) return; const onDeals = $('view-deals') && getComputedStyle($('view-deals')).display !== 'none'; bar.style.display = (dh_compare.size && onDeals) ? 'flex' : 'none'; const c = $('dhCmpCount'); if (c) c.textContent = dh_compare.size; }
   function dh_cmpCancel() { $('dhCmpModal').style.display = 'none'; }
   function dh_openCompare() {
