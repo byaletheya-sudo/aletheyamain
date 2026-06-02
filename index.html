@@ -151,6 +151,8 @@
   .dh-make.collapsed .dh-make-body { display: none; }
   .dh-make-name { font-weight: 800; font-size: 0.96rem; letter-spacing: 0.01em; color: #eef2f8; }
   .dh-make-meta { color: #6b7280; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .dh-grp-sel { margin-left: auto; align-self: center; font-size: 0.68rem; padding: 4px 11px; border-radius: 7px; border: 1px solid rgba(150,200,255,0.22); background: rgba(150,200,255,0.06); color: #9fc0ee; cursor: pointer; white-space: nowrap; transition: background .14s, color .14s; }
+  .dh-grp-sel:hover { background: rgba(150,200,255,0.15); color: #d3e3f8; }
   .dh-sort { background: rgba(255,255,255,0.03); color: #c7ccd4; border: 1px solid rgba(255,255,255,0.09); border-radius: 9px; padding: 7px 10px; font-size: 0.78rem; cursor: pointer; }
   .dh-sort:focus { outline: none; border-color: rgba(120,160,220,0.5); }
   :root { --dh-price: #8fe3c4; }
@@ -3271,6 +3273,19 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // once anything is selected, the whole card becomes a select target (the caret still expands)
   function dh_cardClick(el, key, ev) { if (dh_compare.size > 0) dh_cmpToggle(key, ev); else el.classList.toggle('open'); }
+  // select (or deselect) every car under a make / model section in one click
+  function dh_selectGroup(ev, cls) {
+    ev.stopPropagation();
+    const scope = ev.target.closest('.' + cls); if (!scope) return;
+    const keys = [...scope.querySelectorAll('.dh-car')].map(c => c.dataset.key).filter(Boolean);
+    if (!keys.length) return;
+    const allSel = keys.every(k => dh_compare.has(k));
+    keys.forEach(k => { if (allSel) dh_compare.delete(k); else dh_compare.add(k); });
+    const list = $('dh_carList');                       // targeted update (no full re-render -> keeps expand state)
+    if (list) { list.classList.toggle('dh-selecting', dh_compare.size > 0); list.querySelectorAll('.dh-car').forEach(c => { const sel = dh_compare.has(c.dataset.key); c.classList.toggle('selected', sel); const b = c.querySelector('.dh-cmp'); if (b) { b.classList.toggle('on', sel); b.textContent = sel ? '✓' : '+'; } }); }
+    ev.target.textContent = allSel ? 'Select all' : '✓ Selected';
+    dh_cmpBar();
+  }
   function dh_cmpClear() {
     dh_compare.clear();
     const list = $('dh_carList');                       // clear the visual state directly (no full re-render -> robust + keeps expand state)
@@ -3587,6 +3602,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <span class="dh-model-caret">▾</span>
             <span class="dh-model-name">${mg.label}</span>
             <span class="dh-model-meta">${mg.cars.length} trims · ${mDeals} deal${mDeals > 1 ? 's' : ''}${from ? ' · from ' + from + ' eff' : ''}</span>
+            <button class="dh-grp-sel" onclick="dh_selectGroup(event, 'dh-model')" title="Select every ${mg.label} trim">Select all</button>
           </div>
           <div class="dh-model-body">${mg.cars.map(g => carCard(g, true)).join('')}</div>
         </div>`;
@@ -3596,6 +3612,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
           <span class="dh-make-caret">▾</span>
           <span class="dh-make-name">${mk}</span>
           <span class="dh-make-meta">${cars.length} car${cars.length > 1 ? 's' : ''} · ${dealCount} deal${dealCount > 1 ? 's' : ''}</span>
+          <button class="dh-grp-sel" onclick="dh_selectGroup(event, 'dh-make')" title="Select every ${mk} deal">Select all</button>
         </div>
         <div class="dh-make-body">${body}</div>
       </section>`;
