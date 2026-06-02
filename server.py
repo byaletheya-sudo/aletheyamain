@@ -760,9 +760,9 @@ def carsxe_image():
             if imgs:
                 break
     except urllib.error.HTTPError as e:
-        return jsonify({"error": f"the catalog error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
+        return jsonify({"error": f"Catalog error {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}), 502
     except Exception as e:
-        return jsonify({"error": f"the catalog request failed: {e}"}), 502
+        return jsonify({"error": f"Catalog request failed: {e}"}), 502
 
     if not imgs:
         return jsonify({"found": False, "message": body.get("error") or "No images returned by the catalog."})
@@ -775,7 +775,7 @@ def carsxe_image():
     try:
         first = _carsxe_dataurl(imgs[0]["link"])
     except Exception as e:
-        return jsonify({"error": f"Couldn't load the the catalog image: {e}"}), 502
+        return jsonify({"error": f"Couldn't load the catalog image: {e}"}), 502
     payload = {"found": True, "success": True, "image_data": first,
                "image_url": imgs[0]["link"], "options": options}
     _cache_put(_CARSXE_IMG_CACHE, key, payload)
@@ -784,7 +784,7 @@ def carsxe_image():
 
 @app.route("/carsxe-proxy", methods=["POST"])
 def carsxe_proxy():
-    """Proxy a specific the catalog image (only URLs the catalog itself returned — no open SSRF)."""
+    """Proxy a specific catalog image (only URLs the catalog itself returned — no open SSRF)."""
     url = (request.json or {}).get("url", "").strip()
     if url not in _CARSXE_ALLOWED:
         return jsonify({"error": "URL not allowed."}), 400

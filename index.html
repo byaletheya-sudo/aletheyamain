@@ -1717,7 +1717,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
       const scaler = $('adScaler');
       const stage = scaler.parentElement;
-      const prevT = scaler.style.transform;
       // capture at full 1080x1920: drop the preview scale, hide off-screen
       scaler.style.transform = 'none';
       stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0';
@@ -2701,7 +2700,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     try { return await r.json(); }
     catch (_) { return { error: 'Couldn’t reach the server (try reloading / signing in again).' }; }
   }
-  // Render the the catalog results as tappable thumbnails (first one is active).
+  // Render the catalog results as tappable thumbnails (first one is active).
   function t_setPhotoOptions(options) {
     const wrap = $('t_photoThumbs'); wrap.innerHTML = '';
     (options || []).forEach((o, i) => {
@@ -2790,7 +2789,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       (d.trims || []).forEach(t => { const op = document.createElement('option'); op.value = t; dl.appendChild(op); });
     } catch (e) { /* meta is optional */ }
   }
-  // Main build: pull the the catalog photo (+ colours/trims), place it, populate pickers.
+  // Main build: pull the catalog photo (+ colours/trims), place it, populate pickers.
   async function t_build() {
     const year = $('t_year').value.trim(), make = $('t_make').value.trim(), model = $('t_model').value.trim(), trim = $('t_trim').value.trim();
     if (!(make && model)) { setVdb('Pick a make and type a model.', 'error'); return; }
