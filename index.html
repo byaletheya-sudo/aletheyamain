@@ -321,9 +321,17 @@
   .dh-vsum { display: flex; gap: 14px; align-items: center; font-size: .82rem; font-weight: 700; padding: 8px 0 12px; flex-wrap: wrap; }
   .dh-vsum .ok { color: #46d488; }
   .dh-vsum .err { color: #ff8a8a; }
+  .dh-vsum .appr { color: #9fdfb6; opacity: .85; }
   .dh-vlist { display: flex; flex-direction: column; gap: 6px; }
-  .dh-vrow { font-size: .82rem; color: #c2c7cf; padding: 8px 11px; border-radius: 9px; border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); line-height: 1.4; }
+  .dh-vrow { font-size: .82rem; color: #c2c7cf; padding: 8px 11px; border-radius: 9px; border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); line-height: 1.4; display: flex; align-items: center; gap: 10px; }
+  .dh-vrow .dh-vtxt { flex: 1; min-width: 0; }
   .dh-vrow b { color: #fff; font-weight: 700; }
+  .dh-vbtn { flex: 0 0 auto; font-size: .72rem; font-weight: 700; color: #cfe8ff; background: rgba(74,158,255,.14); border: 1px solid rgba(74,158,255,.34); border-radius: 7px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+  .dh-vbtn:hover { background: rgba(74,158,255,.26); color: #fff; }
+  .dh-vbtn.on { color: #9aa0aa; background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+  .dh-vrow.appr { color: #8f9aa0; border-color: rgba(70,212,136,.22); background: rgba(70,212,136,.05); }
+  .dh-vrow.appr .dh-vtxt { text-decoration: line-through; text-decoration-color: rgba(255,255,255,.25); }
+  .dh-vrow.appr b { color: #c7cdd3; }
   .dh-vrow.ok { color: #9fdfb6; }
   .dh-vrow.err { color: #ffc0c0; border-color: rgba(255,90,90,.34); background: rgba(255,90,90,.08); }
   .dh-vrow.warn { color: #ffd9a8; border-color: rgba(255,170,70,.3); background: rgba(255,170,70,.07); }
@@ -3318,7 +3326,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         const rows = d.rows.filter(x => x.make && x.model);
         const items = dh_verifyReconcile(rows);
         dh_verifyRender(items);
-        const probs = items.filter(i => i.state !== 'match').length;
+        const probs = dh_vOpenProblems(items);
         dh_vStatus((probs ? (probs + ' issue' + (probs > 1 ? 's' : '') + ' to fix') : ('All ' + items.length + ' match ✓')) + ' · read ' + rows.length + ' live deals', probs ? 'error' : 'done');
         return;
       }
@@ -3342,7 +3350,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!rows.length) { dh_vStatus('No deals could be read off that page.', 'error'); $('dhVerifyResult').innerHTML = ''; return; }
       const items = dh_verifyReconcile(rows);
       dh_verifyRender(items);
-      const probs = items.filter(i => i.state !== 'match').length;
+      const probs = dh_vOpenProblems(items);
       dh_vStatus(probs ? (probs + ' issue' + (probs > 1 ? 's' : '') + ' to fix') : ('All ' + items.length + ' deals match ✓'), probs ? 'error' : 'done');
     } catch (e) { dh_vStatus('✕ ' + e.message, 'error'); }
   }
@@ -3421,10 +3429,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const siteMo = dh_num(row.monthly);
       const siteLabel = [row.year, row.make, row.model, row.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || '(unnamed)';
       const c = dh_matchHubCar(row, hubCars);
-      if (!c) { items.push({ state: 'orphan', siteLabel }); return; }
-      if (c._notrim) { items.push({ state: 'notrim', siteLabel }); return; }
+      if (!c) { items.push({ state: 'orphan', siteLabel, siteMo }); return; }
+      if (c._notrim) { items.push({ state: 'notrim', siteLabel, siteMo }); return; }
       matched.add(c.key);
-      if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, hub: c }); return; }
+      if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, siteMo, hub: c }); return; }
       const hubMo = c.bestMonthly;
       if (siteMo == null || hubMo == null) { items.push({ state: 'match', siteLabel, hub: c }); return; }
       const diff = siteMo - hubMo;
@@ -3434,26 +3442,60 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     hubCars.forEach(c => { if (c.anyActive && !dh_isExpired(c.best) && !matched.has(c.key)) items.push({ state: 'missing', hub: c }); });
     return items;
   }
+  // --- manual approvals: dismiss a finding you've reviewed & decided is fine ---
+  // Keyed by the finding's identity (label + the site/hub price it was flagged at),
+  // so an approval auto-expires if that price later changes. Persists per browser.
+  let dh_vItems = [];
+  let dh_vApproved = new Set(JSON.parse(localStorage.getItem('dh_verify_approved') || '[]'));
+  function dh_vSaveApproved() { localStorage.setItem('dh_verify_approved', JSON.stringify([...dh_vApproved])); }
+  function dh_vKey(it) {
+    if (it.state === 'missing') return 'M|' + dh_tightKey(it.hub.label);
+    return (dh_tightKey(it.siteLabel) || '?') + '|' + (it.siteMo != null ? it.siteMo : '');
+  }
+  const dh_vIsProblem = it => it.state !== 'match';
+  const dh_vIsApproved = it => dh_vIsProblem(it) && dh_vApproved.has(dh_vKey(it));
+  const dh_vOpenProblems = items => items.filter(it => dh_vIsProblem(it) && !dh_vIsApproved(it)).length;
+  function dh_vToggleApprove(i) {
+    const it = dh_vItems[i]; if (!it) return;
+    const k = dh_vKey(it);
+    if (dh_vApproved.has(k)) dh_vApproved.delete(k); else dh_vApproved.add(k);
+    dh_vSaveApproved();
+    dh_verifyRender(dh_vItems);
+    dh_vStatus((p => p ? (p + ' issue' + (p > 1 ? 's' : '') + ' to fix') : 'All clear ✓')(dh_vOpenProblems(dh_vItems)), dh_vOpenProblems(dh_vItems) ? 'error' : 'done');
+  }
+  function dh_vRowParts(it) {
+    const M = v => dh_money(v);
+    switch (it.state) {
+      case 'match': return { cls: 'ok', html: `✅ <b>${it.siteLabel}</b> — matches (${M(it.hub.bestMonthly)}/mo)` };
+      case 'stale': return { cls: 'err', html: `🔴 <b>${it.siteLabel}</b> — out of date: site ${M(it.siteMo)}/mo, best now ${M(it.hubMo)}/mo <span class="dh-vdelta">(${M(Math.abs(it.diff))} cheaper available)</span>` };
+      case 'mismatch': return { cls: 'err', html: `🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo` };
+      case 'expired': return { cls: 'warn', html: `⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub` };
+      case 'orphan': return { cls: 'orphan', html: `❓ <b>${it.siteLabel}</b> — on the site but not in the hub (stale or unknown)` };
+      case 'notrim': return { cls: 'orphan', html: `➕ <b>${it.siteLabel}</b> — on the site, but you have no deal for this exact trim in the hub` };
+      case 'missing': return { cls: 'miss', html: `🆕 <b>${it.hub.label}</b> — current best (${M(it.hub.bestMonthly)}/mo), not found on the site` };
+    }
+    return { cls: '', html: '' };
+  }
   function dh_verifyRender(items) {
+    dh_vItems = items;
     const el = $('dhVerifyResult'); if (!el) return;
     const ok = items.filter(i => i.state === 'match').length;
-    const probs = items.filter(i => i.state !== 'match').length;
+    const approved = items.filter(dh_vIsApproved).length;
+    const probs = dh_vOpenProblems(items);
     const onSite = items.filter(i => i.state !== 'missing').length;
     const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, notrim: 4, missing: 5, match: 6 };
-    const sorted = items.slice().sort((a, b) => order[a.state] - order[b.state]);
-    const M = v => dh_money(v);
-    const rowHTML = it => {
-      if (it.state === 'match') return `<div class="dh-vrow ok">✅ <b>${it.siteLabel}</b> — matches (${M(it.hub.bestMonthly)}/mo)</div>`;
-      if (it.state === 'stale') return `<div class="dh-vrow err">🔴 <b>${it.siteLabel}</b> — out of date: site ${M(it.siteMo)}/mo, best now ${M(it.hubMo)}/mo <span class="dh-vdelta">(${M(Math.abs(it.diff))} cheaper available)</span></div>`;
-      if (it.state === 'mismatch') return `<div class="dh-vrow err">🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo</div>`;
-      if (it.state === 'expired') return `<div class="dh-vrow warn">⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub</div>`;
-      if (it.state === 'orphan') return `<div class="dh-vrow orphan">❓ <b>${it.siteLabel}</b> — on the site but not in the hub (stale or unknown)</div>`;
-      if (it.state === 'notrim') return `<div class="dh-vrow orphan">➕ <b>${it.siteLabel}</b> — on the site, but you have no deal for this exact trim in the hub</div>`;
-      if (it.state === 'missing') return `<div class="dh-vrow miss">🆕 <b>${it.hub.label}</b> — current best (${M(it.hub.bestMonthly)}/mo), not found on the site</div>`;
-      return '';
-    };
-    const summary = `<div class="dh-vsum"><span class="${probs ? 'err' : 'ok'}">${probs ? probs + ' to fix' : 'All good'}</span><span class="ok">${ok} OK</span><span style="opacity:.55;font-weight:600;">${onSite} on site</span></div>`;
-    el.innerHTML = summary + '<div class="dh-vlist">' + sorted.map(rowHTML).join('') + '</div>';
+    // open problems first, then approved (resolved), then matches
+    const bucket = it => dh_vIsApproved(it) ? 1 : (it.state === 'match' ? 2 : 0);
+    const idx = items.map((_, i) => i).sort((a, b) => (bucket(items[a]) - bucket(items[b])) || (order[items[a].state] - order[items[b].state]));
+    const rows = idx.map(i => {
+      const it = items[i], p = dh_vRowParts(it), appr = dh_vIsApproved(it);
+      const btn = it.state === 'match' ? '' : `<button class="dh-vbtn${appr ? ' on' : ''}" onclick="dh_vToggleApprove(${i})">${appr ? '↺ Undo' : '✓ OK'}</button>`;
+      return `<div class="dh-vrow ${appr ? 'appr' : p.cls}"><span class="dh-vtxt">${p.html}</span>${btn}</div>`;
+    }).join('');
+    const sum = [`<span class="${probs ? 'err' : 'ok'}">${probs ? probs + ' to fix' : 'All good'}</span>`, `<span class="ok">${ok} OK</span>`];
+    if (approved) sum.push(`<span class="appr">${approved} approved</span>`);
+    sum.push(`<span style="opacity:.55;font-weight:600;">${onSite} on site</span>`);
+    el.innerHTML = `<div class="dh-vsum">${sum.join('')}</div><div class="dh-vlist">${rows}</div>`;
   }
   function dh_ago(iso) { const t = new Date(iso); if (isNaN(t)) return ''; const m = Math.floor((Date.now() - t.getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago'; }
   function dh_renderUpdates() {
