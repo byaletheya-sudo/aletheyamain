@@ -1387,6 +1387,85 @@ def _host_is_public(host):
     return bool(infos)
 
 
+def _extract_inertia_deals(body):
+    """The Nova site is an Inertia.js app: the full deal dataset is embedded as
+    JSON in the root element's data-page="..." attribute. Pull it straight out as
+    structured rows (year/make/model/trim/monthly/das/term) so we don't have to
+    AI-parse scraped text. Returns None if the payload isn't present/parseable."""
+    m = re.search(r'data-page="([^"]*)"', body)
+    if not m:
+        return None
+    try:
+        data = json.loads(_html_unescape(m.group(1)))
+    except Exception:
+        return None
+    cars = None
+    try:
+        cars = data["props"]["car_data"]["cars"]
+    except Exception:
+        cars = None
+    if not isinstance(cars, list):                       # fall back to a generic search
+        found = []
+        def walk(o):
+            if found:
+                return
+            if (isinstance(o, list) and o and isinstance(o[0], dict)
+                    and ({"deal", "deals"} & set(o[0].keys()))
+                    and ({"title", "year", "car_trim"} & set(o[0].keys()))):
+                found.append(o); return
+            if isinstance(o, dict):
+                for v in o.values():
+                    walk(v)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v)
+        walk(data)
+        cars = found[0] if found else None
+    if not isinstance(cars, list):
+        return None
+
+    def _mo(d):
+        try:
+            return float(str(d.get("monthly_payment") or 1e9).replace(",", ""))
+        except Exception:
+            return 1e9
+
+    rows = []
+    for c in cars:
+        if not isinstance(c, dict):
+            continue
+        deal = c.get("deal")
+        deals = [d for d in (c.get("deals") or []) if isinstance(d, dict)]
+        if not isinstance(deal, dict) and deals:
+            deal = sorted(deals, key=_mo)[0]             # cheapest advertised
+        if not isinstance(deal, dict):
+            continue                                     # listed car with no live deal — skip
+        make = model = ""
+        try:
+            cm = c["car_trim"]["car_model"]
+            model = cm.get("name") or ""
+            make = (cm.get("car_make") or {}).get("name") or ""
+        except Exception:
+            pass
+        year, title = c.get("year") or "", str(c.get("title") or "")
+        if not (make and model) and title:               # parse "2026 Toyota Corolla"
+            parts = title.split()
+            if parts and parts[0].isdigit():
+                year = year or parts[0]; parts = parts[1:]
+            if parts:
+                make = make or parts[0]
+            if len(parts) > 1:
+                model = model or " ".join(parts[1:])
+        rows.append({
+            "year": str(year or ""), "make": make, "model": model,
+            "trim": c.get("subtitle") or "",
+            "monthly": str(deal.get("monthly_payment") or ""),
+            "das": str(deal.get("down_payment") or ""),
+            "term": str(deal.get("lease_term_months") or ""),
+        })
+    return rows or None
+
+
 def _html_to_text(h):
     """Crude HTML -> readable text: drop scripts/styles, turn block tags into
     line breaks, strip the rest, decode entities, collapse whitespace."""
@@ -1424,6 +1503,9 @@ def verify_fetch():
     except Exception as e:
         return jsonify({"error": f"Couldn't reach the site: {e}"}), 502
     body = raw.decode("utf-8", "ignore")
+    rows = _extract_inertia_deals(body)                  # the Nova site embeds its deals as JSON
+    if rows:
+        return jsonify({"found": True, "rows": rows, "count": len(rows), "source": "live-data", "url": url})
     text = _html_to_text(body) if ("html" in ctype or "<" in body[:300]) else body
     if not text.strip():
         return jsonify({"found": False, "message": "The page loaded but had no readable text (it may be image-only or JS-rendered — use Paste instead)."})
