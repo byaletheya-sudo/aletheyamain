@@ -1244,12 +1244,21 @@ def desk_parse():
     fields = ["vehicle", "deal_type", "msrp", "selling_price", "residual_pct",
               "residual_amount", "money_factor", "apr", "term", "miles",
               "acq_fee", "rebate", "fees", "down", "tax_pct", "notes"]
+    term_keys = ["term", "residual_pct", "money_factor", "miles"]
     schema = {
         "type": "object", "additionalProperties": False,
-        "required": fields,
+        "required": fields + ["terms"],
         "properties": {
             **{k: {"type": "string"} for k in fields if k != "deal_type"},
             "deal_type": {"type": "string", "enum": ["lease", "finance"]},
+            "terms": {
+                "type": "array",
+                "items": {
+                    "type": "object", "additionalProperties": False,
+                    "required": term_keys,
+                    "properties": {k: {"type": "string"} for k in term_keys},
+                },
+            },
         },
     }
     system = (
@@ -1281,6 +1290,13 @@ def desk_parse():
         "- tax_pct: sales-tax rate ONLY if the sheet states one; else '' (caller defaults 9.75).\n"
         "- notes: anything important that doesn't fit (credit tier, region/zone, validity dates, "
         "loyalty/conquest requirement, multiple-term summary). Keep it short; else ''.\n"
+        "- terms: if the sheet lists MULTIPLE TERMS (e.g. 24 / 36 / 39 / 48 month) each with their OWN "
+        "residual and money factor, output one row PER TERM in this array: {term, residual_pct, "
+        "money_factor, miles}. Use the same conversions (residual as %, money factor as a small decimal, "
+        "lease-rate% ÷ 2400 -> MF). Use the PRIMARY mileage row for each term (prefer 10k, then 12k, then "
+        "7.5k). If a term residual is given only in dollars, convert to % using MSRP. If the sheet shows "
+        "only one term (no real curve), output terms = [] (empty). Still fill the single residual_pct / "
+        "money_factor / term fields above with the primary (36-month) row.\n"
         "RULES: normalize shorthand to plain numbers ('51k'->51000, '$3,500'->3500, '.0012 MF'->0.0012). "
         "A money factor is a small decimal like 0.00120; never confuse it with APR percent. Leave any "
         "field '' if it isn't present. Output numbers only (no $, %, commas) except 'vehicle' and 'notes'."
@@ -1302,7 +1318,14 @@ def desk_parse():
             response_format={"type": "json_schema", "json_schema": {"name": "program", "strict": True, "schema": schema}},
         )
         out = json.loads(resp.choices[0].message.content)
-        return jsonify({"program": {k: (out.get(k) or "").strip() if isinstance(out.get(k), str) else out.get(k) for k in fields}})
+        prog = {k: (out.get(k) or "").strip() if isinstance(out.get(k), str) else out.get(k) for k in fields}
+        rows = out.get("terms") if isinstance(out.get("terms"), list) else []
+        prog["terms"] = [
+            {"term": (r.get("term") or "").strip(), "resid": (r.get("residual_pct") or "").strip(),
+             "mf": (r.get("money_factor") or "").strip(), "miles": (r.get("miles") or "").strip()}
+            for r in rows if isinstance(r, dict) and (r.get("term") or "").strip()
+        ]
+        return jsonify({"program": prog})
     except Exception as e:
         return jsonify({"error": f"Couldn't read that rate sheet: {e}"}), 502
 
