@@ -721,6 +721,12 @@
   .inv-item input { margin: 0; }
   .inv-item .inv-rm { width: 26px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid rgba(255,90,90,0.22); background: rgba(255,90,90,0.08); color: #ff9a9a; font-size: 15px; cursor: pointer; }
   .inv-item .inv-rm:hover { background: #ff4a4a; color: #fff; }
+  .inv-tot-readout { margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 11px; }
+  .inv-tr { display: flex; justify-content: space-between; font-size: .85rem; color: #aab1bc; padding: 4px 0; }
+  .inv-tr b { color: #e6e7ea; font-weight: 600; }
+  .inv-tr.grand { border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 9px; font-size: 1rem; }
+  .inv-tr.grand b { color: #fff; font-weight: 800; }
+  .inv-tr.bal b { color: #4a9eff; }
   .inv-list { display: flex; flex-direction: column; gap: 6px; }
   .inv-list-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; cursor: pointer; font-size: .82rem; color: #c2c7cf; }
   .inv-list-item:hover { border-color: #4a9eff; background: rgba(74,158,255,0.06); }
@@ -1595,7 +1601,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="panel">
               <h2>Client</h2>
               <label for="inv_cname">Client name</label><input type="text" id="inv_cname" placeholder="John Smith" oninput="inv_render()">
-              <div class="row"><div><label for="inv_cemail">Email</label><input type="text" id="inv_cemail" placeholder="john@email.com" oninput="inv_render()"></div><div><label for="inv_cphone">Phone</label><input type="text" id="inv_cphone" placeholder="(818) 000-0000" oninput="inv_render()"></div></div>
+              <div class="row"><div><label for="inv_cemail">Email</label><input type="text" id="inv_cemail" placeholder="john@email.com" oninput="inv_render()"></div><div><label for="inv_cphone">Phone</label><input type="text" id="inv_cphone" placeholder="(818) - 555 - 1234" oninput="this.value = inv_fmtPhone(this.value); inv_render()"></div></div>
               <label for="inv_caddr">Address</label><input type="text" id="inv_caddr" placeholder="123 Main St, Los Angeles, CA" oninput="inv_render()">
             </div>
             <div class="panel">
@@ -1639,6 +1645,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                 <div><label for="inv_disc">Discount ($)</label><input type="text" id="inv_disc" placeholder="0" oninput="inv_render()"></div>
                 <div><label for="inv_paid">Amount paid ($)</label><input type="text" id="inv_paid" placeholder="0" oninput="inv_render()"></div>
               </div>
+              <div class="inv-tot-readout" id="inv_totReadout"></div>
             </div>
             <div class="panel">
               <h2>Notes / Terms</h2>
@@ -1663,7 +1670,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <div class="inv-scaler" id="invScaler">
                 <div class="inv" id="inv">
                   <div class="inv-bar">
-                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">@NovAutoUSA &nbsp;·&nbsp; (818) 873 - 3697</div></div>
+                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">@NovAutoUSA &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
                     <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
                   </div>
                   <div class="inv-parties">
@@ -1676,7 +1683,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
                   </div>
-                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) 873 - 3697</div></div>
+                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
                 </div>
               </div>
             </div>
@@ -5001,7 +5008,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   const inv_num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : 0; };
   const inv_money = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const inv_numLabel = n => 'INV-' + (1000 + (n || 0));
+  const INV_START = 1827;                              // first invoice looks like NOV-1827
+  const inv_next = () => Math.max(inv_counter + 1, INV_START);
+  const inv_numLabel = n => 'NOV-' + (n || 0);
+  function inv_fmtPhone(v) {
+    const d = (v || '').replace(/\D/g, '').slice(0, 10);
+    if (!d) return (v || '').trim();
+    if (d.length <= 3) return '(' + d;
+    if (d.length <= 6) return '(' + d.slice(0, 3) + ') - ' + d.slice(3);
+    return '(' + d.slice(0, 3) + ') - ' + d.slice(3, 6) + ' - ' + d.slice(6);
+  }
   function inv_status(t, type = '') { const e = $('inv_status'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
   function inv_isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function inv_fmtDate(iso) { if (!iso) return '—'; const t = new Date(iso + 'T00:00'); return isNaN(t) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
@@ -5031,8 +5047,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function inv_render() {
     if (!$('inv_metaEl')) return;
     const M = inv_money;
-    $('inv_metaEl').innerHTML = `<div><b>Invoice #</b>${escapeHtml($('inv_num').value || inv_numLabel(inv_counter + 1))}</div><div><b>Date</b>${inv_fmtDate($('inv_date').value)}</div><div><b>Due</b>${inv_fmtDate($('inv_due').value)}</div>`;
-    const bill = [$('inv_cname').value, $('inv_cemail').value, $('inv_cphone').value, $('inv_caddr').value].map(s => s.trim()).filter(Boolean);
+    $('inv_metaEl').innerHTML = `<div><b>Invoice #</b>${escapeHtml($('inv_num').value || inv_numLabel(inv_next()))}</div><div><b>Date</b>${inv_fmtDate($('inv_date').value)}</div><div><b>Due</b>${inv_fmtDate($('inv_due').value)}</div>`;
+    const bill = [$('inv_cname').value, $('inv_cemail').value, inv_fmtPhone($('inv_cphone').value), $('inv_caddr').value].map(s => s.trim()).filter(Boolean);
     $('inv_billEl').innerHTML = bill.length ? bill.map((l, i) => `<div${i === 0 ? ' style="font-weight:700;color:#0b1220;"' : ''}>${escapeHtml(l)}</div>`).join('') : '<div style="color:#b8bec6;">—</div>';
     const vehName = $('inv_vehicle').value.trim();
     $('inv_vehWrap').style.display = vehName ? '' : 'none';
@@ -5069,6 +5085,15 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
     $('inv_totEl').innerHTML = r;
     $('inv_notesEl').textContent = $('inv_notes').value || '';
+    // live totals readout in the controls panel (updates as line items change)
+    const ro = $('inv_totReadout');
+    if (ro) {
+      let h = `<div class="inv-tr"><span>Subtotal</span><b>${M(t.subtotal)}</b></div>`;
+      if (t.disc) h += `<div class="inv-tr"><span>Discount</span><b>−${M(t.disc)}</b></div>`;
+      h += `<div class="inv-tr"><span>Tax (${t.taxPct || 0}%)</span><b>${M(t.tax)}</b></div><div class="inv-tr grand"><span>Total</span><b>${M(t.total)}</b></div>`;
+      if (t.paid) h += `<div class="inv-tr"><span>Amount Paid</span><b>−${M(t.paid)}</b></div><div class="inv-tr bal"><span>Balance Due</span><b>${M(t.balance)}</b></div>`;
+      ro.innerHTML = h;
+    }
   }
   function inv_new() {
     inv_curId = null;
@@ -5077,7 +5102,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_notes').value = 'Thank you for your business! Deposit is non-refundable. Balance due on delivery.';
     const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
     inv_items = [{ desc: '', price: '' }];
-    $('inv_num').value = inv_numLabel(inv_counter + 1);
+    $('inv_num').value = inv_numLabel(inv_next());
     inv_renderItems(); inv_render(); inv_renderList();
     inv_status('New invoice — its number is assigned when you save.', '');
   }
@@ -5101,7 +5126,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   async function inv_save() {
     let number;
     if (inv_curId && inv_list.find(x => x.id === inv_curId)) { number = inv_list.find(x => x.id === inv_curId).number; }
-    else { number = ++inv_counter; inv_curId = 'inv' + Date.now().toString(36) + Math.floor(Math.random() * 1e4); }
+    else { number = inv_next(); inv_curId = 'inv' + Date.now().toString(36) + Math.floor(Math.random() * 1e4); }
+    inv_counter = Math.max(inv_counter, number);
     const o = {
       id: inv_curId, number, date: $('inv_date').value, due: $('inv_due').value,
       cname: $('inv_cname').value, cemail: $('inv_cemail').value, cphone: $('inv_cphone').value, caddr: $('inv_caddr').value,
@@ -5132,7 +5158,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   async function inv_loadAll() {
     if (inv_loaded) return;
-    try { const r = await fetch('/invoices'); if (!r.ok) return; const d = await r.json(); inv_list = d.invoices || []; inv_counter = d.counter || 0; inv_loaded = true; inv_renderList(); if (!inv_curId) $('inv_num').value = inv_numLabel(inv_counter + 1); inv_render(); } catch (e) { }
+    try { const r = await fetch('/invoices'); if (!r.ok) return; const d = await r.json(); inv_list = d.invoices || []; inv_counter = d.counter || 0; inv_loaded = true; inv_renderList(); if (!inv_curId) $('inv_num').value = inv_numLabel(inv_next()); inv_render(); } catch (e) { }
   }
   async function inv_downloadPDF() {
     if (!window.jspdf) { inv_status('PDF library still loading — try again in a second.', 'error'); return; }
