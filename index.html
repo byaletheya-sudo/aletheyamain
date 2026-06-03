@@ -738,7 +738,7 @@
   /* the document itself — a clean light invoice page (Letter, 1080 x 1397) */
   .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
   .inv-scaler { transform-origin: top left; }
-  .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; }
+  .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Tight', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; }
   .inv-bar { background: linear-gradient(118deg, #0a1326 0%, #14264a 56%, #1d386b 100%); border-bottom: 5px solid #2f7ff0; margin: -76px -78px 0; padding: 54px 78px 50px; display: flex; justify-content: space-between; align-items: flex-start; }
   .inv-bar-logo img { width: 300px; height: auto; display: block; }
   .inv-bar-tag { margin-top: 16px; font-size: 20px; color: #9fb6e0; letter-spacing: .03em; line-height: 1.5; }
@@ -747,16 +747,16 @@
   .inv-meta-rows { margin-top: 16px; font-size: 22px; color: #c4d0e6; }
   .inv-meta-rows div { display: flex; gap: 20px; justify-content: flex-end; padding: 3px 0; }
   .inv-meta-rows b { color: #7d97c6; font-weight: 600; min-width: 96px; text-align: left; }
-  .inv-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 40px; margin-top: 36px; padding: 28px 34px; background: linear-gradient(135deg, #f3f8ff, #eaf1fc); border: 1px solid #dde8f8; border-left: 5px solid #2f7ff0; border-radius: 14px; }
+  .inv-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 44px; margin-top: 40px; padding: 30px 34px; background: #f7f8fa; border: 1px solid #edf0f4; border-radius: 16px; }
   .inv-details > div { display: flex; flex-direction: column; gap: 4px; }
   .inv-details span { font-size: 16px; text-transform: uppercase; letter-spacing: .07em; color: #6f86b5; font-weight: 700; }
   .inv-details b { font-size: 24px; color: #0b1220; font-weight: 700; }
   .inv-parties { display: flex; justify-content: space-between; gap: 50px; margin-top: 40px; }
   .inv-party-r { text-align: right; }
-  .inv-lbl { font-size: 18px; text-transform: uppercase; letter-spacing: .12em; color: #2f7ff0; margin-bottom: 9px; font-weight: 700; }
+  .inv-lbl { font-size: 17px; text-transform: uppercase; letter-spacing: .14em; color: #98a0ab; margin-bottom: 10px; font-weight: 600; }
   .inv-party > div:not(.inv-lbl) { font-size: 24px; color: #3a414c; line-height: 1.5; }
   .inv-table { width: 100%; border-collapse: collapse; margin-top: 44px; font-size: 24px; }
-  .inv-table th { text-align: left; font-size: 18px; text-transform: uppercase; letter-spacing: .07em; color: #6f86b5; border-bottom: 2.5px solid #2f7ff0; padding: 0 0 14px; font-weight: 700; }
+  .inv-table th { text-align: left; font-size: 17px; text-transform: uppercase; letter-spacing: .09em; color: #98a0ab; border-bottom: 1px solid #e3e7ec; padding: 0 0 15px; font-weight: 600; }
   .inv-table th.num, .inv-table td.num { text-align: right; }
   .inv-table td { padding: 18px 0; border-bottom: 1px solid #eef1f4; vertical-align: top; color: #2a313c; }
   .inv-table td.num { white-space: nowrap; color: #1a1f29; }
@@ -764,11 +764,15 @@
   .inv-notes { flex: 1; font-size: 21px; color: #5b636e; line-height: 1.6; white-space: pre-wrap; }
   .inv-totbox { width: 440px; flex: 0 0 auto; font-size: 24px; }
   .inv-totrow { display: flex; justify-content: space-between; padding: 10px 0; color: #4a525e; }
-  .inv-totrow.grand { background: linear-gradient(135deg, #0b1220, #1a356a); color: #fff; border-radius: 13px; margin-top: 16px; padding: 20px 26px; font-size: 31px; font-weight: 800; }
-  .inv-totrow.grand span:last-child { color: #7db3ff; }
+  .inv-totrow.grand { border-top: 1.5px solid #0b1220; margin-top: 14px; padding-top: 20px; font-size: 33px; font-weight: 700; color: #0b1220; letter-spacing: -.5px; }
+  .inv-totrow.grand span:last-child { font-weight: 700; }
   .inv-totrow.bal { color: #2f7ff0; font-weight: 700; border-top: 1px solid #e3e7ec; margin-top: 6px; padding-top: 14px; }
-  .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 2px solid #eef1f4; padding-top: 24px; }
-  .inv-foot-tag { font-size: 28px; font-weight: 800; font-style: italic; letter-spacing: -.5px; color: #0b1220; }
+  .inv-close { text-align: center; margin-top: 58px; }
+  .inv-close-line { font-size: 28px; font-weight: 500; color: #1a1f29; letter-spacing: -.4px; }
+  .inv-close-pro { margin-top: 12px; font-size: 18px; color: #98a0ab; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
+  .inv-close-pro b { color: #2f7ff0; font-weight: 700; letter-spacing: -.2px; text-transform: none; font-size: 22px; }
+  .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 1px solid #eef1f4; padding-top: 24px; }
+  .inv-foot-tag { font-size: 26px; font-weight: 600; font-style: italic; letter-spacing: -.4px; color: #1a1f29; }
   .inv-foot-tag b { color: #2f7ff0; font-weight: 800; }
   .inv-foot-meta { margin-top: 10px; font-size: 19px; color: #98a0ab; letter-spacing: .02em; }
 
@@ -1597,6 +1601,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                 <div><label for="inv_date">Date</label><input type="date" id="inv_date" oninput="inv_render()"></div>
                 <div><label for="inv_due">Due date</label><input type="date" id="inv_due" oninput="inv_render()"></div>
               </div>
+              <label for="inv_pro">Nova Pro <span style="font-weight:400;opacity:.55;font-size:.78rem;">(the agent who served them)</span></label>
+              <input type="text" id="inv_pro" placeholder="Agent name" oninput="inv_render()">
             </div>
             <div class="panel">
               <h2>Client</h2>
@@ -1649,7 +1655,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             </div>
             <div class="panel">
               <h2>Notes / Terms</h2>
-              <textarea id="inv_notes" oninput="inv_render()" style="min-height:80px;">Thank you for your business! Deposit is non-refundable. Balance due on delivery.</textarea>
+              <textarea id="inv_notes" oninput="inv_render()" style="min-height:80px;" placeholder="Any terms or notes (optional) — e.g. deposit non-refundable, balance due on delivery…"></textarea>
             </div>
             <div class="panel">
               <h2>Export</h2>
@@ -1683,6 +1689,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
                   </div>
+                  <div class="inv-close" id="inv_closeEl"></div>
                   <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
                 </div>
               </div>
@@ -5088,7 +5095,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     r += `<div class="inv-totrow grand"><span>Total</span><span>${M(t.total)}</span></div>`;
     if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
     $('inv_totEl').innerHTML = r;
-    $('inv_notesEl').textContent = $('inv_notes').value || '';
+    const notesV = $('inv_notes').value.trim();
+    $('inv_notesEl').textContent = notesV; $('inv_notesEl').style.display = notesV ? '' : 'none';
+    const pro = $('inv_pro').value.trim();
+    $('inv_closeEl').innerHTML = `<div class="inv-close-line">It was a pleasure serving you.</div>` + (pro ? `<div class="inv-close-pro">Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b></div>` : '');
     // live totals readout in the controls panel (updates as line items change)
     const ro = $('inv_totReadout');
     if (ro) {
@@ -5101,9 +5111,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function inv_new() {
     inv_curId = null;
-    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_mpre', 'inv_mpost', 'inv_apr', 'inv_down', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
+    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_mpre', 'inv_mpost', 'inv_apr', 'inv_down', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid', 'inv_pro', 'inv_notes'].forEach(id => { if ($(id)) $(id).value = ''; });
     $('inv_tax').value = '9.75'; $('inv_mtax').value = '9.75'; $('inv_delivery').value = 'Delivered'; inv_setDeal('lease');
-    $('inv_notes').value = 'Thank you for your business! Deposit is non-refundable. Balance due on delivery.';
     const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
     inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(inv_next());
@@ -5119,7 +5128,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_mpre').value = o.mpre || ''; $('inv_mtax').value = o.mtax || '9.75'; $('inv_mpost').value = o.mpost || '';
     $('inv_das').value = o.das || ''; $('inv_term').value = o.term || ''; $('inv_miles').value = o.miles || ''; $('inv_apr').value = o.apr || ''; $('inv_down').value = o.down || '';
     $('inv_delivery').value = o.delivery != null ? o.delivery : 'Delivered'; $('inv_pickup').value = o.pickup || '';
-    $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || '';
+    $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || ''; $('inv_pro').value = o.pro || '';
     inv_setDeal(o.dealType === 'finance' ? 'finance' : 'lease');
     inv_items = (o.items || []).map(it => ({ desc: it.desc || '', price: it.price != null ? it.price : '' })); if (!inv_items.length) inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(o.number);
@@ -5138,7 +5147,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, color: $('inv_color').value, dealType: inv_dealType,
       mpre: $('inv_mpre').value, mtax: $('inv_mtax').value, mpost: $('inv_mpost').value,
       das: $('inv_das').value, term: $('inv_term').value, miles: $('inv_miles').value, apr: $('inv_apr').value, down: $('inv_down').value,
-      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, items: inv_items.map(it => ({ desc: it.desc, price: it.price })),
+      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, pro: $('inv_pro').value, items: inv_items.map(it => ({ desc: it.desc, price: it.price })),
       tax: $('inv_tax').value, disc: $('inv_disc').value, paid: $('inv_paid').value, notes: $('inv_notes').value, savedAt: new Date().toISOString(),
     };
     const i = inv_list.findIndex(x => x.id === inv_curId);
