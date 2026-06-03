@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -738,7 +739,8 @@
   /* the document itself — a clean light invoice page (Letter, 1080 x 1397) */
   .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
   .inv-scaler { transform-origin: top left; }
-  .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Tight', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; }
+  .inv, .inv * { font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; }
+  .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; -webkit-font-smoothing: antialiased; }
   .inv-bar { background: linear-gradient(118deg, #0a1326 0%, #14264a 56%, #1d386b 100%); border-bottom: 5px solid #2f7ff0; margin: -76px -78px 0; padding: 54px 78px 50px; display: flex; justify-content: space-between; align-items: flex-start; }
   .inv-bar-logo img { width: 300px; height: auto; display: block; }
   .inv-bar-tag { margin-top: 16px; font-size: 20px; color: #9fb6e0; letter-spacing: .03em; line-height: 1.5; }
@@ -778,8 +780,8 @@
   .inv-close-pro { margin-top: 12px; font-size: 18px; color: #98a0ab; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
   .inv-close-pro b { color: #2f7ff0; font-weight: 700; letter-spacing: -.2px; text-transform: none; font-size: 22px; }
   .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 1px solid #eef1f4; padding-top: 24px; }
-  .inv-foot-tag { font-size: 26px; font-weight: 600; font-style: italic; letter-spacing: -.4px; color: #1a1f29; }
-  .inv-foot-tag b { color: #2f7ff0; font-weight: 800; }
+  .inv-foot-tag { font-size: 25px; font-weight: 600; letter-spacing: .2px; color: #0b1220; }
+  .inv-foot-tag b { color: #0b1220; font-weight: 700; }
   .inv-foot-meta { margin-top: 10px; font-size: 19px; color: #98a0ab; letter-spacing: .02em; }
 
   /* ===== cross-tool coherence: one consistent feel for every secondary/compact button ===== */
