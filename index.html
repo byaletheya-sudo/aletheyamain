@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<!-- iPhone HEIC/HEIF photos → JPEG in the browser so they render & export anywhere -->
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script type="module">
@@ -619,6 +622,12 @@
     border: 1px solid rgba(255,255,255,.09); box-shadow: 0 30px 70px rgba(0,0,0,.5);
   }
   .sp__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sp-drop { margin-top: 8px; border: 1.5px dashed #2e3440; border-radius: 10px; padding: 15px 14px; text-align: center; color: #8a92a0; font-size: .84rem; cursor: pointer; transition: border-color .15s, background .15s, color .15s; background: rgba(255,255,255,.015); }
+  .sp-drop:hover { border-color: #4a9eff; color: #cdd2da; }
+  .sp-drop.over { border-color: #4a9eff; background: rgba(74,158,255,.10); color: #fff; }
+  .sp-drop b { color: #cdd2da; font-weight: 600; }
+  .sp-drop small { opacity: .55; }
+  .sp__photo.over { outline: 3px solid #4a9eff; outline-offset: -3px; }
   .sp__photo .ph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: rgba(255,255,255,.28); font-size: 28px; font-weight: 500; letter-spacing: 1px; }
   .sp__photo img[src=""] + .ph, .sp__photo img:not([src]) + .ph { display: flex; }
   .sp__hero.one .sp__photo { flex: 1; }
@@ -971,15 +980,21 @@
                 <button data-n="2" onclick="spSetLayout(2)">2 photos</button>
               </div>
 
-              <label for="spPhoto1" style="margin-top:14px;">Photo 1</label>
-              <input type="file" id="spPhoto1" accept="image/*" onchange="spLoadPhoto(1, event)" style="font-size:0.85rem;color:#aaa;">
+              <label style="margin-top:14px;">Photo 1</label>
+              <div class="sp-drop" id="spDrop1" onclick="$('spPhoto1').click()">
+                <span>📷 <b>Drop a photo</b>, tap to browse, or paste — <small>iPhone HEIC works</small></span>
+              </div>
+              <input type="file" id="spPhoto1" accept="image/*,.heic,.heif" onchange="spLoadPhoto(1, event)" style="display:none;">
               <div class="controls" style="margin-top:8px;">
                 <button class="btn-ghost" id="spEnh1" onclick="openEditModal(1)" style="display:none;">Enhance photo</button>
                 <button class="btn-ghost" id="spPlate1" onclick="openPlateModal(1)" style="display:none;">Cover license plate</button>
               </div>
               <div id="spPhoto2Wrap" style="display:none;">
-                <label for="spPhoto2" style="margin-top:12px;">Photo 2</label>
-                <input type="file" id="spPhoto2" accept="image/*" onchange="spLoadPhoto(2, event)" style="font-size:0.85rem;color:#aaa;">
+                <label style="margin-top:12px;">Photo 2</label>
+                <div class="sp-drop" id="spDrop2" onclick="$('spPhoto2').click()">
+                  <span>📷 <b>Drop a photo</b>, tap to browse, or paste — <small>iPhone HEIC works</small></span>
+                </div>
+                <input type="file" id="spPhoto2" accept="image/*,.heic,.heif" onchange="spLoadPhoto(2, event)" style="display:none;">
                 <div class="controls" style="margin-top:8px;">
                   <button class="btn-ghost" id="spEnh2" onclick="openEditModal(2)" style="display:none;">Enhance photo</button>
                   <button class="btn-ghost" id="spPlate2" onclick="openPlateModal(2)" style="display:none;">Cover license plate</button>
@@ -1038,7 +1053,7 @@
                     <div class="sp__logo"><img src="logo.png" alt="NovAuto" crossorigin="anonymous"></div>
                   </div>
                   <div class="sp__hero one" id="spPhotos">
-                    <div class="sp__photo sp__slot1"><img id="spImg1" alt=""><div class="ph">Add a photo</div></div>
+                    <div class="sp__photo sp__slot1" id="spSlot1"><img id="spImg1" alt=""><div class="ph">Add a photo</div></div>
                     <div class="sp__photo sp__slot2" id="spSlot2"><img id="spImg2" alt=""><div class="ph">Add a photo</div></div>
                   </div>
                   <div class="sp__panel">
@@ -2450,16 +2465,55 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('spPhoto2Wrap').style.display = n === 2 ? '' : 'none';
   }
 
+  // iPhone photos are HEIC/HEIF — most browsers can't render them, so convert to
+  // JPEG in the browser first. Other formats pass straight through.
+  async function spFileToDataURL(file) {
+    let f = file;
+    const heic = /heic|heif/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
+    if (heic && window.heic2any) {
+      try { const o = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 }); f = Array.isArray(o) ? o[0] : o; }
+      catch (e) { /* some HEICs decode natively (e.g. Safari) — fall back to the raw file */ }
+    }
+    return await blobToDataURL(f);
+  }
+  async function spSetPhoto(slot, file) {
+    if (!file) return;
+    const ok = /^image\//i.test(file.type || '') || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(file.name || '');
+    if (!ok) { setSpStatus('That doesn’t look like an image.', 'error'); return; }
+    setSpStatus('Loading photo…', 'active');     // HEIC conversion can take a moment
+    try {
+      const url = await spFileToDataURL(file);
+      spPhotos[slot] = url;
+      const img = $('spImg' + slot); img.src = url; await waitForImage(img);
+      $('spPlate' + slot).style.display = '';     // enable "Cover license plate"
+      $('spEnh' + slot).style.display = '';        // enable "Enhance photo"
+      setSpStatus('', '');
+    } catch (err) { setSpStatus('Couldn’t load that photo — try a JPG or PNG.', 'error'); }
+  }
   async function spLoadPhoto(slot, e) {
     const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const url = await blobToDataURL(file);
-    spPhotos[slot] = url;
-    $('spImg' + slot).src = url;
-    $('spPlate' + slot).style.display = '';   // enable "Cover license plate"
-    $('spEnh' + slot).style.display = '';      // enable "Enhance photo"
-    setSpStatus('', '');
+    if (file) await spSetPhoto(slot, file);
+    e.target.value = '';                           // allow re-picking the same file
   }
+  // drag & drop onto the controls drop zones or the preview slots, + paste while on Sold
+  (function spWireDrop() {
+    const wire = (el, slot) => {
+      if (!el) return;
+      ['dragenter', 'dragover'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); }));
+      ['dragleave', 'dragend', 'drop'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove('over'); }));
+      el.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) spSetPhoto(slot, f); });
+    };
+    wire($('spDrop1'), 1); wire($('spSlot1'), 1);
+    wire($('spDrop2'), 2); wire($('spSlot2'), 2);
+    document.addEventListener('paste', e => {
+      const v = $('view-sold'); if (!v || !v.classList.contains('active')) return;
+      const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type) || /\.(heic|heif)$/i.test(x.name || ''));
+      if (!f) return;
+      e.preventDefault();
+      const slot = (spPhotos[1] && spLayout === 2 && !spPhotos[2]) ? 2 : 1;   // fill the first empty slot
+      spSetPhoto(slot, f);
+    });
+  })();
 
   function renderSold() {
     const badge = $('spBadge').value.trim();
