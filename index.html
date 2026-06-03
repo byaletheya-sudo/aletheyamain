@@ -634,12 +634,19 @@
   .sp-drop b { color: #cdd2da; font-weight: 600; }
   .sp-drop small { opacity: .55; }
   .sp__photo.over { outline: 3px solid #4a9eff; outline-offset: -3px; }
-  .sp-bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; margin-top: 12px; }
+  .sp-bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 10px; margin-top: 12px; }
   .sp-bulk-grid:empty { display: none; }
   .sp-bulk-item { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; position: relative; }
-  .sp-bulk-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #111; }
-  .sp-bulk-item .ti { width: 100%; border: none; border-top: 1px solid #222; background: #111; color: #eee; font-size: .8rem; padding: 7px 8px; outline: none; box-sizing: border-box; }
+  .sp-bulk-item.active { border-color: #4a9eff; box-shadow: 0 0 0 1px #4a9eff inset; }
+  .sp-bulk-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #111; cursor: pointer; }
+  .sp-bulk-item .ti { width: 100%; border: none; border-top: 1px solid #222; background: #111; color: #eee; font-size: .78rem; padding: 6px 8px; outline: none; box-sizing: border-box; }
   .sp-bulk-item .ti:focus { background: #161922; }
+  .sp-bulk-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-top: 1px solid #222; }
+  .bulk-mini { flex: 1 1 auto; min-width: 0; font-size: .62rem; font-weight: 600; padding: 5px 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #cdd2da; cursor: pointer; white-space: nowrap; }
+  .bulk-mini:hover { background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.34); color: #fff; }
+  .sp-bulk-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; color: #9aa0aa; font-size: .82rem; font-weight: 600; }
+  .sp-bulk-nav button { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cdd2da; font-size: .8rem; cursor: pointer; padding: 0; }
+  .sp-bulk-nav button:hover { background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.34); color: #fff; }
   .sp-bulk-item .rm { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
   .sp-bulk-item .rm:hover { background: #ff4a4a; }
   .sp-bulk-item .dot { position: absolute; top: 6px; left: 6px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,.4); }
@@ -1061,6 +1068,7 @@
               </div>
               <input type="file" id="spBulkInput" accept="image/*,.heic,.heif" multiple onchange="spBulkAdd(event.target.files); event.target.value='';" style="display:none;">
               <div id="spBulkGrid" class="sp-bulk-grid"></div>
+              <div id="spBulkNav" class="sp-bulk-nav" style="display:none;"><button onclick="sp_bulkPrev()" title="Previous">◀</button><span id="spBulkNavLabel">1 of 1</span><button onclick="sp_bulkNext()" title="Next">▶</button></div>
               <div class="controls" id="spBulkActions" style="margin-top:12px;display:none;">
                 <button class="btn-start" id="spBulkDlBtn" onclick="spBulkDownloadAll()">⬇ Download All (<span id="spBulkCount">0</span>)</button>
                 <button class="btn-ghost" onclick="spBulkClear()">Clear</button>
@@ -2445,6 +2453,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const out = canvas.toDataURL('image/png');
     spPhotos[plateSlot] = out;
     $('spImg' + plateSlot).src = out;
+    if (plateSlot === 1 && typeof spBulkWriteBack === 'function') spBulkWriteBack();   // persist to the active bulk item
     setS('plateStatus', 'Nova plate added ✓', 'done');
     setTimeout(closePlateModal, 500);
   }
@@ -2515,6 +2524,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const out = work.toDataURL('image/jpeg', 0.92);
     spPhotos[editSlot] = out;
     $('spImg' + editSlot).src = out;
+    if (editSlot === 1 && typeof spBulkWriteBack === 'function') spBulkWriteBack();   // persist to the active bulk item
     setS('editStatus', 'Applied ✓', 'done');
     setTimeout(closeEditModal, 500);
   }
@@ -2568,8 +2578,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // ---- zoom / reframe each Sold photo (per slot) ----
   const spCrop = { 1: { z: 1, x: 0, y: 0 }, 2: { z: 1, x: 0, y: 0 } };
   function spApplyCrop(slot) { const img = $('spImg' + slot); if (img) img.style.transform = `translate(${spCrop[slot].x}px, ${spCrop[slot].y}px) scale(${spCrop[slot].z})`; }
-  function spSetZoom(slot, v) { spCrop[slot].z = parseFloat(v) || 1; spApplyCrop(slot); }
-  function spResetCrop(slot) { spCrop[slot] = { z: 1, x: 0, y: 0 }; const s = $('spZoom' + slot); if (s) s.value = 1; spApplyCrop(slot); }
+  function spSetZoom(slot, v) { spCrop[slot].z = parseFloat(v) || 1; spApplyCrop(slot); if (slot === 1 && typeof spBulkSaveCrop === 'function') spBulkSaveCrop(); }
+  function spResetCrop(slot) { spCrop[slot] = { z: 1, x: 0, y: 0 }; const s = $('spZoom' + slot); if (s) s.value = 1; spApplyCrop(slot); if (slot === 1 && typeof spBulkSaveCrop === 'function') spBulkSaveCrop(); }
   (function spWireZoomDrag() {
     const scaleOf = () => { const st = $('spScaler'); const stage = st && st.parentElement; return stage && stage.clientWidth ? stage.clientWidth / 1080 : 1; };
     [1, 2].forEach(slot => {
@@ -2577,7 +2587,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       let drag = false, lx = 0, ly = 0;
       const start = (x, y) => { if (!spPhotos[slot]) return; drag = true; lx = x; ly = y; el.classList.add('grabbing'); };
       const move = (x, y) => { if (!drag) return; const s = scaleOf() || 1; spCrop[slot].x += (x - lx) / s; spCrop[slot].y += (y - ly) / s; lx = x; ly = y; spApplyCrop(slot); };
-      const end = () => { drag = false; el.classList.remove('grabbing'); };
+      const end = () => { if (drag && slot === 1 && typeof spBulkSaveCrop === 'function') spBulkSaveCrop(); drag = false; el.classList.remove('grabbing'); };
       el.addEventListener('mousedown', e => { start(e.clientX, e.clientY); });
       window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
       window.addEventListener('mouseup', end);
@@ -2617,41 +2627,93 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     });
   })();
 
-  // ---- Sold bulk queue: many photos -> many posts -> download all ----
-  let sp_bulk = [];                            // { photo, title, name }
+  // ---- Sold bulk queue: many photos -> editable posts -> preview & download all ----
+  let sp_bulk = [];                            // { photo, title, sub, badge, name, crop }
+  let sp_bulkIdx = 0, sp_bulkActive = false;
   let spBulkAbort = false;
   function setSpBulk(t, type = '') { const e = $('spBulkStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
   async function spBulkAdd(files) {
     const arr = [...files]; if (!arr.length) return;
     setSpBulk('Adding ' + arr.length + ' photo' + (arr.length > 1 ? 's' : '') + '… (HEIC may take a moment)', 'active');
+    const startLen = sp_bulk.length, sharedBadge = (($('spBadge') && $('spBadge').value.trim()) || 'JUST SOLD');
     let added = 0;
     for (const file of arr) {
-      const ok = /^image\//i.test(file.type || '') || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(file.name || '');
-      if (!ok) continue;
-      try { const url = await spFileToDataURL(file); sp_bulk.push({ photo: url, title: '', name: (file.name || '').replace(/\.[^.]+$/, '') }); added++; }
+      if (!isImageFile(file)) continue;
+      try { const url = await spFileToDataURL(file); sp_bulk.push({ photo: url, title: '', sub: '', badge: sharedBadge, name: (file.name || '').replace(/\.[^.]+$/, ''), crop: { z: 1, x: 0, y: 0 } }); added++; }
       catch (e) { /* skip a photo that won't decode */ }
     }
     spBulkRender();
-    setSpBulk(added ? ('Added ' + added + ' — give each a title, then Download All.') : 'No usable images in that drop.', added ? 'done' : 'error');
+    if (added) sp_bulkPreview(startLen);        // jump to the first newly-added so its preview shows
+    setSpBulk(added ? ('Added ' + added + ' — edit each, flip through with ◀ ▶, then Download All.') : 'No usable images in that drop.', added ? 'done' : 'error');
   }
   function spBulkRender() {
     const g = $('spBulkGrid'); if (!g) return;
+    const esc = s => (s || '').replace(/"/g, '&quot;');
     g.innerHTML = sp_bulk.map((it, i) =>
-      `<div class="sp-bulk-item"><span class="dot" id="spbdot-${i}"></span><button class="rm" onclick="spBulkRemove(${i})" title="Remove">×</button>` +
-      `<img src="${it.photo}" alt=""><input class="ti" value="${(it.title || '').replace(/"/g, '&quot;')}" placeholder="${(it.name || 'Title').replace(/"/g, '&quot;')}" oninput="sp_bulk[${i}].title=this.value"></div>`
+      `<div class="sp-bulk-item${i === sp_bulkIdx && sp_bulkActive ? ' active' : ''}" id="spbi-${i}">
+        <span class="dot" id="spbdot-${i}"></span><button class="rm" onclick="spBulkRemove(${i})" title="Remove">×</button>
+        <img src="${it.photo}" alt="" onclick="sp_bulkPreview(${i})" title="Preview & reframe this photo">
+        <input class="ti" value="${esc(it.title)}" placeholder="Title (e.g. ${esc(it.name || '2024 BMW M3')})" oninput="spBulkField(${i},'title',this.value)">
+        <input class="ti" value="${esc(it.sub)}" placeholder="Subtitle (optional)" oninput="spBulkField(${i},'sub',this.value)">
+        <input class="ti" value="${esc(it.badge)}" placeholder="Badge" oninput="spBulkField(${i},'badge',this.value)">
+        <div class="sp-bulk-tools"><button class="bulk-mini" onclick="spBulkEnhance(${i})" title="Enhance photo">✨ Enhance</button><button class="bulk-mini" onclick="spBulkPlate(${i})" title="Cover license plate">🚗 Plate</button><button class="bulk-mini" onclick="sp_bulkPreview(${i})" title="Zoom / reframe in the big preview">🔍 Reframe</button></div>
+      </div>`
     ).join('');
     const cnt = $('spBulkCount'); if (cnt) cnt.textContent = sp_bulk.length;
     $('spBulkActions').style.display = sp_bulk.length ? '' : 'none';
+    sp_bulkNavSync();
   }
-  function spBulkRemove(i) { sp_bulk.splice(i, 1); spBulkRender(); }
-  function spBulkClear() { sp_bulk = []; spBulkRender(); setSpBulk('', ''); }
+  function spBulkField(i, key, val) {
+    if (!sp_bulk[i]) return;
+    sp_bulk[i][key] = val;
+    if (sp_bulkActive && i === sp_bulkIdx) spRenderInto(sp_bulk[i].title, sp_bulk[i].sub, sp_bulk[i].badge);   // live-update the preview
+  }
+  function spBulkRemove(i) {
+    sp_bulk.splice(i, 1);
+    if (!sp_bulk.length) { sp_bulkActive = false; spBulkRender(); setSpBulk('Batch cleared.', ''); return; }
+    if (sp_bulkIdx >= sp_bulk.length) sp_bulkIdx = sp_bulk.length - 1;
+    spBulkRender();
+    if (sp_bulkActive) sp_bulkPreview(sp_bulkIdx);
+  }
+  function spBulkClear() { sp_bulk = []; sp_bulkActive = false; spBulkRender(); setSpBulk('', ''); }
   function spBulkDot(i, s) { const d = $('spbdot-' + i); if (d) d.className = 'dot ' + (s || ''); }
+  function sp_bulkNavSync() {
+    const nav = $('spBulkNav'); if (!nav) return;
+    nav.style.display = sp_bulk.length > 1 ? '' : 'none';
+    const lbl = $('spBulkNavLabel'); if (lbl && sp_bulk.length) lbl.textContent = (Math.min(sp_bulkIdx, sp_bulk.length - 1) + 1) + ' of ' + sp_bulk.length;
+  }
+  async function sp_bulkPreview(idx) {
+    if (!sp_bulk.length) return;
+    sp_bulkIdx = ((idx % sp_bulk.length) + sp_bulk.length) % sp_bulk.length;
+    sp_bulkActive = true;
+    const it = sp_bulk[sp_bulkIdx];
+    if (spLayout !== 1) spSetLayout(1);
+    spPhotos[1] = it.photo; $('spImg1').src = it.photo;
+    $('spEnh1').style.display = ''; $('spPlate1').style.display = '';
+    const zc = $('spZoomCtl1'); if (zc) zc.style.display = ''; $('spSlot1').classList.add('has-photo');
+    try { await waitForImage($('spImg1')); } catch (e) { }
+    spCrop[1] = { ...(it.crop || { z: 1, x: 0, y: 0 }) }; const zr = $('spZoom1'); if (zr) zr.value = spCrop[1].z; spApplyCrop(1);
+    spRenderInto(it.title, it.sub, it.badge);
+    document.querySelectorAll('#spBulkGrid .sp-bulk-item').forEach((el, i) => el.classList.toggle('active', i === sp_bulkIdx));
+    sp_bulkNavSync();
+  }
+  function sp_bulkPrev() { sp_bulkPreview(sp_bulkIdx - 1); }
+  function sp_bulkNext() { sp_bulkPreview(sp_bulkIdx + 1); }
+  function spBulkEnhance(i) { sp_bulkPreview(i).then(() => openEditModal(1)); }
+  function spBulkPlate(i) { sp_bulkPreview(i).then(() => openPlateModal(1)); }
+  function spBulkWriteBack() {                 // after enhance/plate edits slot 1, save back to the active bulk item
+    if (!sp_bulkActive || !sp_bulk[sp_bulkIdx]) return;
+    sp_bulk[sp_bulkIdx].photo = spPhotos[1];
+    const img = document.querySelector('#spbi-' + sp_bulkIdx + ' img'); if (img) img.src = spPhotos[1];
+  }
+  function spBulkSaveCrop() { if (sp_bulkActive && sp_bulk[sp_bulkIdx]) sp_bulk[sp_bulkIdx].crop = { ...spCrop[1] }; }
   async function spBulkDownloadAll() {
     if (!sp_bulk.length) return;
     spBulkAbort = false;
     const dl = $('spBulkDlBtn'), stop = $('spBulkStopBtn'); dl.disabled = true; stop.disabled = false;
-    const save = { photo: spPhotos[1], title: $('spTitle').value, layout: spLayout, crop: { ...spCrop[1] } };   // restore single state after
-    if (spLayout !== 1) spSetLayout(1);                                                  // bulk posts are one photo each
+    const save = { photo: spPhotos[1], title: $('spTitle').value, sub: $('spSub') ? $('spSub').value : '', badge: $('spBadge').value, layout: spLayout, crop: { ...spCrop[1] }, active: sp_bulkActive, idx: sp_bulkIdx };
+    sp_bulkActive = false;                       // don't write back mid-batch
+    if (spLayout !== 1) spSetLayout(1);
     let ok = 0, fail = 0;
     for (let i = 0; i < sp_bulk.length; i++) {
       if (spBulkAbort) break;
@@ -2659,42 +2721,40 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       setSpBulk('Rendering ' + (i + 1) + ' of ' + sp_bulk.length + '…', 'active'); spBulkDot(i, 'loading');
       try {
         spPhotos[1] = it.photo; $('spImg1').src = it.photo;
-        $('spTitle').value = it.title || '';
-        spResetCrop(1);                         // each bulk post is full-frame (no leftover zoom)
-        renderSold();
         await waitForImage($('spImg1'));
+        spCrop[1] = { ...(it.crop || { z: 1, x: 0, y: 0 }) }; spApplyCrop(1);
+        spRenderInto(it.title, it.sub, it.badge);
         const canvas = await renderSoldCanvas();
         const base = (it.title || it.name || ('sold_' + (i + 1))).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || ('sold_' + (i + 1));
         const a = document.createElement('a'); a.download = base + '_sold' + (soldH === 1350 ? '_4x5' : '') + '.png'; a.href = canvas.toDataURL('image/png'); a.click();
         spBulkDot(i, 'done'); ok++;
-        await sleep(450);                       // let each download settle
+        await sleep(450);
       } catch (e) { spBulkDot(i, 'error'); fail++; }
     }
-    spPhotos[1] = save.photo; $('spImg1').src = save.photo || ''; $('spTitle').value = save.title;
-    spCrop[1] = save.crop; spApplyCrop(1);
     if (save.layout !== 1) spSetLayout(save.layout);
-    renderSold();
+    if (save.active && sp_bulk[save.idx]) { sp_bulkPreview(save.idx); }       // restore the bulk preview
+    else { sp_bulkActive = false; spPhotos[1] = save.photo; $('spImg1').src = save.photo || ''; spCrop[1] = save.crop; spApplyCrop(1); $('spTitle').value = save.title; if ($('spSub')) $('spSub').value = save.sub; $('spBadge').value = save.badge; renderSold(); }
     dl.disabled = false; stop.disabled = true;
     setSpBulk(spBulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + ' ✓'), fail ? 'error' : 'done');
   }
 
-  function renderSold() {
-    const badge = $('spBadge').value.trim();
-    $('spBadgeEl').textContent = badge;
-    $('spBadgeEl').style.display = badge ? '' : 'none';
-    $('spTitleEl').textContent = $('spTitle').value || '';
-    const sub = $('spSub') ? $('spSub').value.trim() : '';
-    const subEl = $('spSubEl');
-    if (subEl) { subEl.textContent = sub; subEl.style.display = sub ? '' : 'none'; }
+  // render the #sp template from explicit values (shared footer/format), with title/sub auto-fit
+  function spRenderInto(title, sub, badge) {
+    badge = (badge || '').trim();
+    $('spBadgeEl').textContent = badge; $('spBadgeEl').style.display = badge ? '' : 'none';
+    $('spTitleEl').textContent = title || '';
+    const subEl = $('spSubEl'), subv = (sub || '').trim();
+    if (subEl) { subEl.textContent = subv; subEl.style.display = subv ? '' : 'none'; }
     const f = $('spFooter').value.trim();
-    $('spFooterEl').textContent = f;
-    $('spFooterEl').style.display = f ? '' : 'none';
-    // auto-fit the title — read the current (variant-aware) CSS size as the base.
-    // shrink to ~42% so even long names wrap to 2 lines instead of clipping.
+    $('spFooterEl').textContent = f; $('spFooterEl').style.display = f ? '' : 'none';
     $('spTitleEl').style.fontSize = '';
-    const spBase = parseFloat(getComputedStyle($('spTitleEl')).fontSize) || 78;
-    fitText($('spTitleEl'), spBase, Math.round(spBase * 0.42), 2);
-    if (sub && subEl) { subEl.style.fontSize = ''; const sb = parseFloat(getComputedStyle(subEl).fontSize) || 42; fitText(subEl, sb, Math.round(sb * 0.5), 2); }
+    const tb = parseFloat(getComputedStyle($('spTitleEl')).fontSize) || 78;
+    fitText($('spTitleEl'), tb, Math.round(tb * 0.42), 2);
+    if (subv && subEl) { subEl.style.fontSize = ''; const sb = parseFloat(getComputedStyle(subEl).fontSize) || 42; fitText(subEl, sb, Math.round(sb * 0.5), 2); }
+  }
+  function renderSold() {
+    sp_bulkActive = false;        // editing a single-mode field leaves bulk-preview mode
+    spRenderInto($('spTitle').value, $('spSub') ? $('spSub').value : '', $('spBadge').value);
   }
 
   async function renderSoldCanvas() {
