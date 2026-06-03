@@ -3976,11 +3976,28 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     'alfa': 'alfa romeo', 'mini cooper': 'mini', 'beemer': 'bmw', 'bimmer': 'bmw'
   };
   const dh_norm = s => (s || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ');
+  // A powertrain in the package field (Gas / Hybrid / PHEV / Electric) is a
+  // different vehicle, not just an option — so it's part of the car's identity.
+  // (Option packages like "Leather" or "7 Pass" are NOT powertrains and don't split.)
+  function dh_pwr(d) {
+    const p = (d.package || '').toString();
+    if (/\b(?:phev|plug[\s-]?in)\b/i.test(p)) return 'PHEV';
+    if (/\bhybrid\b/i.test(p)) return 'Hybrid';
+    if (/\b(?:full[\s-]?electric|electric|ev|bev)\b/i.test(p)) return 'Electric';
+    if (/\bgas\b/i.test(p)) return 'Gas';
+    return '';
+  }
+  // trim as shown/keyed: trim + its powertrain, so "Preferred" gas and "Preferred"
+  // hybrid become distinct cards.
+  function dh_trimDisp(d) { return [(d.trim || '').toString().trim(), dh_pwr(d)].filter(Boolean).join(' '); }
   function dh_carKey(d) {
     let make = dh_norm(d.make); make = DH_MAKE_ALIAS[make] || make;
-    return [dh_norm(d.year), make, dh_norm(d.model), dh_norm(d.trim)].join('|');
+    const k = [dh_norm(d.year), make, dh_norm(d.model), dh_norm(d.trim)];
+    const p = dh_norm(dh_pwr(d));
+    if (p) k.push(p);                       // powertrain variants get their own key; a base trim keeps its original key
+    return k.join('|');
   }
-  function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, d.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
+  function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, dh_trimDisp(d)].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
   function dh_lastDate(d) { return d._updated || d._added || ''; }
   function dh_age(d) {
     const s = dh_lastDate(d); if (!s) return '';
@@ -4121,7 +4138,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
     // organize the cars under make headers — same hierarchy the ad builder uses (Make ▸ Year/Model/Trim)
     const makeOf = g => ((T_MAKE_SHORT[g.deals[0].make] || g.deals[0].make || '').toString().trim()) || 'Other';
-    const cardLabel = (g, nested) => nested ? (((g.deals[0].trim || '').toString().trim()) || 'Base') : ([g.deals[0].year, g.deals[0].model, g.deals[0].trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || g.label);
+    const cardLabel = (g, nested) => nested ? ((dh_trimDisp(g.deals[0]) || 'Base')) : ([g.deals[0].year, g.deals[0].model, dh_trimDisp(g.deals[0])].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || g.label);
     const byMake = {};
     list.forEach(g => { const mk = makeOf(g); (byMake[mk] = byMake[mk] || []).push(g); });
     const makeNames = Object.keys(byMake).sort((a, b) => a.localeCompare(b));
@@ -4152,7 +4169,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         const active = exp ? '<span class="dh-exp">expired</span>' : ('thru ' + dh_dateShort(d.active_to));
         const fin = dh_isFinance(d);
         return `<tr class="${i === 0 ? 'win' : ''}${exp ? ' dh-expired' : ''}">
-          <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(dh_cleanNotes(d))}</div>${(d.package || '').trim() ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
+          <td><div class="dh-row-dealer">${i === 0 ? '🏆 ' : ''}${dh_dealerCell(d.dealer)}${d.special ? ' <span class="dh-badge-special">' + d.special + '</span>' : ''}${fin ? ' <span class="dh-badge-fin">Fin</span>' : ''}${dh_incentiveTags(d)}${dh_noteIcon(dh_cleanNotes(d))}</div>${(d.package || '').trim() && !dh_pwr(d) ? '<div class="dh-row-pkg">+ ' + escapeHtml(d.package.trim()) + '</div>' : ''}</td><td>${dq}</td><td>${dh_money(d.das) || '$0'}</td>
           <td><b>${dh_money(dh_zeroOf(d))}</b></td><td>${(d.term || '') + (!fin && d.miles ? ' / ' + dh_mi(d.miles) : '')}</td>
           ${hasFin ? '<td>' + (fin && dh_num(d.apr) != null ? dh_num(d.apr) + '%' : '') + '</td>' : ''}<td>${dh_money(d.broker_fee) || ''}</td><td>${active}</td>
           <td class="dh-row-actions"><button class="dh-custom-btn" onclick="dh_sendToAd(${dh_deals.indexOf(d)}, event)" title="Make an ad from this deal">🎨</button><button class="dh-custom-btn" onclick="dh_openCustomize(${dh_deals.indexOf(d)}, event)" title="Customize down / monthly">⚙</button></td></tr>`;
