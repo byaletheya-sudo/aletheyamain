@@ -806,6 +806,20 @@
   .qt-for { margin-top: 64px; font-size: 25px; color: #8ea2c4; letter-spacing: .03em; }
   .qt-veh { margin-top: 12px; font-size: 74px; font-weight: 700; letter-spacing: -2px; line-height: 1.03; }
   .qt-vehsub { margin-top: 14px; font-size: 28px; color: #9fb0cc; font-weight: 400; }
+  .qt-photo { margin-top: 18px; height: 330px; display: flex; align-items: center; justify-content: center; }
+  .qt-photo img { max-width: 94%; max-height: 330px; object-fit: contain; display: block; filter: drop-shadow(0 26px 38px rgba(0,0,0,.55)); }
+  /* when a photo is shown, compact the rest so it all stays on one page */
+  .qt.has-photo .qt-for { margin-top: 40px; }
+  .qt.has-photo .qt-veh { font-size: 62px; margin-top: 8px; }
+  .qt.has-photo .qt-vehsub { margin-top: 8px; font-size: 25px; }
+  .qt.has-photo .qt-photo { height: 300px; margin-top: 14px; }
+  .qt.has-photo .qt-photo img { max-height: 300px; }
+  .qt.has-photo .qt-hero { margin-top: 26px; padding: 34px 44px; }
+  .qt.has-photo .qt-mo-amt { font-size: 108px; }
+  .qt.has-photo .qt-terms { margin-top: 28px; gap: 18px; }
+  .qt.has-photo .qt-terms > div { padding: 20px 24px; }
+  .qt.has-photo .qt-notes { margin-top: 26px; font-size: 23px; }
+  .qt.has-photo .qt-valid { margin-top: 22px; }
   .qt-hero { margin-top: 50px; padding: 44px 50px; border: 1px solid rgba(110,166,240,.32); border-radius: 24px;
     background: linear-gradient(135deg, rgba(47,127,240,.18), rgba(47,127,240,.04)); }
   .qt-mo { display: flex; align-items: baseline; gap: 16px; }
@@ -1811,6 +1825,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <textarea id="qt_notes" oninput="qt_render()" style="min-height:76px;" placeholder="e.g. Includes Premium Package + maintenance · First payment waived · Loaner available…"></textarea>
             </div>
             <div class="panel">
+              <h2>Photo <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
+              <div class="controls">
+                <button class="btn-ghost" onclick="qt_findPhoto()">🔍 Find factory photo</button>
+                <button class="btn-ghost" onclick="$('qt_upload').click()">⬆ Upload</button>
+                <button class="btn-ghost" id="qt_photoClear" onclick="qt_clearPhoto()" style="display:none;">Remove</button>
+              </div>
+              <input type="file" id="qt_upload" accept="image/*,.heic,.heif" onchange="qt_onUpload(event)" style="display:none;">
+              <div id="qt_photoStrip" class="bulk-photostrip" style="display:none;margin-top:10px;"></div>
+              <div class="status" id="qt_photoStatus"></div>
+            </div>
+            <div class="panel">
               <h2>Export</h2>
               <div class="controls">
                 <button class="btn-start" onclick="qt_downloadPNG()">⬇ Download Image</button>
@@ -1832,6 +1857,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <div class="qt-for" id="qt_forEl"></div>
                   <div class="qt-veh" id="qt_vehEl"></div>
                   <div class="qt-vehsub" id="qt_vehsubEl"></div>
+                  <div class="qt-photo" id="qt_photoEl" style="display:none;"><img id="qt_photoImg" crossorigin="anonymous" alt=""></div>
                   <div class="qt-hero" id="qt_heroEl"></div>
                   <div class="qt-terms" id="qt_termsEl"></div>
                   <div class="qt-notes" id="qt_notesEl"></div>
@@ -5400,8 +5426,61 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
   // ===================== DEAL PROPOSAL (QUOTE) =====================
   let qt_dealType = 'lease';
+  let qt_photo = null, qt_photoUrl = '', qt_photoOptions = [];
   const qt_m0 = v => '$' + Math.round(Number(v) || 0).toLocaleString('en-US');   // whole-dollar money
   function qt_setStatus(t, type = '') { const e = $('qt_status'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function qt_setPhotoStatus(t, type = '') { const e = $('qt_photoStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function qt_parseVehicle() {
+    const parts = ($('qt_vehicle').value || '').trim().split(/\s+/);
+    let year = '';
+    if (parts[0] && /^\d{4}$/.test(parts[0])) year = parts.shift();
+    return { year, make: parts.shift() || '', model: parts.join(' ') };
+  }
+  function qt_renderPhotoStrip() {
+    const strip = $('qt_photoStrip'); if (!strip) return;
+    if (!qt_photoOptions.length) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+    strip.style.display = '';
+    strip.innerHTML = qt_photoOptions.map((o, j) => `<div class="bulk-ph${qt_photoUrl && qt_photoUrl === o.url ? ' active' : ''}" onclick="qt_pickPhoto(${j})"><img src="${(o.url || o.thumb).replace(/"/g, '&quot;')}" loading="lazy" alt=""><span class="chk">✓</span></div>`).join('');
+  }
+  async function qt_findPhoto() {
+    const { year, make, model } = qt_parseVehicle();
+    if (!(make && model)) { qt_setPhotoStatus('Enter the vehicle first (e.g. "2024 BMW X5").', 'error'); return; }
+    qt_setPhotoStatus('Finding factory photos…', 'active');
+    try {
+      const r = await fetch('/carsxe-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model }) });
+      if (r.status === 403) { qt_setPhotoStatus('Unlock the Deal Hub password once to search photos (Upload works without it).', 'error'); return; }
+      const d = await r.json();
+      if (d.error || d.found === false) { qt_setPhotoStatus('✕ ' + (d.error || d.message || 'No photo found for that vehicle.'), 'error'); return; }
+      qt_photoOptions = d.options || []; qt_photoUrl = (d.options && d.options[0] && d.options[0].url) || '';
+      qt_photo = d.image_data; qt_renderPhotoStrip(); qt_render();
+      qt_setPhotoStatus(qt_photoOptions.length + ' photo(s) — tap to choose, or it uses the first.', 'done');
+    } catch (e) { qt_setPhotoStatus('✕ ' + e.message, 'error'); }
+  }
+  async function qt_pickPhoto(j) {
+    const o = qt_photoOptions[j]; if (!o) return;
+    qt_photoUrl = o.url; qt_renderPhotoStrip();
+    qt_setPhotoStatus('Loading photo…', 'active');
+    try {
+      const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) });
+      const d = await r.json();
+      if (d.error) { qt_setPhotoStatus('✕ ' + d.error, 'error'); return; }
+      qt_photo = d.image_data; qt_render(); qt_setPhotoStatus('Photo set ✓', 'done');
+    } catch (e) { qt_setPhotoStatus('✕ ' + e.message, 'error'); }
+  }
+  async function qt_onUpload(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file || !isImageFile(file)) { if (file) qt_setPhotoStatus('That doesn’t look like an image.', 'error'); return; }
+    qt_setPhotoStatus('Processing photo… (removing background, first run downloads a one-time model)', 'active');
+    try {
+      const usable = await heicToUsable(file);
+      let url;
+      try { if (window.__removeBg) { const blob = await window.__removeBg(usable); url = await blobToDataURL(blob); } else url = await blobToDataURL(usable); }
+      catch (e2) { url = await blobToDataURL(usable); }   // bg-removal failed → use the raw photo
+      qt_photo = url; qt_photoUrl = ''; qt_photoOptions = []; qt_renderPhotoStrip(); qt_render();
+      qt_setPhotoStatus('Photo set ✓', 'done');
+    } catch (err) { qt_setPhotoStatus('Upload failed: ' + err.message, 'error'); }
+  }
+  function qt_clearPhoto() { qt_photo = null; qt_photoUrl = ''; qt_photoOptions = []; qt_renderPhotoStrip(); qt_render(); qt_setPhotoStatus('', ''); }
   function qt_setDeal(type) {
     qt_dealType = type;
     const b = $('qt_dealSeg').querySelectorAll('.seg-btn'); b[0].classList.toggle('active', type === 'lease'); b[1].classList.toggle('active', type === 'finance');
@@ -5419,11 +5498,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function qt_render() {
     if (!$('qt_forEl')) return;
+    $('qt').classList.toggle('has-photo', !!qt_photo);   // compact layout when a photo is present
     const name = $('qt_cname').value.trim();
     $('qt_forEl').textContent = name ? ('Prepared for ' + name) : 'Prepared for you';
     $('qt_vehEl').textContent = $('qt_vehicle').value.trim() || 'Your next vehicle';
     const sub = [$('qt_color').value.trim(), $('qt_vin').value.trim() ? 'VIN ' + $('qt_vin').value.trim() : ''].filter(Boolean).join('  ·  ');
     $('qt_vehsubEl').textContent = sub; $('qt_vehsubEl').style.display = sub ? '' : 'none';
+    const pimg = $('qt_photoImg');
+    if (qt_photo) { if (pimg.getAttribute('src') !== qt_photo) pimg.src = qt_photo; $('qt_photoEl').style.display = ''; }
+    else { pimg.removeAttribute('src'); $('qt_photoEl').style.display = 'none'; }
+    if ($('qt_photoClear')) $('qt_photoClear').style.display = qt_photo ? '' : 'none';
     const pre = inv_num($('qt_mpre').value), post = inv_num($('qt_mpost').value);
     if (pre || post) {
       const big = pre || post;
@@ -5453,6 +5537,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   async function qt_capture() {
     await document.fonts.ready;
     try { await waitForImage($('qt_logoImg')); } catch (e) { }
+    if (qt_photo) { try { await waitForImage($('qt_photoImg')); } catch (e) { } }
     const scaler = $('qtScaler'), stage = scaler.parentElement;
     const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
     scaler.style.transform = 'none'; stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = '1350px';
