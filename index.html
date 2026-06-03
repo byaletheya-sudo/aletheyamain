@@ -741,7 +741,7 @@
   .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; }
   .inv-bar { background: linear-gradient(118deg, #0a1326 0%, #14264a 56%, #1d386b 100%); border-bottom: 5px solid #2f7ff0; margin: -76px -78px 0; padding: 54px 78px 50px; display: flex; justify-content: space-between; align-items: flex-start; }
   .inv-bar-logo img { width: 300px; height: auto; display: block; }
-  .inv-bar-tag { margin-top: 16px; font-size: 20px; color: #9fb6e0; letter-spacing: .03em; }
+  .inv-bar-tag { margin-top: 16px; font-size: 20px; color: #9fb6e0; letter-spacing: .03em; line-height: 1.5; }
   .inv-meta { text-align: right; }
   .inv-doc-title { font-size: 56px; font-weight: 800; letter-spacing: 5px; color: #fff; line-height: 1; }
   .inv-meta-rows { margin-top: 16px; font-size: 22px; color: #c4d0e6; }
@@ -1670,7 +1670,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <div class="inv-scaler" id="invScaler">
                 <div class="inv" id="inv">
                   <div class="inv-bar">
-                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">@NovAutoUSA &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
+                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">novautousa.com &nbsp;·&nbsp; @NovAutoUSA<br>(818) - 873 - 3697 &nbsp;·&nbsp; Los Angeles, CA</div></div>
                     <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
                   </div>
                   <div class="inv-parties">
@@ -1678,7 +1678,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
                   </div>
                   <div class="inv-details" id="inv_detailsEl"></div>
-                  <table class="inv-table"><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
+                  <table class="inv-table" id="inv_tableEl"><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
                   <div class="inv-bottom">
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
@@ -5074,9 +5074,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if ($('inv_pickup').value.trim()) push(dm === 'Picked Up' ? 'Pickup Location' : 'Delivered To', $('inv_pickup').value);
     $('inv_detailsEl').innerHTML = det.join('');
     $('inv_detailsEl').style.display = det.length ? '' : 'none';
-    $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it =>
-      `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item description</span>'}</td><td class="num">${M(inv_num(it.price))}</td></tr>`
-    ).join('') : '<tr><td colspan="2" style="color:#c2c8d0;padding:24px 0;">No line items yet — add one on the left.</td></tr>';
+    const shown = inv_items.filter(it => (it.desc || '').trim() || inv_num(it.price));
+    const hasItems = shown.length > 0;
+    $('inv_tableEl').style.display = hasItems ? '' : 'none';   // hide the whole table when there's nothing to bill
+    $('inv_totEl').style.display = hasItems ? '' : 'none';
+    if (hasItems) $('inv_rowsEl').innerHTML = shown.map(it =>
+      `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item</span>'}</td><td class="num">${M(inv_num(it.price))}</td></tr>`
+    ).join('');
     const t = inv_totals();
     let r = `<div class="inv-totrow"><span>Subtotal</span><span>${M(t.subtotal)}</span></div>`;
     if (t.disc) r += `<div class="inv-totrow"><span>Discount</span><span>−${M(t.disc)}</span></div>`;
