@@ -3362,9 +3362,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // "Club…". So instead of matching model-then-trim, we pool ALL the meaningful
   // words from model+trim(+package) and match on overlap, anchored on the make and
   // on at least one shared model-field word.
+  // Canonicalize drivetrain wording so the hub's "4X4" and the site's "4WD" /
+  // "Four Wheel Drive" collapse to one token (and 2WD / RWD / "Rear Wheel Drive"
+  // to another). For trucks the drivetrain IS the distinguishing trim, so these
+  // must match across the two spellings.
+  const dh_canon = s => (s || '').toString().toLowerCase()
+    .replace(/\b(?:all[\s-]*wheel[\s-]*drive|awd|4matic\+?|x[\s-]?drive\d*|4motion|quattro)\b/g, ' awd ')
+    .replace(/\b(?:four[\s-]*wheel[\s-]*drive|4wd|4x4|4wheel)\b/g, ' fourwd ')
+    .replace(/\b(?:rear[\s-]*wheel[\s-]*drive|rwd|2wd)\b/g, ' twowd ')
+    .replace(/\b(?:front[\s-]*wheel[\s-]*drive|fwd)\b/g, ' fwd ');
   // Glue a short letter+number into one token so "CX 90"→"cx90" and "Mazda 3"→
   // "mazda3", but DON'T glue a drivetrain suffix — "Tacoma 4WD" must stay two words.
-  const dh_glue = s => (s || '').toString().toLowerCase().replace(/([a-z])[ \-]+(\d+)(?!\s*(?:wd|x\d|x\b))/g, '$1$2');
+  const dh_glue = s => dh_canon(s).replace(/([a-z])[ \-]+(\d+)(?!\s*(?:wd|x\d|x\b))/g, '$1$2');
   const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'bed', 'at']);
   function dh_vtoks(s) {
     const out = new Set();
