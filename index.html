@@ -689,6 +689,17 @@
   .plate-dialog .controls { margin-top: 14px; align-items: center; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .plate-dialog .controls label { margin: 0; color: #aaa; font-size: .82rem; }
   .plate-dialog .controls input[type=range] { width: 110px; }
+
+  /* ===== cross-tool coherence: one consistent feel for every secondary/compact button ===== */
+  /* unify the resting look of the plain ghost/compact action buttons */
+  .bulk-photos, .bulk-dl, .t-nav-mini, .dh-toggle-btn { background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.1); color: #cdd2da; }
+  /* one shared hover (the blue-tint language already used by the seg/chip/active states) */
+  .bulk-photos:hover, .bulk-dl:hover, .t-nav-mini:hover, .dh-toggle-btn:not(.active):hover,
+  .chip:hover, .dh-custom-btn:hover, .bulk-dot + .bulk-dl:hover {
+    background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.34); color: #fff;
+  }
+  /* keep selected/active states distinct from hover */
+  .dh-toggle-btn.active:hover { background: rgba(120,150,200,0.24); }
 </style>
 </head>
 <body>
