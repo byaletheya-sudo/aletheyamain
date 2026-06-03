@@ -788,6 +788,7 @@
   .inv-close-pro b { color: #2f7ff0; font-weight: 700; letter-spacing: -.2px; text-transform: none; font-size: 22px; }
   .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 1px solid #eef1f4; padding-top: 24px; }
   .inv-foot-tag { font-size: 24px; font-weight: 400; letter-spacing: .3px; color: #5b636e; }
+  .inv-foot-page { margin-top: 8px; font-size: 18px; color: #aab0ba; letter-spacing: .04em; }
   .inv-foot-meta { margin-top: 10px; font-size: 19px; color: #98a0ab; letter-spacing: .02em; }
 
   /* ================= DEAL PROPOSAL (QUOTE) CARD ================= */
@@ -1748,7 +1749,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">novautousa.com &nbsp;·&nbsp; @NovAutoUSA<br>(818) - 873 - 3697 &nbsp;·&nbsp; Los Angeles, CA</div></div>
                     <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
                   </div>
-                  <div class="inv-parties">
+                  <div class="inv-parties" id="inv_partiesEl">
                     <div class="inv-party"><div class="inv-lbl">Client</div><div id="inv_billEl"></div></div>
                     <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
                   </div>
@@ -1760,7 +1761,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   </div>
                   <div class="inv-paynote" id="inv_payNoteEl" style="display:none;"></div>
                   <div class="inv-close" id="inv_closeEl"></div>
-                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends Overpay</div></div>
+                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends Overpay</div><div class="inv-foot-page" id="inv_pageEl" style="display:none;"></div></div>
                 </div>
               </div>
             </div>
@@ -5138,6 +5139,35 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // ===================== INVOICE GENERATOR =====================
   let inv_items = [];              // [{ desc, price }]
   let inv_dealType = 'lease';
+  let inv_show = {}, inv_pages = [];   // pagination state
+  function inv_itemRowHTML(it) { return `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item</span>'}</td><td class="num">${inv_money(inv_num(it.price))}</td></tr>`; }
+  // split the line items across Letter pages: page 1 carries the client + deal details,
+  // continuation pages carry just more rows, the totals land on the final page.
+  function inv_paginate(shown) {
+    if (shown.length <= 5) return [{ items: shown, parties: true, totals: true }];   // fits one page with the deal box + totals
+    const pages = [], rem = shown.slice();
+    pages.push({ items: rem.splice(0, 8), parties: true, totals: false });            // page 1 = client + deal box + rows
+    while (rem.length) {
+      if (rem.length <= 7) pages.push({ items: rem.splice(0, rem.length), parties: false, totals: true });   // rows + totals fit together
+      else pages.push({ items: rem.splice(0, 13), parties: false, totals: false });   // a full continuation page
+    }
+    if (!pages[pages.length - 1].totals) pages.push({ items: [], parties: false, totals: true });
+    return pages;
+  }
+  // show one page in the #inv element: its rows, and which sections appear on it
+  function inv_applyPage(pg, num, total) {
+    $('inv_rowsEl').innerHTML = pg.items.map(inv_itemRowHTML).join('');
+    $('inv_tableEl').style.display = pg.items.length ? '' : 'none';
+    $('inv_partiesEl').style.display = pg.parties ? '' : 'none';
+    $('inv_detailsEl').style.display = (pg.parties && inv_show.details) ? '' : 'none';
+    $('inv_totEl').style.display = (pg.totals && inv_show.tot) ? '' : 'none';
+    $('inv_notesEl').style.display = (pg.totals && inv_show.notes) ? '' : 'none';
+    $('inv_payNoteEl').style.display = (pg.totals && inv_show.payNote) ? '' : 'none';
+    $('inv_closeEl').style.display = (pg.totals && inv_show.close) ? '' : 'none';
+    const multi = total > 1;
+    $('inv_pageEl').textContent = multi ? `Page ${num} of ${total}` : '';
+    $('inv_pageEl').style.display = multi ? '' : 'none';
+  }
   let inv_list = [], inv_counter = 0, inv_curId = null, inv_loaded = false;
   function inv_setDeal(type) {
     inv_dealType = type;
@@ -5226,14 +5256,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     push('Delivery', dm);
     if ($('inv_pickup').value.trim()) push(dm === 'Picked Up' ? 'Pickup Location' : 'Delivered To', $('inv_pickup').value);
     $('inv_detailsEl').innerHTML = det.join('');
-    $('inv_detailsEl').style.display = det.length ? '' : 'none';
     const shown = inv_items.filter(it => (it.desc || '').trim() || inv_num(it.price));
-    const hasItems = shown.length > 0;
-    $('inv_tableEl').style.display = hasItems ? '' : 'none';   // hide the whole table when there's nothing to bill
-    $('inv_totEl').style.display = hasItems ? '' : 'none';
-    if (hasItems) $('inv_rowsEl').innerHTML = shown.map(it =>
-      `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item</span>'}</td><td class="num">${M(inv_num(it.price))}</td></tr>`
-    ).join('');
     const t = inv_totals();
     const upfront = inv_dealType === 'finance' ? inv_num($('inv_down').value) : inv_num($('inv_das').value);
     const upfrontLbl = inv_dealType === 'finance' ? 'Down Payment' : 'Due at Signing';
@@ -5249,11 +5272,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     // if they want a Zelle transfer and it's not paid yet, spell out where to send it
     const zelleUnpaid = pm === 'Zelle' && ps !== 'paid';
     $('inv_payNoteEl').innerHTML = zelleUnpaid ? `Zelle payments can be sent to <b>info@novaautopro.com</b>` : '';
-    $('inv_payNoteEl').style.display = zelleUnpaid ? '' : 'none';
     const notesV = $('inv_notes').value.trim();
-    $('inv_notesEl').textContent = notesV; $('inv_notesEl').style.display = notesV ? '' : 'none';
+    $('inv_notesEl').textContent = notesV;
     const pro = $('inv_pro').value.trim();
     $('inv_closeEl').innerHTML = pro ? `<div class="inv-close-pro">Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b></div>` : '';
+    // paginate the line items and show page 1 (the live preview)
+    inv_show = { details: det.length > 0, tot: shown.length > 0, payNote: zelleUnpaid, notes: notesV.length > 0, close: !!pro };
+    inv_pages = inv_paginate(shown);
+    inv_applyPage(inv_pages[0], 1, inv_pages.length);
     // live totals readout in the controls panel (updates as line items change)
     const ro = $('inv_totReadout');
     if (ro) {
@@ -5338,19 +5364,27 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (!window.jspdf) { inv_status('PDF library still loading — try again in a second.', 'error'); return; }
     inv_status('Building PDF…', 'active');
     try {
+      inv_render();                                   // fresh pagination
       await document.fonts.ready;
-      try { await waitForImage($('inv_logoImg')); } catch (e) { }   // make sure the logo is in before capture
+      try { await waitForImage($('inv_logoImg')); } catch (e) { }
+      const pages = inv_pages, total = pages.length;
       const scaler = $('invScaler'), stage = scaler.parentElement;
       const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
       scaler.style.transform = 'none';
       stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = '1397px';
-      const canvas = await html2canvas($('inv'), { width: 1080, height: 1397, scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
-      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
-      const pdf = new window.jspdf.jsPDF('p', 'pt', 'letter');   // 612 x 792 pt
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 612, 792);
+      const pdf = new window.jspdf.jsPDF('p', 'pt', 'letter');   // 612 x 792 pt per page
+      for (let i = 0; i < total; i++) {
+        inv_applyPage(pages[i], i + 1, total);
+        await new Promise(r => requestAnimationFrame(r));
+        const canvas = await html2canvas($('inv'), { width: 1080, height: 1397, scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 612, 792);
+      }
+      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w;
+      inv_applyPage(pages[0], 1, total); fitPreviews();   // restore preview to page 1
       const base = ($('inv_num').value || 'invoice').replace(/[^\w-]/g, '_'), c = ($('inv_cname').value || '').replace(/[^\w]/g, '');
       pdf.save(base + (c ? '_' + c : '') + '.pdf');
-      inv_status('PDF downloaded ✓', 'done');
+      inv_status('PDF downloaded ✓ (' + total + (total > 1 ? ' pages' : ' page') + ')', 'done');
     } catch (e) { inv_status('PDF failed: ' + e.message, 'error'); }
   }
   inv_new();
