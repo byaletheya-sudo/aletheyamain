@@ -683,6 +683,25 @@
     .view-inner { padding: 24px 16px 70px; }
     h1 { font-size: 1.55rem; }
   }
+  /* ---- tool-open entrance animation ---- */
+  @keyframes nvViewIn { from { opacity: 0; transform: translateY(16px) scale(.992); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
+  .view.active > .view-inner { animation: nvViewIn .44s cubic-bezier(.22,.61,.36,1) both; }
+  @keyframes nvTileIn { from { opacity: 0; transform: translateY(22px) scale(.95); } to { opacity: 1; transform: none; } }
+  #view-home.active .nv-tile { animation: nvTileIn .52s cubic-bezier(.22,.61,.36,1) both; }
+  #view-home.active .nv-tile:nth-child(1) { animation-delay: .05s; }
+  #view-home.active .nv-tile:nth-child(2) { animation-delay: .10s; }
+  #view-home.active .nv-tile:nth-child(3) { animation-delay: .15s; }
+  #view-home.active .nv-tile:nth-child(4) { animation-delay: .20s; }
+  #view-home.active .nv-tile:nth-child(5) { animation-delay: .25s; }
+  #view-home.active .nv-tile:nth-child(6) { animation-delay: .30s; }
+  #view-home.active .nv-tile:nth-child(7) { animation-delay: .35s; }
+  #view-home.active .nv-tile:nth-child(8) { animation-delay: .40s; }
+  /* the tool view that just opened lifts in with a quick title accent */
+  @keyframes nvTitleIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .view.active:not(#view-home) > .view-inner > h1 { animation: nvTitleIn .5s .06s cubic-bezier(.22,.61,.36,1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    .view.active > .view-inner, #view-home.active .nv-tile, .view.active:not(#view-home) > .view-inner > h1 { animation: none; }
+  }
 
   /* ================= NOVA HOME / TOOL LAUNCHER ================= */
   .nv-hero { margin-bottom: 30px; }
