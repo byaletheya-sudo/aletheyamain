@@ -570,6 +570,51 @@ def review_parse():
         return jsonify({"error": f"Couldn't read that review: {e}"}), 502
 
 
+@app.route("/reviews-parse", methods=["POST"])
+def reviews_parse():
+    """Bulk smart-fill: split a paste of SEVERAL reviews into a structured list, one
+    object per review, for batch testimonial graphics."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    text = ((request.json or {}).get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Paste some reviews first."}), 400
+    review_obj = {
+        "type": "object", "additionalProperties": False,
+        "required": ["name", "rating", "source", "review", "vehicle"],
+        "properties": {
+            "name": {"type": "string"}, "rating": {"type": "integer"},
+            "source": {"type": "string"}, "review": {"type": "string"}, "vehicle": {"type": "string"},
+        },
+    }
+    schema = {"type": "object", "additionalProperties": False, "required": ["reviews"],
+              "properties": {"reviews": {"type": "array", "items": review_obj}}}
+    system = (
+        "You read a block of text that contains ONE OR MORE customer reviews (copied from Google, Yelp, "
+        "DealerRater, or Cars.com — possibly several stacked together) and split them into a list. For "
+        "EACH distinct review output: name (reviewer's name or first name + last initial like 'John D.'; "
+        "'' if unknown), rating (1-5 integer; 5 if not stated), source (Google / Yelp / DealerRater / "
+        "Cars.com / '' if unknown), review (cleaned up for a post: fix typos/caps, trim filler, keep it "
+        "authentic and in the customer's voice, ≤320 chars; do NOT invent content), and vehicle (the car "
+        "if mentioned, e.g. '2024 BMW X5'; else ''). Do not merge separate reviews; do not fabricate reviews."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "reviews", "strict": True, "schema": schema}},
+        )
+        out = json.loads(resp.choices[0].message.content)
+        rows = out.get("reviews") or []
+        for r in rows:
+            v = r.get("rating") or 5
+            r["rating"] = max(1, min(5, int(v) if str(v).isdigit() else 5))
+        return jsonify({"reviews": rows})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read those reviews: {e}"}), 502
+
+
 @app.route("/review-caption", methods=["POST"])
 def review_caption():
     """Write an Instagram caption + hashtags for a customer-review repost."""

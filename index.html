@@ -647,6 +647,21 @@
   .sp-bulk-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; color: #9aa0aa; font-size: .82rem; font-weight: 600; }
   .sp-bulk-nav button { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cdd2da; font-size: .8rem; cursor: pointer; padding: 0; }
   .sp-bulk-nav button:hover { background: rgba(120,150,200,0.18); border-color: rgba(140,170,220,0.34); color: #fff; }
+  .rv-bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 10px; margin-top: 12px; }
+  .rv-bulk-grid:empty { display: none; }
+  .rv-bulk-item { position: relative; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .rv-bulk-item.active { border-color: #4a9eff; box-shadow: 0 0 0 1px #4a9eff inset; }
+  .rv-bulk-top { display: flex; align-items: center; gap: 6px; }
+  .rv-bulk-top .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: #333; }
+  .rv-bulk-top .dot.loading { background: #ffb347; } .rv-bulk-top .dot.done { background: #46d488; } .rv-bulk-top .dot.error { background: #ff5a5a; }
+  .rv-bulk-rate, .rv-bulk-src { background: #111; border: 1px solid #2a2f3a; color: #eee; border-radius: 7px; font-size: .76rem; padding: 4px 6px; }
+  .rv-bulk-rate { color: #ffd166; }
+  .rv-bulk-src { flex: 1; min-width: 0; }
+  .rv-bulk-item .rm { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(255,90,90,0.12); color: #ff9a9a; cursor: pointer; font-size: 14px; line-height: 1; flex: 0 0 auto; }
+  .rv-bulk-item .rm:hover { background: #ff4a4a; color: #fff; }
+  .rv-bulk-item .ti, .rv-bulk-item .ta { width: 100%; border: 1px solid #222; background: #111; color: #eee; font-size: .77rem; padding: 6px 8px; outline: none; box-sizing: border-box; border-radius: 7px; }
+  .rv-bulk-item .ta { min-height: 54px; resize: vertical; line-height: 1.4; }
+  .rv-bulk-item .ti:focus, .rv-bulk-item .ta:focus { border-color: #4a9eff; }
   .sp-bulk-item .rm { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
   .sp-bulk-item .rm:hover { background: #ff4a4a; }
   .sp-bulk-item .dot { position: absolute; top: 6px; left: 6px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,.4); }
@@ -1451,6 +1466,24 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <h2>Export</h2>
               <div class="controls"><button class="btn-start" onclick="rv_download()">Download Review</button></div>
               <div class="status" id="rv_status"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Bulk Reviews <span style="font-weight:400;opacity:.55;font-size:.8rem;">— batch a stack, download all</span></h2>
+              <p class="hint" style="margin-bottom:10px;">Paste several reviews and AI splits them into separate graphics — or add blanks. Each uses the theme, layout &amp; format above. Edit, flip through with ◀ ▶, then Download All.</p>
+              <textarea id="rv_bulkPaste" style="min-height:84px;" placeholder="Paste one or more reviews (Google / Yelp / DealerRater)…"></textarea>
+              <div class="controls" style="margin-top:10px;">
+                <button class="btn-start" id="rv_bulkParseBtn" onclick="rv_bulkParse()">✨ Parse with AI</button>
+                <button class="btn-ghost" onclick="rv_bulkAddBlank()">+ Add blank</button>
+              </div>
+              <div id="rv_bulkGrid" class="rv-bulk-grid"></div>
+              <div id="rv_bulkNav" class="sp-bulk-nav" style="display:none;"><button onclick="rv_bulkPrev()" title="Previous">◀</button><span id="rv_bulkNavLabel">1 of 1</span><button onclick="rv_bulkNext()" title="Next">▶</button></div>
+              <div class="controls" id="rv_bulkActions" style="margin-top:12px;display:none;">
+                <button class="btn-start" id="rv_bulkDlBtn" onclick="rv_bulkDownloadAll()">⬇ Download All (<span id="rv_bulkCount">0</span>)</button>
+                <button class="btn-ghost" onclick="rv_bulkClear()">Clear</button>
+                <button class="btn-ghost" id="rv_bulkStopBtn" onclick="rv_bulkAbort=true" disabled>Stop</button>
+              </div>
+              <div class="status" id="rv_bulkStatus"></div>
             </div>
           </div>
           <div class="preview-col">
@@ -4638,20 +4671,138 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     catch (e) { $('rv_caption').select(); document.execCommand('copy'); rv_setCapStatus('Copied ✓', 'done'); }
   }
   function rv_filename() { const n = (($('rv_name').value || 'review').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')) || 'review'; return 'nova_review_' + n + (rv_format === 'story' ? '_story' : '_4x5') + '.png'; }
+  async function rv_capture() {                              // render #rv to a full-res canvas
+    await document.fonts.ready;
+    const h = rv_h();
+    const scaler = $('rvScaler'), stage = scaler.parentElement;
+    const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
+    scaler.style.transform = 'none';
+    stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = h + 'px';
+    const canvas = await html2canvas($('rv'), { width: 1080, height: h, scale: 2, backgroundColor: null, useCORS: true, logging: false });
+    stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
+    return canvas;
+  }
   async function rv_download() {
     rv_setStatus('Rendering…', 'active');
     try {
-      await document.fonts.ready;
-      const h = rv_h();
-      const scaler = $('rvScaler'), stage = scaler.parentElement;
-      const prev = { t: scaler.style.transform, pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
-      scaler.style.transform = 'none';
-      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = h + 'px';
-      const canvas = await html2canvas($('rv'), { width: 1080, height: h, scale: 2, backgroundColor: null, useCORS: true, logging: false });
-      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
+      const canvas = await rv_capture();
       const a = document.createElement('a'); a.download = rv_filename(); a.href = canvas.toDataURL('image/png'); a.click();
       rv_setStatus('Downloaded ✓', 'done');
     } catch (e) { rv_setStatus('Render failed: ' + e.message, 'error'); }
+  }
+
+  // ---- Review bulk: paste several reviews -> editable cards -> preview & download all ----
+  let rv_bulk = [];                            // { name, rating, source, vehicle, text }
+  let rv_bulkIdx = 0, rv_bulkActive = false, rv_bulkAbort = false;
+  const RV_SOURCES = ['Google', 'Yelp', 'DealerRater', 'Cars.com', ''];
+  function setRvBulk(t, type = '') { const e = $('rv_bulkStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  async function rv_bulkParse() {
+    const text = ($('rv_bulkPaste').value || '').trim();
+    if (!text) { setRvBulk('Paste some reviews first (or use “+ Add blank”).', 'error'); return; }
+    const btn = $('rv_bulkParseBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Parsing…';
+    setRvBulk('AI is reading your reviews…', 'active');
+    try {
+      const r = await fetch('/reviews-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const d = await r.json();
+      if (d.error) { setRvBulk('✕ ' + d.error, 'error'); return; }
+      const rows = (d.reviews || []).map(x => ({ name: x.name || '', rating: Math.max(1, Math.min(5, x.rating || 5)), source: x.source || 'Google', vehicle: x.vehicle || '', text: x.review || '' })).filter(x => x.text);
+      if (!rows.length) { setRvBulk('No reviews found in that text.', 'error'); return; }
+      const start = rv_bulk.length; rv_bulk.push(...rows);
+      rv_bulkRender(); rv_bulkPreview(start);
+      $('rv_bulkPaste').value = '';
+      setRvBulk('Found ' + rows.length + ' review' + (rows.length > 1 ? 's' : '') + ' — edit, flip with ◀ ▶, then Download All.', 'done');
+    } catch (e) { setRvBulk('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = '✨ Parse with AI'; }
+  }
+  function rv_bulkAddBlank() {
+    rv_bulk.push({ name: '', rating: 5, source: 'Google', vehicle: '', text: '' });
+    rv_bulkRender(); rv_bulkPreview(rv_bulk.length - 1);
+    setRvBulk('Added a blank review — fill it in.', '');
+  }
+  function rv_bulkRender() {
+    const g = $('rv_bulkGrid'); if (!g) return;
+    const esc = s => (s || '').replace(/"/g, '&quot;'), esct = s => (s || '').replace(/</g, '&lt;');
+    g.innerHTML = rv_bulk.map((it, i) => {
+      const stars = [5, 4, 3, 2, 1].map(n => `<option value="${n}"${it.rating === n ? ' selected' : ''}>${'★'.repeat(n)}</option>`).join('');
+      const srcs = RV_SOURCES.map(s => `<option value="${s}"${it.source === s ? ' selected' : ''}>${s || '—'}</option>`).join('');
+      return `<div class="rv-bulk-item${i === rv_bulkIdx && rv_bulkActive ? ' active' : ''}" id="rvbi-${i}">
+        <div class="rv-bulk-top"><span class="dot" id="rvbdot-${i}"></span>
+          <select class="rv-bulk-rate" onchange="rv_bulkField(${i},'rating',+this.value)">${stars}</select>
+          <select class="rv-bulk-src" onchange="rv_bulkField(${i},'source',this.value)">${srcs}</select>
+          <button class="rm" onclick="rv_bulkRemove(${i})" title="Remove">×</button></div>
+        <input class="ti" value="${esc(it.name)}" placeholder="Reviewer name" oninput="rv_bulkField(${i},'name',this.value)">
+        <input class="ti" value="${esc(it.vehicle)}" placeholder="Vehicle (optional)" oninput="rv_bulkField(${i},'vehicle',this.value)">
+        <textarea class="ta" placeholder="Review text" oninput="rv_bulkField(${i},'text',this.value)">${esct(it.text)}</textarea>
+        <button class="bulk-mini" onclick="rv_bulkPreview(${i})" title="Show in the big preview">👁 Preview</button>
+      </div>`;
+    }).join('');
+    const cnt = $('rv_bulkCount'); if (cnt) cnt.textContent = rv_bulk.length;
+    $('rv_bulkActions').style.display = rv_bulk.length ? '' : 'none';
+    rv_bulkNavSync();
+  }
+  function rv_bulkField(i, key, val) {
+    if (!rv_bulk[i]) return;
+    rv_bulk[i][key] = val;
+    if (rv_bulkActive && i === rv_bulkIdx) rv_bulkApply(rv_bulk[i]);   // live-update the preview
+  }
+  function rv_bulkRemove(i) {
+    rv_bulk.splice(i, 1);
+    if (!rv_bulk.length) { rv_bulkActive = false; rv_bulkRender(); setRvBulk('Batch cleared.', ''); return; }
+    if (rv_bulkIdx >= rv_bulk.length) rv_bulkIdx = rv_bulk.length - 1;
+    rv_bulkRender(); if (rv_bulkActive) rv_bulkPreview(rv_bulkIdx);
+  }
+  function rv_bulkClear() { rv_bulk = []; rv_bulkActive = false; rv_bulkRender(); setRvBulk('', ''); }
+  function rv_bulkDot(i, s) { const d = $('rvbdot-' + i); if (d) d.className = 'dot ' + (s || ''); }
+  function rv_bulkNavSync() {
+    const nav = $('rv_bulkNav'); if (!nav) return;
+    nav.style.display = rv_bulk.length > 1 ? '' : 'none';
+    const lbl = $('rv_bulkNavLabel'); if (lbl && rv_bulk.length) lbl.textContent = (Math.min(rv_bulkIdx, rv_bulk.length - 1) + 1) + ' of ' + rv_bulk.length;
+  }
+  function rv_bulkApply(it) {                  // push an item's fields into the editor + re-render
+    $('rv_name').value = it.name || '';
+    $('rv_vehicle').value = it.vehicle || '';
+    $('rv_text').value = it.text || '';
+    const opt = [...$('rv_source').options].find(o => o.value === (it.source || '')); $('rv_source').value = opt ? opt.value : '';
+    rv_rating = Math.max(1, Math.min(5, it.rating || 5)); rv_renderStarPick();
+    rv_render();
+  }
+  function rv_bulkPreview(idx) {
+    if (!rv_bulk.length) return;
+    rv_bulkIdx = ((idx % rv_bulk.length) + rv_bulk.length) % rv_bulk.length;
+    rv_bulkActive = true;
+    rv_bulkApply(rv_bulk[rv_bulkIdx]);
+    document.querySelectorAll('#rv_bulkGrid .rv-bulk-item').forEach((el, i) => el.classList.toggle('active', i === rv_bulkIdx));
+    rv_bulkNavSync();
+  }
+  function rv_bulkPrev() { rv_bulkPreview(rv_bulkIdx - 1); }
+  function rv_bulkNext() { rv_bulkPreview(rv_bulkIdx + 1); }
+  async function rv_bulkDownloadAll() {
+    if (!rv_bulk.length) return;
+    rv_bulkAbort = false;
+    const dl = $('rv_bulkDlBtn'), stop = $('rv_bulkStopBtn'); dl.disabled = true; stop.disabled = false;
+    const savePhoto = rv_photoData;
+    const save = { name: $('rv_name').value, vehicle: $('rv_vehicle').value, text: $('rv_text').value, source: $('rv_source').value, rating: rv_rating, active: rv_bulkActive, idx: rv_bulkIdx };
+    rv_photoData = null;                         // bulk reviews are clean text testimonials
+    let ok = 0, fail = 0;
+    for (let i = 0; i < rv_bulk.length; i++) {
+      if (rv_bulkAbort) break;
+      const it = rv_bulk[i];
+      setRvBulk('Rendering ' + (i + 1) + ' of ' + rv_bulk.length + '…', 'active'); rv_bulkDot(i, 'loading');
+      try {
+        rv_bulkApply(it);
+        await new Promise(r => requestAnimationFrame(r));
+        const canvas = await rv_capture();
+        const base = (it.name || 'review').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || ('review_' + (i + 1));
+        const a = document.createElement('a'); a.download = 'nova_review_' + base + (rv_format === 'story' ? '_story' : '_4x5') + '.png'; a.href = canvas.toDataURL('image/png'); a.click();
+        rv_bulkDot(i, 'done'); ok++;
+        await sleep(450);
+      } catch (e) { rv_bulkDot(i, 'error'); fail++; }
+    }
+    rv_photoData = savePhoto;
+    if (save.active && rv_bulk[save.idx]) rv_bulkPreview(save.idx);
+    else { rv_bulkActive = false; $('rv_name').value = save.name; $('rv_vehicle').value = save.vehicle; $('rv_text').value = save.text; $('rv_source').value = save.source; rv_rating = save.rating; rv_renderStarPick(); rv_render(); }
+    dl.disabled = false; stop.disabled = true;
+    setRvBulk(rv_bulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + ' ✓'), fail ? 'error' : 'done');
   }
 
   renderSold();
