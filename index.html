@@ -3358,69 +3358,53 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // "tight" key: just the alphanumerics, lowercased — so "CX-90", "CX 90" and
   // "CX90" all collapse to "cx90", while "CX5" ("cx5") stays distinct from
   // "CX50" ("cx50"). Spacing/punctuation differences vanish; real digits don't.
-  const dh_tightKey = s => (s || '').toString().toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const dh_tokens = s => (s || '').toString().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const dh_tightKey = s => (s || '').toString().toLowerCase().replace(/[^a-z0-9]+/g, '');   // used for stable approval keys
   function dh_makeKey(make) { let m = dh_norm(make); m = DH_MAKE_ALIAS[m] || m; return m.replace(/\s+/g, ''); }
-  // Do two model strings refer to the same model? Equal tight keys (handles the
-  // spacing case), OR one's words are a subset of the other's (handles the site
-  // carrying extra words like "Mazda3 Sedan" vs a dealer's bare "Mazda3"). Word-
-  // level subset — not substring — so "CX5" never matches into "CX50".
-  function dh_modelMatch(a, b) {
-    const ta = dh_tightKey(a), tb = dh_tightKey(b);
-    if (!ta || !tb) return false;
-    if (ta === tb) return true;                             // "CX 90" === "CX90"
-    const A = dh_tokens(a), B = dh_tokens(b), As = new Set(A), Bs = new Set(B);
-    if (B.length && B.every(t => As.has(t))) return true;   // hub ⊆ site ("Mazda3" ⊆ "Mazda3 Sedan")
-    if (A.length && A.every(t => Bs.has(t))) return true;   // site ⊆ hub
-    // one tight key is a prefix of the other, but only at a non-digit boundary —
-    // so "mazda3"→"mazda3sedan" matches yet "cx5"→"cx50" never does.
-    const pref = (long, short) => long.length > short.length && long.startsWith(short) && !/[0-9]/.test(long[short.length]);
-    return pref(ta, tb) || pref(tb, ta);
-  }
-  // trim "grade" tokens: drop body/drivetrain/powertrain noise so what's left is
-  // the part that actually distinguishes one trim from another (L / LE / SE / XSE…).
-  // Body/drivetrain/transmission words don't distinguish trims. Powertrain words
-  // (hybrid, phev, ev, prime) DO — the hub & site use them to tell e.g. a gas XLE
-  // apart from a Hybrid XLE — so they stay as meaningful grade tokens.
-  const DH_TRIM_NOISE = new Set(['plugin', 'plug', 'in', 'drive', 'wheel', 'front', 'rear', 'all', 'four', '2wd', '4wd', 'awd', 'fwd', 'rwd', '4x4', 'cvt', 'automatic', 'auto', 'manual', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'i', 'ii']);
-  const dh_trimTokens = s => dh_tokens(s).filter(t => t && !DH_TRIM_NOISE.has(t));
-  // Similarity of two trims by their grade tokens: how many overlap (inter), and
-  // how many are left over on either side (sym). More overlap + fewer leftovers =
-  // a closer trim, so "Hybrid XLE" prefers "XLE Hybrid" over a bare gas "XLE".
-  function dh_trimSim(siteTrim, hubTrim) {
-    const a = new Set(dh_trimTokens(siteTrim)), b = new Set(dh_trimTokens(hubTrim));
-    let inter = 0; a.forEach(t => { if (b.has(t)) inter++; });
-    return { inter, sym: (a.size - inter) + (b.size - inter) };
+  // The hub (dealer-entered) and the site split a vehicle's name across the model
+  // and trim fields differently — e.g. hub "Crosstrek Sport"/"Hybrid" vs site
+  // "Crosstrek"/"Sport Hybrid…", or hub "Miata Club"/"MT" vs site "MX-5 Miata"/
+  // "Club…". So instead of matching model-then-trim, we pool ALL the meaningful
+  // words from model+trim(+package) and match on overlap, anchored on the make and
+  // on at least one shared model-field word.
+  // Glue a short letter+number into one token so "CX 90"→"cx90" and "Mazda 3"→
+  // "mazda3", but DON'T glue a drivetrain suffix — "Tacoma 4WD" must stay two words.
+  const dh_glue = s => (s || '').toString().toLowerCase().replace(/([a-z])[ \-]+(\d+)(?!\s*(?:wd|x\d|x\b))/g, '$1$2');
+  const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'bed', 'at']);
+  function dh_vtoks(s) {
+    const out = new Set();
+    dh_glue(s).split(/[^a-z0-9]+/).forEach(t => { if (t && !DH_TOK_NOISE.has(t) && !(t.length === 1 && /[a-z]/.test(t))) out.add(t); });
+    return out;
   }
   function dh_matchHubCar(row, hubCars) {
-    const mkt = dh_makeKey(row.make);
-    const sameMake = hubCars.filter(c => c.mkt === mkt);
-    if (!sameMake.length) return null;
-    // Prefer an EXACT model match (so "Corolla" never grabs "Corolla Cross"); only
-    // fall back to fuzzy model matching when the hub has nothing exact.
-    const siteTight = dh_tightKey(row.model);
-    let cands = sameMake.filter(c => dh_tightKey(c.model) === siteTight);
-    if (!cands.length) cands = sameMake.filter(c => dh_modelMatch(row.model, c.model));
-    if (!cands.length) return null;
-    const yr = (row.year || '').toString().trim();
-    const sameYear = yr ? cands.filter(c => c.year === yr) : [];
-    if (sameYear.length) cands = sameYear;
-    if (cands.length === 1) return cands[0];                // one deal for this model — compare to it
-    // several trims of the same model: match the site's trim grade to the right one
-    const sm = dh_num(row.monthly);
-    const scored = cands.map(c => { const t = dh_trimSim(row.trim, c.best.trim); return { c, inter: t.inter, sym: t.sym }; });
-    const top = Math.max(...scored.map(x => x.inter));
-    if (top > 0) {                                          // best overlap, then fewest leftover tokens, then closest price
-      return scored.filter(x => x.inter === top)
-        .sort((a, b) => (a.sym - b.sym) || (sm != null ? (Math.abs((a.c.bestMonthly ?? 1e9) - sm) - Math.abs((b.c.bestMonthly ?? 1e9) - sm)) : 0))[0].c;
+    const smk = dh_makeKey(row.make);
+    const sf = dh_vtoks([row.model, row.trim].join(' '));   // site's full word bag
+    const sm = dh_vtoks(row.model);                          // site's model-field words (the anchor)
+    const sp = dh_num(row.monthly);
+    let best = null, bInter = -1, bSym = Infinity, bPd = Infinity;
+    for (const c of hubCars) {
+      if (c.mkt !== smk) continue;
+      // anchor: a model-field word must be shared (so "Crosstrek" reaches "Crosstrek
+      // Sport" but "CX5" never reaches "CX50" — different number tokens, no overlap)
+      let anchor = false;
+      for (const t of sm) { if (c.ftoks.has(t)) { anchor = true; break; } }
+      if (!anchor) { for (const t of c.mtoks) { if (sf.has(t)) { anchor = true; break; } } }
+      if (!anchor) continue;
+      let inter = 0; sf.forEach(t => { if (c.ftoks.has(t)) inter++; });
+      const sym = (sf.size - inter) + (c.ftoks.size - inter);
+      const pd = Math.abs((c.bestMonthly ?? 9e9) - (sp ?? 0));
+      if (inter > bInter || (inter === bInter && (sym < bSym || (sym === bSym && pd < bPd)))) {
+        best = c; bInter = inter; bSym = sym; bPd = pd;     // most overlap, then fewest leftovers, then closest price
+      }
     }
-    return { _notrim: true };                               // model's in the hub, but not this trim
+    return best;
   }
   function dh_verifyReconcile(rows) {
     const bests = dh_bestByCar();
     const hubCars = Object.entries(bests).map(([key, v]) => ({
       key, best: v.best, anyActive: v.anyActive,
-      mkt: dh_makeKey(v.best.make), model: v.best.model || '',
+      mkt: dh_makeKey(v.best.make),
+      mtoks: dh_vtoks(v.best.model || ''),
+      ftoks: dh_vtoks([v.best.model || '', v.best.trim || '', v.best.package || ''].join(' ')),
       year: (v.best.year || '').toString().trim(), label: dh_carLabel(v.best),
       bestMonthly: dh_num(v.best.orig_mo || v.best.tax_in_mo),
     }));
@@ -3430,7 +3414,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const siteLabel = [row.year, row.make, row.model, row.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') || '(unnamed)';
       const c = dh_matchHubCar(row, hubCars);
       if (!c) { items.push({ state: 'orphan', siteLabel, siteMo }); return; }
-      if (c._notrim) { items.push({ state: 'notrim', siteLabel, siteMo }); return; }
       matched.add(c.key);
       if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, siteMo, hub: c }); return; }
       const hubMo = c.bestMonthly;
@@ -3471,7 +3454,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       case 'mismatch': return { cls: 'err', html: `🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo` };
       case 'expired': return { cls: 'warn', html: `⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub` };
       case 'orphan': return { cls: 'orphan', html: `❓ <b>${it.siteLabel}</b> — on the site but not in the hub (stale or unknown)` };
-      case 'notrim': return { cls: 'orphan', html: `➕ <b>${it.siteLabel}</b> — on the site, but you have no deal for this exact trim in the hub` };
       case 'missing': return { cls: 'miss', html: `🆕 <b>${it.hub.label}</b> — current best (${M(it.hub.bestMonthly)}/mo), not found on the site` };
     }
     return { cls: '', html: '' };
@@ -3483,7 +3465,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const approved = items.filter(dh_vIsApproved).length;
     const probs = dh_vOpenProblems(items);
     const onSite = items.filter(i => i.state !== 'missing').length;
-    const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, notrim: 4, missing: 5, match: 6 };
+    const order = { mismatch: 0, stale: 1, expired: 2, orphan: 3, missing: 4, match: 5 };
     // open problems first, then approved (resolved), then matches
     const bucket = it => dh_vIsApproved(it) ? 1 : (it.state === 'match' ? 2 : 0);
     const idx = items.map((_, i) => i).sort((a, b) => (bucket(items[a]) - bucket(items[b])) || (order[items[a].state] - order[items[b].state]));
