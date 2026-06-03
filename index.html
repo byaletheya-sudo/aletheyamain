@@ -323,6 +323,14 @@
   .bk-send { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; border: none; background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 70%); color: #fff; font-size: 1rem; cursor: pointer; transition: filter .15s, transform .12s; }
   .bk-send:hover { filter: brightness(1.09); } .bk-send:active { transform: translateY(1px) scale(.96); }
   .bk-send:disabled { opacity: .5; cursor: default; }
+  /* lift above the Deal Hub's own import orb when both are on screen */
+  #bkFab.raised { bottom: 92px; }
+  #bkPanel.raised { bottom: 92px; }
+  /* smart action buttons the copilot can offer */
+  .bk-actions { align-self: flex-start; display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 2px; max-width: 92%; }
+  .bk-act { display: inline-flex; align-items: center; gap: 6px; background: radial-gradient(120% 120% at 32% 26%, rgba(90,166,255,.22), rgba(42,95,208,.22) 70%); border: 1px solid rgba(120,180,255,.5); color: #d9e8ff; border-radius: 10px; padding: 7px 12px; font-size: .8rem; font-weight: 700; cursor: pointer; transition: .14s; }
+  .bk-act:hover { background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 70%); color: #fff; border-color: rgba(150,200,255,.7); transform: translateY(-1px); }
+  .bk-act:active { transform: translateY(0) scale(.98); }
   /* ===== premium polish: motion, depth, micro-interactions ===== */
   .dh-car.open > .dh-car-deals { animation: dhReveal .26s cubic-bezier(.33,1,.68,1); }
   @keyframes dhReveal { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
@@ -719,8 +727,10 @@
     .dh-agent-fab, .bk-fab { right: 14px; bottom: 14px; }
   }
   /* ---- tool-open entrance animation ---- */
-  @keyframes nvViewIn { from { opacity: 0; transform: translateY(16px) scale(.992); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
-  .view.active > .view-inner { animation: nvViewIn .44s cubic-bezier(.22,.61,.36,1) both; }
+  @keyframes nvViewIn { from { opacity: 0; transform: translateY(16px) scale(.992); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+  /* fill: backwards (not both) — don't RETAIN the end transform/filter, which (even as an
+     identity matrix) would create a containing block that traps fixed-position orbs */
+  .view.active > .view-inner { animation: nvViewIn .44s cubic-bezier(.22,.61,.36,1) backwards; }
   @keyframes nvTileIn { from { opacity: 0; transform: translateY(22px) scale(.95); } to { opacity: 1; transform: none; } }
   #view-home.active .nv-tile { animation: nvTileIn .52s cubic-bezier(.22,.61,.36,1) both; }
   #view-home.active .nv-tile:nth-child(1) { animation-delay: .05s; }
@@ -1126,22 +1136,6 @@
             <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
           </button>
 
-        </div>
-      </div>
-
-      <!-- floating Broker Copilot (home only) -->
-      <button type="button" id="bkFab" class="dh-agent-fab bk-fab" onclick="bk_toggle()" title="Broker Copilot — your AI deal helper" aria-label="Broker Copilot">
-        <span class="dh-agent-orb">✦</span>
-      </button>
-      <div id="bkPanel" class="dh-agent-panel bk-panel">
-        <div class="dh-agent-head">
-          <span class="dh-agent-title">✦ Broker Copilot</span>
-          <button type="button" class="dh-agent-x" onclick="bk_toggle()" aria-label="Close">✕</button>
-        </div>
-        <div class="bk-msgs" id="bk_msgs"></div>
-        <div class="bk-inputrow">
-          <textarea id="bk_input" rows="1" placeholder="Ask me anything — lease math, talk tracks, how to use a tool…" onkeydown="bk_key(event)" oninput="bk_grow(this)"></textarea>
-          <button class="bk-send" id="bk_send" onclick="bk_ask()" aria-label="Send">➤</button>
         </div>
       </div>
     </section>
@@ -2195,6 +2189,22 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   </main>
 </div>
 
+<!-- floating Broker Copilot — lives on every page -->
+<button type="button" id="bkFab" class="dh-agent-fab bk-fab" onclick="bk_toggle()" title="Broker Copilot — your AI deal helper" aria-label="Broker Copilot">
+  <span class="dh-agent-orb">✦</span>
+</button>
+<div id="bkPanel" class="dh-agent-panel bk-panel">
+  <div class="dh-agent-head">
+    <span class="dh-agent-title">✦ Broker Copilot</span>
+    <button type="button" class="dh-agent-x" onclick="bk_toggle()" aria-label="Close">✕</button>
+  </div>
+  <div class="bk-msgs" id="bk_msgs"></div>
+  <div class="bk-inputrow">
+    <textarea id="bk_input" rows="1" placeholder="Ask me anything — lease math, talk tracks, how to use a tool…" onkeydown="bk_key(event)" oninput="bk_grow(this)"></textarea>
+    <button class="bk-send" id="bk_send" onclick="bk_ask()" aria-label="Send">➤</button>
+  </div>
+</div>
+
 <!-- restricted-tools password gate -->
 <div class="lock-modal" id="lockModal">
   <div class="lock-card">
@@ -2967,6 +2977,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (name === 'invoice' && typeof inv_render === 'function') requestAnimationFrame(inv_render);
     if (name === 'quote' && typeof qt_render === 'function') requestAnimationFrame(qt_render);
     if (name === 'desk' && typeof dk_calc === 'function') { if (typeof dk_loadPrograms === 'function') dk_loadPrograms(); requestAnimationFrame(dk_calc); }
+    if (typeof bk_sync === 'function') bk_sync(name);        // keep the copilot orb clear of the Deal Hub orb
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -6333,7 +6344,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   dk_setDeal('lease');
 
-  // ===================== BROKER COPILOT (home chat) =====================
+  // ===================== BROKER COPILOT (global chat) =====================
   let bk_messages = [], bk_busy = false;
   const BK_SUGGEST = [
     'What’s the cheapest deal live on the site right now?',
@@ -6341,13 +6352,35 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     'Explain money factor like I’m talking to a client',
     'Talk track for a higher-than-expected payment',
   ];
+  // smart action buttons the copilot can offer — key → {label, view}
+  const BK_ACTIONS = {
+    desk: { label: '🧮 Open Desking', view: 'desk' },
+    quote: { label: '📄 Build a proposal', view: 'quote' },
+    proposal: { label: '📄 Build a proposal', view: 'quote' },
+    invoice: { label: '🧾 Build an invoice', view: 'invoice' },
+    deals: { label: '🗂 Open Deal Hub', view: 'deals' },
+    ads: { label: '🎨 Make a lease ad', view: 'ads' },
+    sold: { label: '✅ Make a sold post', view: 'sold' },
+    review: { label: '⭐ Make a review post', view: 'review' },
+  };
+  function bk_doAction(key) {
+    const a = BK_ACTIONS[key]; if (!a) return;
+    if (a.view === 'invoice' && typeof inv_new === 'function') inv_new();   // start a fresh invoice
+    $('bkPanel').classList.remove('open');                                  // close chat, reveal the tool
+    showView(a.view);
+  }
   function bk_fmt(t) { return escapeHtml(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
   function bk_scroll() { const m = $('bk_msgs'); if (m) m.scrollTop = m.scrollHeight; }
+  function bk_actHTML(acts) {
+    const valid = (acts || []).filter(k => BK_ACTIONS[k]);
+    if (!valid.length) return '';
+    return `<div class="bk-actions">${valid.map(k => `<button class="bk-act" onclick="bk_doAction('${k}')">${BK_ACTIONS[k].label}</button>`).join('')}</div>`;
+  }
   function bk_render(typing) {
     const m = $('bk_msgs'); if (!m) return;
     const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Broker Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time — ask me what's advertised, the cheapest deal, or what's under a price. I'll also help with lease/finance math, talk tracks, and how to use any tool here.</div>`;
     const chips = bk_messages.length ? '' : `<div class="bk-suggest">${BK_SUGGEST.map((s, i) => `<button class="bk-chip" onclick="bk_suggest(${i})">${escapeHtml(s)}</button>`).join('')}</div>`;
-    const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>`).join('');
+    const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>` + (x.role === 'assistant' ? bk_actHTML(x.actions) : '')).join('');
     const typ = typing ? `<div class="bk-typing"><span></span><span></span><span></span></div>` : '';
     m.innerHTML = greet + chips + body + typ;
     bk_scroll();
@@ -6355,6 +6388,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function bk_toggle() {
     const p = $('bkPanel'); const open = p.classList.toggle('open');
     if (open) { bk_render(false); setTimeout(() => $('bk_input').focus(), 80); }
+  }
+  // keep the copilot from colliding with the Deal Hub's own import orb
+  function bk_sync(name) {
+    const raised = name === 'deals';
+    $('bkFab').classList.toggle('raised', raised);
+    $('bkPanel').classList.toggle('raised', raised);
   }
   function bk_grow(el) { el.style.height = 'auto'; el.style.height = Math.min(130, el.scrollHeight) + 'px'; }
   function bk_key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bk_ask(); } }
@@ -6366,9 +6405,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     bk_messages.push({ role: 'user', content: t });
     bk_busy = true; $('bk_send').disabled = true; bk_render(true);
     try {
-      const r = await fetch('/broker-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: bk_messages.slice(-20) }) });
+      const hist = bk_messages.slice(-20).map(x => ({ role: x.role, content: x.content }));
+      const r = await fetch('/broker-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hist }) });
       const d = await r.json();
-      bk_messages.push({ role: 'assistant', content: d.error ? ('⚠️ ' + d.error) : (d.reply || '…') });
+      bk_messages.push({ role: 'assistant', content: d.error ? ('⚠️ ' + d.error) : (d.reply || '…'), actions: d.actions || [] });
     } catch (e) { bk_messages.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     bk_busy = false; $('bk_send').disabled = false; bk_render(false);
     setTimeout(() => $('bk_input').focus(), 30);

@@ -1411,7 +1411,13 @@ def broker_chat():
         "LIMITS: You do NOT know raw manufacturer programs (residual %, money factor, incentives) or a specific "
         "client's file — for those, point them to the Desking program library or the Deal Hub. Never INVENT a "
         "residual %, money factor, or incentive amount. Ask a brief clarifying question if a request is ambiguous. "
-        "Keep general guidance only on legal/tax matters."
+        "Keep general guidance only on legal/tax matters.\n"
+        "ACTION BUTTONS: when your answer naturally leads the agent to USE a tool, end your message with ONE final "
+        "line in EXACTLY this format and nothing after it: [[ACTIONS: key1, key2]] — using only these keys: "
+        "desk (open the Desking calculator), quote (build a Deal Proposal), invoice (build an Invoice), deals (open "
+        "the Deal Hub), ads (make a lease ad), sold (make a sold post), review (make a review post). Include 1–3 of "
+        "the MOST relevant keys (e.g. someone closing a deal → 'quote, invoice'; pricing a car → 'desk'). If no tool "
+        "is relevant, OMIT the line entirely. Never mention or explain this line; just append it when useful."
     )
     deals_text, deals_n = _fetch_live_deals_text()
     if deals_text:
@@ -1428,7 +1434,17 @@ def broker_chat():
             messages=[{"role": "system", "content": system}] + clean,
             temperature=0.5, max_tokens=700,
         )
-        return jsonify({"reply": (resp.choices[0].message.content or "").strip()})
+        reply = (resp.choices[0].message.content or "").strip()
+        # pull out the optional [[ACTIONS: ...]] line → structured buttons
+        actions = []
+        allowed = {"desk", "quote", "proposal", "invoice", "deals", "ads", "sold", "review"}
+        m = re.search(r'\[\[\s*ACTIONS?\s*:\s*([^\]]+)\]\]', reply, re.I)
+        if m:
+            for k in re.split(r'[,\s]+', m.group(1).strip().lower()):
+                if k in allowed and k not in actions:
+                    actions.append(k)
+            reply = reply[:m.start()].rstrip()        # strip the marker from the visible text
+        return jsonify({"reply": reply, "actions": actions})
     except Exception as e:
         return jsonify({"error": f"Couldn't reach the assistant: {e}"}), 502
 
