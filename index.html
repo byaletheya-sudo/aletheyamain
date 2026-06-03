@@ -126,6 +126,8 @@
   .bulk-line input, .bulk-line select { padding: 6px 8px; font-size: 0.78rem; border-radius: 7px; flex: 1 1 64px; min-width: 0; }
   .bulk-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
   .bulk-dl { padding: 8px 13px; background: rgba(255,255,255,0.06); color: #e6e7ea; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; font-size: 1rem; }
+  .bulk-rm { padding: 6px 11px; background: rgba(255,90,90,0.08); color: #ff9a9a; border: 1px solid rgba(255,90,90,0.22); border-radius: 9px; font-size: 0.85rem; cursor: pointer; }
+  .bulk-rm:hover { background: rgba(255,90,90,0.2); border-color: rgba(255,90,90,0.4); color: #fff; }
   .bulk-dl:hover { background: rgba(120,150,200,0.18); }
   .bulk-dot { width: 9px; height: 9px; border-radius: 50%; background: #3a3f48; }
   .bulk-dot.loading { background: #ffd166; animation: btnpulse 1s infinite; }
@@ -1123,7 +1125,6 @@
     <section class="view" id="view-test">
       <div class="view-inner">
         <h1>Lease Ad — TEST</h1>
-        <p class="subtitle">Pulls a real transparent factory photo by year / make / model and drops it straight onto the template — pick the best result and color.</p>
         <div class="seg" style="margin-bottom:18px;">
           <button type="button" class="seg-btn active" id="t_modeSingle" onclick="t_setMode('single')">Single</button>
           <button type="button" class="seg-btn" id="t_modeBulk" onclick="t_setMode('bulk')">Bulk</button>
@@ -2972,7 +2973,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     (options || []).forEach((o, i) => {
       const t = document.createElement('div');
       t.className = 'ph-thumb' + (i === 0 ? ' active' : '');
-      const img = document.createElement('img'); img.src = o.thumb || o.url; img.alt = ''; img.loading = 'lazy';
+      const img = document.createElement('img'); img.src = o.url || o.thumb; img.alt = ''; img.loading = 'lazy';
       const chk = document.createElement('span'); chk.className = 'chk'; chk.textContent = '✓';
       t.appendChild(img); t.appendChild(chk);
       t.onclick = () => t_pickPhoto(o.url, t);
@@ -3254,7 +3255,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             inp('badge', 'Badge') +
           '</div>' +
         '</div>' +
-        '<div class="bulk-actions"><div class="bulk-act-row"><button class="bulk-photos" onclick="t_bulkLoadPhotos(' + i + ')" title="See & choose the photo">📷</button><button class="bulk-photos" onclick="t_bulkRefreshPhotos(' + i + ')" title="Get a new batch of photos">🔄</button></div><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
+        '<div class="bulk-actions"><div class="bulk-act-row"><button class="bulk-photos" onclick="t_bulkLoadPhotos(' + i + ')" title="See & choose the photo">📷</button><button class="bulk-photos" onclick="t_bulkRefreshPhotos(' + i + ')" title="Get a new batch of photos">🔄</button></div><button class="bulk-dl" onclick="t_bulkDownloadOne(' + i + ')" title="Download this ad">⬇</button><button class="bulk-rm" onclick="t_bulkRemove(' + i + ')" title="Remove this car from the batch">✕</button><span class="bulk-dot" id="bdot-' + i + '"></span></div>';
       grid.appendChild(card);
       const strip = document.createElement('div'); strip.className = 'bulk-photostrip'; strip.id = 'bphotos-' + i; strip.style.display = 'none';
       grid.appendChild(strip);
@@ -3279,7 +3280,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const opts = row.photoOptions || [];
     strip.style.display = '';
     if (!opts.length) { strip.innerHTML = '<span class="bulk-ph-msg">No photos found for this vehicle.</span>'; return; }
-    strip.innerHTML = opts.map((o, j) => `<div class="bulk-ph${(row.photoUrl ? row.photoUrl === o.url : j === 0) ? ' active' : ''}" onclick="t_bulkPickPhoto(${i}, ${j})"><img src="${(o.thumb || o.url).replace(/"/g, '&quot;')}" loading="lazy" alt=""><span class="chk">✓</span></div>`).join('');
+    strip.innerHTML = opts.map((o, j) => `<div class="bulk-ph${(row.photoUrl ? row.photoUrl === o.url : j === 0) ? ' active' : ''}" onclick="t_bulkPickPhoto(${i}, ${j})"><img src="${(o.url || o.thumb).replace(/"/g, '&quot;')}" loading="lazy" alt=""><span class="chk">✓</span></div>`).join('');
   }
   async function t_bulkPickPhoto(i, j) {
     const row = t_bulkRows[i], o = (row.photoOptions || [])[j]; if (!o) return;
@@ -3358,6 +3359,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function t_loadCrop(row) { t_zoom = (row && row.zoom) || 1; t_px = (row && row.px) || 0; t_py = (row && row.py) || 0; const z = $('t_zoom'); if (z) z.value = t_zoom; t_applyCrop(); }
   function t_setCropZoom(v) { t_zoom = parseFloat(v) || 1; t_applyCrop(); t_saveCrop(); }
   function t_resetCrop() { t_zoom = 1; t_px = 0; t_py = 0; const z = $('t_zoom'); if (z) z.value = 1; t_applyCrop(); t_saveCrop(); }
+  function t_bulkRemove(i) {
+    t_bulkRows.splice(i, 1);
+    if (!t_bulkRows.length) { $('t_bulkResultPanel').style.display = 'none'; t_bulkNavSync(); setTB('Batch cleared.', ''); return; }
+    if (t_bulkPreviewIdx >= t_bulkRows.length) t_bulkPreviewIdx = t_bulkRows.length - 1;
+    t_renderBulkGrid();
+    $('t_bulkCount').textContent = '(' + t_bulkRows.length + ')';
+    t_bulkPreview(t_bulkPreviewIdx);
+  }
   function t_bulkEdit(el) {
     const i = +el.dataset.i, k = el.dataset.k;
     t_bulkRows[i][k] = el.value;
