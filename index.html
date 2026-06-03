@@ -733,23 +733,24 @@
   .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
   .inv-scaler { transform-origin: top left; }
   .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; }
-  .inv-bar { background: linear-gradient(135deg, #0b1220, #16294d); margin: -76px -78px 0; padding: 52px 78px; display: flex; justify-content: space-between; align-items: center; }
+  .inv-bar { background: linear-gradient(118deg, #0a1326 0%, #14264a 56%, #1d386b 100%); border-bottom: 5px solid #2f7ff0; margin: -76px -78px 0; padding: 54px 78px 50px; display: flex; justify-content: space-between; align-items: flex-start; }
   .inv-bar-logo img { width: 300px; height: auto; display: block; }
+  .inv-bar-tag { margin-top: 16px; font-size: 20px; color: #9fb6e0; letter-spacing: .03em; }
   .inv-meta { text-align: right; }
-  .inv-doc-title { font-size: 58px; font-weight: 800; letter-spacing: -1.5px; color: #fff; line-height: 1; }
-  .inv-meta-rows { margin-top: 14px; font-size: 22px; color: #c4d0e6; }
+  .inv-doc-title { font-size: 56px; font-weight: 800; letter-spacing: 5px; color: #fff; line-height: 1; }
+  .inv-meta-rows { margin-top: 16px; font-size: 22px; color: #c4d0e6; }
   .inv-meta-rows div { display: flex; gap: 20px; justify-content: flex-end; padding: 3px 0; }
-  .inv-meta-rows b { color: #8ea4cc; font-weight: 600; min-width: 96px; text-align: left; }
-  .inv-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 40px; margin-top: 34px; padding: 28px 32px; background: #f5f7fa; border-radius: 14px; }
+  .inv-meta-rows b { color: #7d97c6; font-weight: 600; min-width: 96px; text-align: left; }
+  .inv-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 40px; margin-top: 36px; padding: 28px 34px; background: linear-gradient(135deg, #f3f8ff, #eaf1fc); border: 1px solid #dde8f8; border-left: 5px solid #2f7ff0; border-radius: 14px; }
   .inv-details > div { display: flex; flex-direction: column; gap: 4px; }
-  .inv-details span { font-size: 16px; text-transform: uppercase; letter-spacing: .07em; color: #98a0ab; font-weight: 600; }
-  .inv-details b { font-size: 24px; color: #1a1f29; font-weight: 700; }
+  .inv-details span { font-size: 16px; text-transform: uppercase; letter-spacing: .07em; color: #6f86b5; font-weight: 700; }
+  .inv-details b { font-size: 24px; color: #0b1220; font-weight: 700; }
   .inv-parties { display: flex; justify-content: space-between; gap: 50px; margin-top: 40px; }
   .inv-party-r { text-align: right; }
-  .inv-lbl { font-size: 18px; text-transform: uppercase; letter-spacing: .1em; color: #98a0ab; margin-bottom: 9px; font-weight: 600; }
+  .inv-lbl { font-size: 18px; text-transform: uppercase; letter-spacing: .12em; color: #2f7ff0; margin-bottom: 9px; font-weight: 700; }
   .inv-party > div:not(.inv-lbl) { font-size: 24px; color: #3a414c; line-height: 1.5; }
   .inv-table { width: 100%; border-collapse: collapse; margin-top: 44px; font-size: 24px; }
-  .inv-table th { text-align: left; font-size: 18px; text-transform: uppercase; letter-spacing: .07em; color: #98a0ab; border-bottom: 2px solid #d9dee4; padding: 0 0 14px; font-weight: 600; }
+  .inv-table th { text-align: left; font-size: 18px; text-transform: uppercase; letter-spacing: .07em; color: #6f86b5; border-bottom: 2.5px solid #2f7ff0; padding: 0 0 14px; font-weight: 700; }
   .inv-table th.num, .inv-table td.num { text-align: right; }
   .inv-table td { padding: 18px 0; border-bottom: 1px solid #eef1f4; vertical-align: top; color: #2a313c; }
   .inv-table td.num { white-space: nowrap; color: #1a1f29; }
@@ -757,9 +758,13 @@
   .inv-notes { flex: 1; font-size: 21px; color: #5b636e; line-height: 1.6; white-space: pre-wrap; }
   .inv-totbox { width: 440px; flex: 0 0 auto; font-size: 24px; }
   .inv-totrow { display: flex; justify-content: space-between; padding: 10px 0; color: #4a525e; }
-  .inv-totrow.grand { border-top: 2px solid #0b1220; margin-top: 10px; padding-top: 18px; font-size: 32px; font-weight: 800; color: #0b1220; }
+  .inv-totrow.grand { background: linear-gradient(135deg, #0b1220, #1a356a); color: #fff; border-radius: 13px; margin-top: 16px; padding: 20px 26px; font-size: 31px; font-weight: 800; }
+  .inv-totrow.grand span:last-child { color: #7db3ff; }
   .inv-totrow.bal { color: #2f7ff0; font-weight: 700; border-top: 1px solid #e3e7ec; margin-top: 6px; padding-top: 14px; }
-  .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 56px; text-align: center; font-size: 20px; color: #aab0ba; border-top: 1px solid #eef1f4; padding-top: 22px; }
+  .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 2px solid #eef1f4; padding-top: 24px; }
+  .inv-foot-tag { font-size: 28px; font-weight: 800; font-style: italic; letter-spacing: -.5px; color: #0b1220; }
+  .inv-foot-tag b { color: #2f7ff0; font-weight: 800; }
+  .inv-foot-meta { margin-top: 10px; font-size: 19px; color: #98a0ab; letter-spacing: .02em; }
 
   /* ===== cross-tool coherence: one consistent feel for every secondary/compact button ===== */
   /* unify the resting look of the plain ghost/compact action buttons */
@@ -865,7 +870,7 @@
           <button class="nv-tile" onclick="showView('invoice')">
             <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></div>
             <h3>Invoice Generator <span class="nv-tag">PW</span></h3>
-            <p>Build a clean PDF invoice for a customer — line items, tax, totals — auto-numbered and saved to your history.</p>
+            <p>Build a clean PDF invoice for a client — line items, tax, totals — auto-numbered and saved to your history.</p>
             <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
           </button>
 
@@ -1479,7 +1484,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <option value="Yelp">Yelp</option>
                     <option value="DealerRater">DealerRater</option>
                     <option value="Cars.com">Cars.com</option>
-                    <option value="">Verified Customer</option>
+                    <option value="">Verified Client</option>
                   </select>
                 </div>
               </div>
@@ -1489,7 +1494,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="panel">
               <h2>Photo &amp; Style</h2>
               <div id="rv_drop" class="dh-drop" onclick="$('rv_file').click()">
-                <span>📷 Drop a customer / car photo, or <u>browse</u> <span style="opacity:.6;">(optional)</span></span>
+                <span>📷 Drop a client / car photo, or <u>browse</u> <span style="opacity:.6;">(optional)</span></span>
                 <input type="file" id="rv_file" accept="image/*" style="display:none;" onchange="rv_onPhoto(this.files[0]); this.value='';">
               </div>
               <div id="rv_photoBar" style="display:none;margin-top:8px;"></div>
@@ -1552,7 +1557,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <div class="rv-body">
                     <div class="rv-top">
                       <img class="rv-logo" src="logo.png" alt="Nova" crossorigin="anonymous">
-                      <span class="rv-tag">Customer Review</span>
+                      <span class="rv-tag">Client Review</span>
                     </div>
                     <div class="rv-stars" id="rv_stars">★★★★★</div>
                     <div class="rv-bigquote">“</div>
@@ -1588,8 +1593,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               </div>
             </div>
             <div class="panel">
-              <h2>Bill To</h2>
-              <label for="inv_cname">Customer name</label><input type="text" id="inv_cname" placeholder="John Smith" oninput="inv_render()">
+              <h2>Client</h2>
+              <label for="inv_cname">Client name</label><input type="text" id="inv_cname" placeholder="John Smith" oninput="inv_render()">
               <div class="row"><div><label for="inv_cemail">Email</label><input type="text" id="inv_cemail" placeholder="john@email.com" oninput="inv_render()"></div><div><label for="inv_cphone">Phone</label><input type="text" id="inv_cphone" placeholder="(818) 000-0000" oninput="inv_render()"></div></div>
               <label for="inv_caddr">Address</label><input type="text" id="inv_caddr" placeholder="123 Main St, Los Angeles, CA" oninput="inv_render()">
             </div>
@@ -1604,8 +1609,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <h2>Delivery</h2>
               <label for="inv_delivery">Method</label>
               <select id="inv_delivery" onchange="inv_render()"><option value="Delivered">Delivered</option><option value="Picked Up">Picked Up</option><option value="">— not specified —</option></select>
-              <label for="inv_pickup">Pickup location <span style="font-weight:400;opacity:.55;font-size:.78rem;">(if picked up)</span></label>
-              <input type="text" id="inv_pickup" placeholder="NovAuto — 123 Auto Row, Los Angeles, CA" oninput="inv_render()">
+              <label for="inv_pickup">Delivery / pickup location <span style="font-weight:400;opacity:.55;font-size:.78rem;">(if different from address)</span></label>
+              <input type="text" id="inv_pickup" placeholder="e.g. 123 Auto Row, Los Angeles, CA" oninput="inv_render()">
             </div>
             <div class="panel">
               <h2>Line Items</h2>
@@ -1644,11 +1649,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <div class="inv-scaler" id="invScaler">
                 <div class="inv" id="inv">
                   <div class="inv-bar">
-                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"></div>
+                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"><div class="inv-bar-tag">@NovAutoUSA &nbsp;·&nbsp; (818) 873 - 3697</div></div>
                     <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
                   </div>
                   <div class="inv-parties">
-                    <div class="inv-party"><div class="inv-lbl">Bill To</div><div id="inv_billEl"></div></div>
+                    <div class="inv-party"><div class="inv-lbl">Client</div><div id="inv_billEl"></div></div>
                     <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
                   </div>
                   <div class="inv-details" id="inv_detailsEl"></div>
@@ -1657,7 +1662,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
                   </div>
-                  <div class="inv-doc-foot">NovAuto · Thank you for choosing us.</div>
+                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) 873 - 3697</div></div>
                 </div>
               </div>
             </div>
@@ -4771,8 +4776,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const name = ($('rv_name').value || '').trim();
     const src = $('rv_source').value, veh = ($('rv_vehicle').value || '').trim();
     $('rv_revtext').textContent = ($('rv_text').value || '').trim();
-    $('rv_byname').textContent = name || 'Verified Customer';
-    $('rv_bysrc').textContent = [src ? 'via ' + src : 'Verified Customer', veh].filter(Boolean).join('  ·  ');
+    $('rv_byname').textContent = name || 'Verified Client';
+    $('rv_bysrc').textContent = [src ? 'via ' + src : 'Verified Client', veh].filter(Boolean).join('  ·  ');
     const av = $('rv_avatar');
     if (rv_photoData && rv_layout === 'card') { av.style.backgroundImage = 'url(' + rv_photoData + ')'; av.textContent = ''; }
     else { av.style.backgroundImage = ''; av.textContent = rv_initials(name); }
@@ -5007,8 +5012,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     push('Due at Signing', mny('inv_das'));
     push('Term', $('inv_term').value.trim() ? $('inv_term').value.trim() + ' mo' : '');
     push('Mileage', $('inv_miles').value.trim() ? Number(inv_num($('inv_miles').value)).toLocaleString('en-US') + ' /yr' : '');
-    push('Delivery', $('inv_delivery').value);
-    if ($('inv_delivery').value === 'Picked Up') push('Pickup', $('inv_pickup').value);
+    const dm = $('inv_delivery').value;
+    push('Delivery', dm);
+    if ($('inv_pickup').value.trim()) push(dm === 'Picked Up' ? 'Pickup Location' : 'Delivered To', $('inv_pickup').value);
     $('inv_detailsEl').innerHTML = det.join('');
     $('inv_detailsEl').style.display = det.length ? '' : 'none';
     $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it => {
