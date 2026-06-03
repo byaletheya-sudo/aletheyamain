@@ -343,6 +343,7 @@ def home():
 @app.route("/deal-hub")
 @app.route("/review-generator")
 @app.route("/invoice")
+@app.route("/quote")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
