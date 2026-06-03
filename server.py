@@ -1334,7 +1334,9 @@ LIVE_DEALS_URL = "https://novautousa.com/deals"
 _LIVE_DEALS_CACHE = {"at": 0.0, "text": "", "count": 0}
 
 # ---- Concierge Copilot knowledge base (the NovAuto sales guide, etc.) ----
-# Stored on the Railway volume (GENERATED_DIR), NOT committed to the public repo.
+# Two private sources, NEITHER in the public repo:
+#   1) COPILOT_KB env var on Railway  ← set it once, no in-app upload needed (preferred)
+#   2) the volume file written by the in-app 📚 editor (overrides the env var if used)
 COPILOT_KB_FILE = os.path.join(GENERATED_DIR, "copilot_kb.txt")
 _COPILOT_KB_CACHE = {"at": 0.0, "text": None}
 
@@ -1343,11 +1345,14 @@ def _load_copilot_kb(max_age=60):
     now = time.time()
     if _COPILOT_KB_CACHE["text"] is not None and (now - _COPILOT_KB_CACHE["at"] < max_age):
         return _COPILOT_KB_CACHE["text"]
-    try:
+    text = ""
+    try:                                                  # in-app editor file wins if present
         with open(COPILOT_KB_FILE, encoding="utf-8") as f:
             text = f.read().strip()
     except Exception:
         text = ""
+    if not text:                                          # else the Railway env var
+        text = (os.environ.get("COPILOT_KB") or "").strip()
     _COPILOT_KB_CACHE.update(at=now, text=text)
     return text
 
