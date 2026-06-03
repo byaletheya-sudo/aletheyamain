@@ -6365,10 +6365,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // ===================== CONCIERGE COPILOT (global chat) =====================
   let bk_messages = [], bk_busy = false;
   const BK_SUGGEST = [
+    'Ballpark a 2026 BMW X5 lease, 36/10k',
     'What’s the cheapest deal live on the site right now?',
-    'Which SUVs are under $400/mo on our site?',
-    'Explain money factor like I’m talking to a client',
-    'Talk track for a higher-than-expected payment',
+    'Build a proposal for a RAV4 XLE at $399/mo',
+    'Client says another broker quoted cheaper — what do I say?',
   ];
   // smart action buttons the copilot can offer — key → {label, view}
   const BK_ACTIONS = {
@@ -6381,24 +6381,53 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     sold: { label: '✅ Make a sold post', view: 'sold' },
     review: { label: '⭐ Make a review post', view: 'review' },
   };
-  function bk_doAction(key) {
+  const bk_num = v => (v == null ? '' : String(v)).replace(/[^0-9.]/g, '');
+  // push the deal the copilot was discussing straight into a tool's fields
+  function bk_prefill(view, deal) {
+    deal = deal || {}; const dt = deal.dealType === 'finance' ? 'finance' : 'lease';
+    const set = (id, v) => { const el = $(id); if (el && v != null && String(v).trim() !== '') el.value = v; };
+    if (view === 'quote') {
+      if (typeof qt_setDeal === 'function') qt_setDeal(dt);
+      set('qt_vehicle', deal.vehicle); set('qt_cname', deal.client); set('qt_color', deal.color); set('qt_vin', deal.vin);
+      set('qt_term', bk_num(deal.term)); set('qt_miles', bk_num(deal.miles)); set('qt_das', bk_num(deal.das));
+      set('qt_apr', bk_num(deal.apr)); if (dt === 'finance') set('qt_down', bk_num(deal.das));
+      if (deal.notes) set('qt_notes', deal.notes);
+      if (deal.monthly) { set('qt_mpre', bk_num(deal.monthly)); if (typeof qt_mcalc === 'function') qt_mcalc('pre'); }
+      if (typeof qt_render === 'function') qt_render();
+    } else if (view === 'invoice') {
+      if (typeof inv_new === 'function') inv_new();
+      if (typeof inv_setDeal === 'function') inv_setDeal(dt);
+      set('inv_vehicle', deal.vehicle); set('inv_cname', deal.client); set('inv_color', deal.color); set('inv_vin', deal.vin);
+      set('inv_term', bk_num(deal.term)); set('inv_miles', bk_num(deal.miles)); set('inv_das', bk_num(deal.das));
+      set('inv_apr', bk_num(deal.apr)); if (dt === 'finance') set('inv_down', bk_num(deal.das));
+      if (deal.monthly) { set('inv_mpre', bk_num(deal.monthly)); if (typeof inv_mcalc === 'function') inv_mcalc('pre'); }
+      if (typeof inv_render === 'function') inv_render();
+    } else if (view === 'desk') {
+      if (typeof dk_setDeal === 'function') dk_setDeal(dt);
+      set('dk_vehicle', deal.vehicle); set('dk_msrp', bk_num(deal.msrp)); set('dk_term', bk_num(deal.term));
+      set('dk_miles', bk_num(deal.miles)); set('dk_down', bk_num(deal.das)); set('dk_apr', bk_num(deal.apr));
+      if (typeof dk_calc === 'function') dk_calc();
+    }
+  }
+  function bk_doAction(key, i) {
     const a = BK_ACTIONS[key]; if (!a) return;
-    if (a.view === 'invoice' && typeof inv_new === 'function') inv_new();   // start a fresh invoice
+    const deal = (typeof i === 'number' && bk_messages[i] && bk_messages[i].deal) || {};
     $('bkPanel').classList.remove('open');                                  // close chat, reveal the tool
     showView(a.view);
+    bk_prefill(a.view, deal);                                              // carry the discussed car in
   }
   function bk_fmt(t) { return escapeHtml(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
   function bk_scroll() { const m = $('bk_msgs'); if (m) m.scrollTop = m.scrollHeight; }
-  function bk_actHTML(acts) {
+  function bk_actHTML(acts, idx) {
     const valid = (acts || []).filter(k => BK_ACTIONS[k]);
     if (!valid.length) return '';
-    return `<div class="bk-actions">${valid.map(k => `<button class="bk-act" onclick="bk_doAction('${k}')">${BK_ACTIONS[k].label}</button>`).join('')}</div>`;
+    return `<div class="bk-actions">${valid.map(k => `<button class="bk-act" onclick="bk_doAction('${k}',${idx})">${BK_ACTIONS[k].label}</button>`).join('')}</div>`;
   }
   function bk_render(typing) {
     const m = $('bk_msgs'); if (!m) return;
-    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Concierge Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time — ask me what's advertised, the cheapest deal, or what's under a price. I'll also help with lease/finance math, talk tracks, and how to use any tool here.</div>`;
+    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Concierge Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time, ballpark a car we haven't pre-negotiated, run lease math, draft talk tracks — and drop a deal straight into a Proposal, Invoice, or Desking. What do you need?</div>`;
     const chips = bk_messages.length ? '' : `<div class="bk-suggest">${BK_SUGGEST.map((s, i) => `<button class="bk-chip" onclick="bk_suggest(${i})">${escapeHtml(s)}</button>`).join('')}</div>`;
-    const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>` + (x.role === 'assistant' ? bk_actHTML(x.actions) : '')).join('');
+    const body = bk_messages.map((x, i) => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>` + (x.role === 'assistant' ? bk_actHTML(x.actions, i) : '')).join('');
     const typ = typing ? `<div class="bk-typing"><span></span><span></span><span></span></div>` : '';
     m.innerHTML = greet + chips + body + typ;
     bk_scroll();
@@ -6450,7 +6479,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const hist = bk_messages.slice(-20).map(x => ({ role: x.role, content: x.content }));
       const r = await fetch('/broker-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hist }) });
       const d = await r.json();
-      bk_messages.push({ role: 'assistant', content: d.error ? ('⚠️ ' + d.error) : (d.reply || '…'), actions: d.actions || [] });
+      bk_messages.push({ role: 'assistant', content: d.error ? ('⚠️ ' + d.error) : (d.reply || '…'), actions: d.actions || [], deal: d.deal || {} });
     } catch (e) { bk_messages.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     bk_busy = false; $('bk_send').disabled = false; bk_render(false);
     setTimeout(() => $('bk_input').focus(), 30);

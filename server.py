@@ -1437,6 +1437,17 @@ def broker_chat():
         "payment. Residual is a % of MSRP. More miles/year → lower residual → higher payment. Down payment / "
         "rebates reduce the cap cost. Due at signing = down + first payment + broker fee. Finance: tax the selling "
         "price, finance it, standard amortization. Show the formula and a worked number when it helps.\n"
+        "BALLPARK QUICK-REFERENCE (Nova rules of thumb): $1,000 cap reduction ≈ $30/mo less on 36mo (≈ $42/mo on "
+        "24mo); $500 cap reduction ≈ $15/mo less on 36mo; every 1% residual drop ≈ $15–20/mo more; a down-payment "
+        "change ÷ term = the monthly change ($1k less down ÷ 36 ≈ +$28/mo); MF × 2400 = APR; LA tax: ×1.0975 to add, "
+        "÷1.0975 to remove. Every number we give a client is a TRUE OUT-THE-DOOR number — tax, DMV, fees, first "
+        "payment, and the Nova concierge fee all included; quote ONE clean DAS and ONE clean monthly.\n"
+        "BALLPARK ESTIMATES: If an agent asks roughly what a car leases/finances for and it's NOT pre-negotiated "
+        "(not in our live deals), give a useful BALLPARK by (a) using similar cars from our live deals as comps, (b) "
+        "applying the rules of thumb above, and (c) your general market knowledge for that segment. ALWAYS label it "
+        "as a 'rough ballpark, not a locked quote', state your assumptions (term / miles / DAS), and tell them to "
+        "confirm the real number in Desking or by sourcing through Nema. Give a sensible monthly RANGE, not false "
+        "precision. Never present an estimate as a firm price.\n"
         "LIVE DEALS: You DO have real-time read access to the deals published on novautousa.com/deals — they're "
         "given to you below. Use them whenever an agent asks what's live / advertised / the best or cheapest deal / "
         "a specific car / what's under a price. Quote the exact advertised monthly, due-at-signing, and term, and "
@@ -1451,7 +1462,14 @@ def broker_chat():
         "desk (open the Desking calculator), quote (build a Deal Proposal), invoice (build an Invoice), deals (open "
         "the Deal Hub), ads (make a lease ad), sold (make a sold post), review (make a review post). Include 1–3 of "
         "the MOST relevant keys (e.g. someone closing a deal → 'quote, invoice'; pricing a car → 'desk'). If no tool "
-        "is relevant, OMIT the line entirely. Never mention or explain this line; just append it when useful."
+        "is relevant, OMIT the line entirely. Never mention or explain this line; just append it when useful.\n"
+        "DEAL HAND-OFF: when you include a quote/invoice/desk action AND a specific vehicle or deal is in play, ALSO "
+        "append ONE more final line in EXACTLY this format (after the ACTIONS line): [[DEAL: {json}]] — a compact "
+        "JSON object with any of these STRING fields you actually know from the conversation or live deals: vehicle "
+        "('2026 Toyota RAV4 XLE'), dealType ('lease' or 'finance'), monthly, term, das (due at signing or down), "
+        "miles, msrp, apr, color, vin, client (the client's first name), notes. Use live-deal numbers for an "
+        "advertised car, or your ballpark for an estimate. OMIT fields you don't know — never invent a VIN or MSRP. "
+        "This pre-fills the tool for the agent. If no specific car is in play, omit the DEAL line. Never explain it."
     )
     kb = _load_copilot_kb()
     if kb:
@@ -1473,16 +1491,29 @@ def broker_chat():
             temperature=0.5, max_tokens=700,
         )
         reply = (resp.choices[0].message.content or "").strip()
-        # pull out the optional [[ACTIONS: ...]] line → structured buttons
-        actions = []
+        actions, deal = [], {}
         allowed = {"desk", "quote", "proposal", "invoice", "deals", "ads", "sold", "review"}
-        m = re.search(r'\[\[\s*ACTIONS?\s*:\s*([^\]]+)\]\]', reply, re.I)
-        if m:
-            for k in re.split(r'[,\s]+', m.group(1).strip().lower()):
+        deal_fields = {"vehicle", "dealType", "monthly", "term", "das", "miles", "msrp", "apr", "color", "vin", "client", "notes"}
+        # optional [[DEAL: {json}]] → pre-fill payload for the tools
+        dm = re.search(r'\[\[\s*DEAL\s*:\s*(\{.*?\})\s*\]\]', reply, re.I | re.S)
+        if dm:
+            try:
+                d = json.loads(dm.group(1))
+                if isinstance(d, dict):
+                    deal = {k: str(v).strip()[:120] for k, v in d.items()
+                            if k in deal_fields and v not in (None, "") and str(v).strip()}
+            except Exception:
+                deal = {}
+        # optional [[ACTIONS: ...]] → smart buttons
+        am = re.search(r'\[\[\s*ACTIONS?\s*:\s*([^\]]+)\]\]', reply, re.I)
+        if am:
+            for k in re.split(r'[,\s]+', am.group(1).strip().lower()):
                 if k in allowed and k not in actions:
                     actions.append(k)
-            reply = reply[:m.start()].rstrip()        # strip the marker from the visible text
-        return jsonify({"reply": reply, "actions": actions})
+        starts = [x.start() for x in (am, dm) if x]
+        if starts:
+            reply = reply[:min(starts)].rstrip()          # strip the markers from the visible text
+        return jsonify({"reply": reply, "actions": actions, "deal": deal})
     except Exception as e:
         return jsonify({"error": f"Couldn't reach the assistant: {e}"}), 502
 
