@@ -6416,7 +6416,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     showView(a.view);
     bk_prefill(a.view, deal);                                              // carry the discussed car in
   }
-  function bk_fmt(t) { return escapeHtml(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
+  function bk_fmt(t) {
+    return escapeHtml(t || '')
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/(https?:\/\/[^\s<]+?)([.,;:!?)]*)(?=\s|<|$)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>$2');   // clickable links
+  }
   function bk_scroll() { const m = $('bk_msgs'); if (m) m.scrollTop = m.scrollHeight; }
   function bk_actHTML(acts, idx) {
     const valid = (acts || []).filter(k => BK_ACTIONS[k]);

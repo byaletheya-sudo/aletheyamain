@@ -1394,6 +1394,8 @@ def _fetch_live_deals_text(max_age=300):
                 parts.append("$" + str(d["das"]) + " due at signing")
             if d.get("term"):
                 parts.append(str(d["term"]) + "mo")
+            if d.get("slug"):
+                parts.append("page: https://novautousa.com/deals/" + urllib.parse.quote(d["slug"], safe=""))
             if parts:
                 lines.append("• " + " · ".join(parts))
         text = "\n".join(lines)
@@ -1458,6 +1460,11 @@ def broker_chat():
         "a specific car / what's under a price. Quote the exact advertised monthly, due-at-signing, and term, and "
         "say it's the current advertised number. If a car they ask about isn't in the live list, say it's not "
         "currently advertised on the site.\n"
+        "DEAL PAGE LINKS: each live deal below includes its 'page:' link on novautousa.com. When you reference or "
+        "recommend a specific live car, ALWAYS include that page link so the agent can send it to the client — this "
+        "is Nova's own marketing page (NOT the dealer's listing), so it's safe to share. (The guide's 'never send "
+        "the car link' rule is about hiding the DEALER's listing/VIN, not Nova's own site.) Use the exact URL given; "
+        "never invent a link.\n"
         "LIMITS: You do NOT know raw manufacturer programs (residual %, money factor, incentives) or a specific "
         "client's file — for those, point them to the Desking program library or the Deal Hub. Never INVENT a "
         "residual %, money factor, or incentive amount. Ask a brief clarifying question if a request is ambiguous. "
@@ -1873,6 +1880,7 @@ def _extract_inertia_deals(body):
             "monthly": str(deal.get("monthly_payment") or ""),
             "das": str(deal.get("down_payment") or ""),
             "term": str(deal.get("lease_term_months") or ""),
+            "slug": str(c.get("slug") or ""),
         })
     return rows or None
 
