@@ -1330,6 +1330,41 @@ def desk_parse():
         return jsonify({"error": f"Couldn't read that rate sheet: {e}"}), 502
 
 
+LIVE_DEALS_URL = "https://novautousa.com/deals"
+_LIVE_DEALS_CACHE = {"at": 0.0, "text": "", "count": 0}
+
+
+def _fetch_live_deals_text(max_age=300):
+    """Fetch & cache the live novautousa.com/deals as a compact text block the Broker
+    Copilot can read. Cached ~5 min; on failure, returns any stale cache. -> (text, count)."""
+    now = time.time()
+    if _LIVE_DEALS_CACHE["text"] and (now - _LIVE_DEALS_CACHE["at"] < max_age):
+        return _LIVE_DEALS_CACHE["text"], _LIVE_DEALS_CACHE["count"]
+    try:
+        req = urllib.request.Request(LIVE_DEALS_URL, headers={"User-Agent": "Mozilla/5.0 (NovaCopilot)"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = r.read(3_000_000).decode("utf-8", "ignore")
+        rows = _extract_inertia_deals(body) or []
+        lines = []
+        for d in rows:
+            veh = " ".join(x for x in [d.get("year", ""), d.get("make", ""), d.get("model", ""), d.get("trim", "")] if x).strip()
+            parts = [veh] if veh else []
+            if d.get("monthly"):
+                parts.append("$" + str(d["monthly"]) + "/mo")
+            if d.get("das"):
+                parts.append("$" + str(d["das"]) + " due at signing")
+            if d.get("term"):
+                parts.append(str(d["term"]) + "mo")
+            if parts:
+                lines.append("• " + " · ".join(parts))
+        text = "\n".join(lines)
+        if text:
+            _LIVE_DEALS_CACHE.update(at=now, text=text, count=len(lines))
+        return text, len(lines)
+    except Exception:
+        return _LIVE_DEALS_CACHE["text"], _LIVE_DEALS_CACHE["count"]
+
+
 @app.route("/broker-chat", methods=["POST"])
 def broker_chat():
     """Broker Copilot — a conversational assistant for NovAuto's agents on the home
@@ -1368,11 +1403,24 @@ def broker_chat():
         "payment. Residual is a % of MSRP. More miles/year → lower residual → higher payment. Down payment / "
         "rebates reduce the cap cost. Due at signing = down + first payment + broker fee. Finance: tax the selling "
         "price, finance it, standard amortization. Show the formula and a worked number when it helps.\n"
-        "LIMITS: You do NOT know live manufacturer rates, a specific client's file, or today's exact incentives — "
-        "if asked, say so and point them to the right tool (e.g. the Desking program library or the Deal Hub). "
-        "Never invent specific residual %, money factors, or incentive amounts. Ask a brief clarifying question if "
-        "the request is ambiguous. Keep general guidance only on legal/tax matters."
+        "LIVE DEALS: You DO have real-time read access to the deals published on novautousa.com/deals — they're "
+        "given to you below. Use them whenever an agent asks what's live / advertised / the best or cheapest deal / "
+        "a specific car / what's under a price. Quote the exact advertised monthly, due-at-signing, and term, and "
+        "say it's the current advertised number. If a car they ask about isn't in the live list, say it's not "
+        "currently advertised on the site.\n"
+        "LIMITS: You do NOT know raw manufacturer programs (residual %, money factor, incentives) or a specific "
+        "client's file — for those, point them to the Desking program library or the Deal Hub. Never INVENT a "
+        "residual %, money factor, or incentive amount. Ask a brief clarifying question if a request is ambiguous. "
+        "Keep general guidance only on legal/tax matters."
     )
+    deals_text, deals_n = _fetch_live_deals_text()
+    if deals_text:
+        system += ("\n\n=== LIVE DEALS on novautousa.com/deals right now (" + str(deals_n) +
+                   " vehicles, refreshed within ~5 min) — these are the current client-facing advertised "
+                   "numbers ===\n" + deals_text[:7000])
+    else:
+        system += ("\n\n(Live deals from novautousa.com/deals are momentarily unavailable — if asked about live "
+                   "deals, say so and suggest checking the Deal Hub.)")
     try:
         client = OpenAI(api_key=API_KEY)
         resp = client.chat.completions.create(

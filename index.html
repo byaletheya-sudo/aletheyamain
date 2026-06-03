@@ -6321,16 +6321,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // ===================== BROKER COPILOT (home chat) =====================
   let bk_messages = [], bk_busy = false;
   const BK_SUGGEST = [
+    'What’s the cheapest deal live on the site right now?',
+    'Which SUVs are under $400/mo on our site?',
     'Explain money factor like I’m talking to a client',
     'Talk track for a higher-than-expected payment',
-    'How do I use the Desking tool?',
-    'Lease vs finance — quick pros & cons',
   ];
   function bk_fmt(t) { return escapeHtml(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
   function bk_scroll() { const m = $('bk_msgs'); if (m) m.scrollTop = m.scrollHeight; }
   function bk_render(typing) {
     const m = $('bk_msgs'); if (!m) return;
-    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Broker Copilot</b>. Ask me about lease/finance math, structuring or presenting a deal, talk tracks for a client, or how to use any tool here.</div>`;
+    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Broker Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time — ask me what's advertised, the cheapest deal, or what's under a price. I'll also help with lease/finance math, talk tracks, and how to use any tool here.</div>`;
     const chips = bk_messages.length ? '' : `<div class="bk-suggest">${BK_SUGGEST.map((s, i) => `<button class="bk-chip" onclick="bk_suggest(${i})">${escapeHtml(s)}</button>`).join('')}</div>`;
     const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>`).join('');
     const typ = typing ? `<div class="bk-typing"><span></span><span></span><span></span></div>` : '';
