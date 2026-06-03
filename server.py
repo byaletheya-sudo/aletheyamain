@@ -39,7 +39,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -1438,6 +1438,32 @@ def invoices():
             return jsonify({"invoices": d.get("invoices", []), "counter": int(d.get("counter") or 0)})
     except Exception:
         return jsonify({"invoices": [], "counter": 0})
+
+
+PROGRAMS_FILE = os.path.join(GENERATED_DIR, "programs.json")
+
+
+@app.route("/desk-programs", methods=["GET", "POST"])
+def desk_programs():
+    """The Desking program library — saved manufacturer programs (residual, money
+    factor, term, fees …) keyed by vehicle. The client owns the list; the server
+    just persists it (volume-backed), same as deals/invoices."""
+    if request.method == "POST":
+        data = request.json or {}
+        rows = data.get("programs")
+        store = {"programs": rows if isinstance(rows, list) else []}
+        try:
+            with open(PROGRAMS_FILE, "w") as f:
+                json.dump(store, f, indent=1)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": True, "count": len(store["programs"])})
+    try:
+        with open(PROGRAMS_FILE) as f:
+            d = json.load(f)
+            return jsonify({"programs": d.get("programs", [])})
+    except Exception:
+        return jsonify({"programs": []})
 
 
 @app.route("/detect-plate", methods=["POST"])

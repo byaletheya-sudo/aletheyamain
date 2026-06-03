@@ -590,6 +590,35 @@
   .dk-thumb { position: relative; width: 64px; height: 64px; border-radius: 9px; overflow: hidden; border: 1px solid #232938; }
   .dk-thumb img { width: 100%; height: 100%; object-fit: cover; }
   .dk-thumb button { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,.7); color: #fff; font-size: .7rem; line-height: 1; cursor: pointer; padding: 0; }
+  /* mileage quick-picks */
+  .dk-milechips { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .dk-milechips > span { font-size: .72rem; color: #6b7585; font-weight: 600; }
+  .dk-milechips button { background: rgba(255,255,255,.04); border: 1px solid #232938; color: #9aa3b1; border-radius: 8px; padding: 5px 11px; font-size: .8rem; font-weight: 700; cursor: pointer; transition: .12s; }
+  .dk-milechips button:hover { border-color: #4a9eff; color: #dfe5ee; }
+  .dk-milechips button.active { background: rgba(74,158,255,.16); border-color: rgba(74,158,255,.5); color: #fff; }
+  /* down-payment slider in the readout */
+  .dk-slider { margin-top: 16px; background: rgba(255,255,255,.03); border: 1px solid #1d2230; border-radius: 12px; padding: 12px 14px; }
+  .dk-slider-top { display: flex; justify-content: space-between; align-items: baseline; font-size: .8rem; color: #8a93a1; font-weight: 600; }
+  .dk-slider-top b { font-size: 1.05rem; color: #eef2f8; font-weight: 800; }
+  .dk-slider input[type=range] { width: 100%; margin: 9px 0 2px; accent-color: #4a9eff; cursor: pointer; }
+  .dk-slider-scale { display: flex; justify-content: space-between; font-size: .68rem; color: #5b6471; }
+  /* saved-program match hint */
+  .dk-progmatch { margin: 9px 0 2px; background: rgba(46,204,113,.08); border: 1px solid rgba(46,204,113,.28); border-radius: 10px; padding: 9px 12px; font-size: .82rem; color: #8be3b0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .dk-progmatch b { color: #cdeede; }
+  .dk-progmatch button { background: #2ecc71; border: none; color: #06281a; font-weight: 800; font-size: .76rem; border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .dk-progmatch button:hover { filter: brightness(1.07); }
+  /* library list */
+  .dk-liblist { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+  .dk-lib { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.025); border: 1px solid #1d2230; border-radius: 10px; padding: 9px 11px; cursor: pointer; transition: .12s; }
+  .dk-lib:hover { border-color: #4a9eff; background: rgba(74,158,255,.07); }
+  .dk-lib .dk-lib-main { flex: 1; min-width: 0; }
+  .dk-lib .dk-lib-veh { font-size: .86rem; font-weight: 700; color: #eef2f8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dk-lib .dk-lib-sub { font-size: .72rem; color: #7a8696; margin-top: 1px; }
+  .dk-lib .dk-lib-mo { font-size: .82rem; font-weight: 800; color: #4a9eff; white-space: nowrap; }
+  .dk-lib .dk-lib-del { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px; border: none; background: transparent; color: #5b6471; font-size: 1rem; cursor: pointer; opacity: 0; transition: .12s; }
+  .dk-lib:hover .dk-lib-del { opacity: 1; }
+  .dk-lib .dk-lib-del:hover { background: rgba(255,77,79,.14); color: #ff6b6e; }
+  .dk-libempty { font-size: .8rem; color: #5b6471; padding: 8px 2px; }
   @media (max-width: 1080px) {
     .dk-layout { grid-template-columns: 1fr; }
     .dk-results { position: static; }
@@ -1971,7 +2000,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             </div>
             <div class="panel">
               <h2>Vehicle</h2>
-              <label for="dk_vehicle">Vehicle</label><input type="text" id="dk_vehicle" placeholder="2026 Toyota RAV4 XLE" oninput="dk_calc()">
+              <label for="dk_vehicle">Vehicle</label><input type="text" id="dk_vehicle" placeholder="2026 Toyota RAV4 XLE" oninput="dk_onVehicleInput()">
+              <div id="dk_progMatch" class="dk-progmatch" style="display:none;"></div>
               <div class="row">
                 <div><label for="dk_msrp">MSRP ($)</label><input type="text" id="dk_msrp" placeholder="42,000" oninput="dk_calc()"></div>
                 <div><label for="dk_price">Selling price ($)</label><input type="text" id="dk_price" placeholder="40,500" oninput="dk_calc()"></div>
@@ -2000,9 +2030,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <div><label for="dk_fin_term_spacer">&nbsp;</label><div style="height:0;"></div></div>
                 </div>
               </div>
-              <div class="row">
+              <div class="row3">
                 <div><label for="dk_term">Term (months)</label><input type="text" id="dk_term" placeholder="36" oninput="dk_calc()"></div>
-                <div id="dk_f_miles"><label for="dk_miles">Annual miles</label><input type="text" id="dk_miles" placeholder="7,500" oninput="dk_calc()"></div>
+                <div id="dk_f_miles"><label for="dk_miles">Annual miles</label><input type="text" id="dk_miles" placeholder="10,000" oninput="dk_calc()"></div>
+                <div id="dk_f_basemiles"><label for="dk_baseMiles">RV quoted @ <span style="font-weight:400;opacity:.5;font-size:.72rem;">mi/yr</span></label><input type="text" id="dk_baseMiles" placeholder="10,000" oninput="dk_calc()"></div>
+              </div>
+              <div id="dk_mileChips" class="dk-milechips">
+                <span>Quick miles:</span>
+                <button type="button" data-mi="7500" onclick="dk_setMiles(7500)">7.5k</button>
+                <button type="button" data-mi="10000" onclick="dk_setMiles(10000)">10k</button>
+                <button type="button" data-mi="12000" onclick="dk_setMiles(12000)">12k</button>
+                <button type="button" data-mi="15000" onclick="dk_setMiles(15000)">15k</button>
               </div>
             </div>
 
@@ -2017,6 +2055,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                 <div><label for="dk_tax">Sales tax %</label><input type="text" id="dk_tax" value="9.75" oninput="dk_calc()"></div>
                 <div><label for="dk_cost">Your cost ($) <span style="font-weight:400;opacity:.55;font-size:.74rem;">internal · optional</span></label><input type="text" id="dk_cost" placeholder="—" oninput="dk_calc()"></div>
               </div>
+            </div>
+
+            <div class="panel">
+              <h2>📚 Program library <span style="font-weight:400;opacity:.55;font-size:.78rem;">saved manufacturer programs</span></h2>
+              <div class="controls" style="margin-bottom:10px;">
+                <button class="btn-start" onclick="dk_saveProgram()">💾 Save this program</button>
+                <button class="btn-ghost" onclick="dk_toDealHub()">🗂 Save to Deal Hub</button>
+              </div>
+              <input type="text" id="dk_progSearch" placeholder="Search saved programs…" oninput="dk_renderLibrary()" style="margin-bottom:8px;">
+              <div id="dk_libList" class="dk-liblist"></div>
+              <div class="status" id="dk_libStatus"></div>
             </div>
           </div>
 
@@ -2034,6 +2083,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <button class="btn-ghost" onclick="dk_toProposal()">→ Proposal</button>
                   <button class="btn-start" onclick="dk_toInvoice()">→ Invoice</button>
                 </div>
+              </div>
+              <div class="dk-slider" id="dk_downWrap">
+                <div class="dk-slider-top"><span id="dk_downSlideLbl">Choose down payment</span><b id="dk_downReadout">$0</b></div>
+                <input type="range" id="dk_downSlider" min="0" max="10000" step="250" value="0" oninput="dk_downSlide(this.value)">
+                <div class="dk-slider-scale"><span>$0</span><span id="dk_downMax">$10k</span></div>
               </div>
               <div class="dk-chiprow" id="dk_roChips"></div>
               <div class="dk-break" id="dk_roBreak"></div>
@@ -2789,7 +2843,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   const RESTRICTED_VIEWS = new Set(['test', 'deals', 'invoice', 'desk']);
   async function checkUnlock() {
     try { const r = await fetch('/unlock'); const d = await r.json(); restrictedUnlocked = !!d.unlocked; } catch (e) { }
-    if (restrictedUnlocked) { dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); }   // restricted endpoints are reachable now
+    if (restrictedUnlocked) { dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); dk_loadPrograms(); }   // restricted endpoints are reachable now
     if (restrictedUnlocked && lockPendingView) { $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; showView(v, { noPush: true }); }
   }
   function showLock(targetView) {
@@ -2804,7 +2858,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     try {
       const r = await fetch('/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
       const d = await r.json();
-      if (d.ok) { restrictedUnlocked = true; dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
+      if (d.ok) { restrictedUnlocked = true; dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); dk_loadPrograms(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
       else { $('lockErr').textContent = d.error || 'Incorrect password.'; }
     } catch (e) { $('lockErr').textContent = e.message; }
   }
@@ -2826,7 +2880,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (name === 'sold' && typeof renderSold === 'function') requestAnimationFrame(renderSold);   // re-fit the sold title/subtitle now it's measurable
     if (name === 'invoice' && typeof inv_render === 'function') requestAnimationFrame(inv_render);
     if (name === 'quote' && typeof qt_render === 'function') requestAnimationFrame(qt_render);
-    if (name === 'desk' && typeof dk_calc === 'function') requestAnimationFrame(dk_calc);
+    if (name === 'desk' && typeof dk_calc === 'function') { if (typeof dk_loadPrograms === 'function') dk_loadPrograms(); requestAnimationFrame(dk_calc); }
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -5764,9 +5818,24 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('dk_lease').style.display = lease ? '' : 'none';
     $('dk_fin').style.display = lease ? 'none' : '';
     $('dk_f_miles').style.display = lease ? '' : 'none';
+    $('dk_f_basemiles').style.display = lease ? '' : 'none';
+    $('dk_mileChips').style.display = lease ? '' : 'none';
     $('dk_downLbl').textContent = lease ? 'Cap reduction ($)' : 'Down payment ($)';
     dk_calc();
   }
+  // ---- mileage → residual: more miles = lower residual = higher payment ----
+  // standard residual-point deltas vs a 10k/yr base (editable via "RV quoted @")
+  function dk_milesAnchor(m) {
+    const pts = [[7500, 2], [10000, 0], [12000, -1], [15000, -3]];
+    if (m <= pts[0][0]) return pts[0][1];
+    if (m >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+    for (let i = 0; i < pts.length - 1; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1]; if (m >= x0 && m <= x1) return y0 + (y1 - y0) * (m - x0) / (x1 - x0); }
+    return 0;
+  }
+  function dk_milesAdj(miles, baseMiles) { const m = miles || baseMiles || 10000, b = baseMiles || 10000; return dk_milesAnchor(m) - dk_milesAnchor(b); }
+  function dk_effResid(I) { return I.resid + (dk_dealType === 'lease' ? dk_milesAdj(I.miles, I.baseMiles) : 0); }
+  function dk_setMiles(m) { $('dk_miles').value = m; dk_calc(); }
+  function dk_downSlide(v) { $('dk_down').value = Math.round(Number(v) || 0); dk_calc(); }
   // ---- the math ----
   function dk_leasePayment(msrp, price, residPct, mf, term, down, rebate, acq, fees, taxPct) {
     const residual = msrp * (residPct / 100);
@@ -5794,13 +5863,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       resid: inv_num($('dk_resid').value), mf,
       acq: inv_num($('dk_acq').value), apr: inv_num($('dk_apr').value),
       term: Math.round(inv_num($('dk_term').value)) || 0, miles: inv_num($('dk_miles').value),
+      baseMiles: Math.round(inv_num($('dk_baseMiles').value)) || 10000,
       down: inv_num($('dk_down').value), rebate: inv_num($('dk_rebate').value),
       fees: inv_num($('dk_fees').value), tax: inv_num($('dk_tax').value),
       cost: inv_num($('dk_cost').value),
     };
   }
   function dk_payAt(term, down, I) {
-    if (dk_dealType === 'lease') { const r = dk_leasePayment(I.msrp, I.price, I.resid, I.mf, term, down, I.rebate, I.acq, I.fees, I.tax); return { base: r.base, monthly: r.monthly }; }
+    if (dk_dealType === 'lease') { const r = dk_leasePayment(I.msrp, I.price, dk_effResid(I), I.mf, term, down, I.rebate, I.acq, I.fees, I.tax); return { base: r.base, monthly: r.monthly }; }
     const r = dk_financePayment(I.price, I.apr, term, down, I.rebate, I.fees, I.tax); return { base: r.monthly, monthly: r.monthly };
   }
   function dk_pickCell(term, down) { $('dk_term').value = term; $('dk_down').value = down; dk_calc(); }
@@ -5814,10 +5884,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                         : (I.price > 0 && I.term > 0);
     $('dk_roVeh').textContent = $('dk_vehicle').value.trim() || 'Your deal';
     const baseTerm = I.term || 36;
+    const effResid = dk_effResid(I);                       // residual after the mileage adjustment
+    const milesAdj = lease ? dk_milesAdj(I.miles, I.baseMiles) : 0;
+    // sync the interactive controls (down slider + mileage chips)
+    const maxDown = Math.max(8000, Math.round((I.down + 5000) / 500) * 500, Math.round(I.msrp * 0.2 / 500) * 500);
+    const sl = $('dk_downSlider'); sl.max = maxDown; sl.value = Math.min(I.down, maxDown);
+    $('dk_downReadout').textContent = dk_m(I.down); $('dk_downMax').textContent = dk_m(maxDown);
+    $('dk_downSlideLbl').textContent = lease ? 'Choose cap reduction' : 'Choose down payment';
+    $('dk_mileChips').querySelectorAll('button').forEach(b => b.classList.toggle('active', Number(b.dataset.mi) === I.miles));
     const sc = lease
-      ? dk_leasePayment(I.msrp, I.price, I.resid, I.mf, baseTerm, I.down, I.rebate, I.acq, I.fees, I.tax)
+      ? dk_leasePayment(I.msrp, I.price, effResid, I.mf, baseTerm, I.down, I.rebate, I.acq, I.fees, I.tax)
       : dk_financePayment(I.price, I.apr, baseTerm, I.down, I.rebate, I.fees, I.tax);
-    dk_last = { dealType: dk_dealType, base: sc.base, monthly: sc.monthly, das: sc.das, term: baseTerm };
+    dk_last = { dealType: dk_dealType, base: sc.base, monthly: sc.monthly, das: sc.das, term: baseTerm, effResid };
 
     if (!ready) {
       $('dk_roBig').className = 'dk-big zero'; $('dk_roBig').innerHTML = '<span class="amt">$0</span><span class="per">/mo</span>';
@@ -5828,13 +5906,15 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     }
     // ---- readout ----
     $('dk_roBig').className = 'dk-big'; $('dk_roBig').innerHTML = `<span class="amt">${dk_m(sc.monthly)}</span><span class="per">/mo</span>`;
-    if (lease) $('dk_roSub').innerHTML = `<b>${dk_m(sc.base)}</b> base&nbsp;+&nbsp;${dk_m(sc.tax)} tax · with tax included`;
+    const mileNote = (lease && milesAdj) ? ` &nbsp;·&nbsp; ${Number(I.miles || I.baseMiles).toLocaleString('en-US')} mi → residual <b>${milesAdj > 0 ? '+' : ''}${(+milesAdj.toFixed(1))}%</b>` : '';
+    if (lease) $('dk_roSub').innerHTML = `<b>${dk_m(sc.base)}</b> base&nbsp;+&nbsp;${dk_m(sc.tax)} tax · with tax included${mileNote}`;
     else $('dk_roSub').innerHTML = `tax included in payment · ${dk_m(sc.financed)} financed`;
     // chips
     const chips = [];
     chips.push(`<div class="dk-chip"><span>Term</span><b>${baseTerm} mo</b></div>`);
     if (lease) {
-      chips.push(`<div class="dk-chip"><span>Residual</span><b>${dk_m(sc.residual)} · ${I.resid}%</b></div>`);
+      const rLbl = (+effResid.toFixed(1)) + '%' + (milesAdj ? ` <span style="color:#7a8696;font-weight:600;">@${(I.miles / 1000)}k</span>` : '');
+      chips.push(`<div class="dk-chip"><span>Residual</span><b>${dk_m(sc.residual)} · ${rLbl}</b></div>`);
       chips.push(`<div class="dk-chip"><span>Money factor</span><b>${I.mf.toFixed(5)}${I.mf > 0 ? ' · ' + (I.mf * 2400).toFixed(1) + '%' : ''}</b></div>`);
       chips.push(`<div class="dk-chip"><span>Due at signing</span><b>${dk_m(sc.das)}</b></div>`);
     } else {
@@ -5881,9 +5961,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     });
     h += `</tbody>`;
     $('dk_grid').innerHTML = h;
-    $('dk_gridMode').textContent = lease ? `residual ${I.resid}% · MF ${I.mf.toFixed(5)}` : `APR ${I.apr}%`;
+    $('dk_gridMode').textContent = lease ? `residual ${(+effResid.toFixed(1))}% @ ${(I.miles / 1000) || (I.baseMiles / 1000)}k · MF ${I.mf.toFixed(5)}` : `APR ${I.apr}%`;
     $('dk_gridHint').innerHTML = lease
-      ? `Cells show monthly <b>with tax</b>. Residual % &amp; money factor are held constant across terms — per-term program values arrive with the rate-sheet library (Stage&nbsp;2).`
+      ? `Cells show monthly <b>with tax</b> at <b>${Number(I.miles || I.baseMiles).toLocaleString('en-US')} mi/yr</b>. Change the mileage above to reprice the whole grid. Residual &amp; money factor are held constant across terms (use a saved program per term for exact curves).`
       : `Cells show the all-in monthly (tax financed) across down payment &amp; term.`;
   }
   // ---- bridges to Proposal / Invoice ----
@@ -5970,8 +6050,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if ((!resid || !String(resid).trim()) && p.residual_amount && p.msrp) { const m = inv_num(p.msrp), a = inv_num(p.residual_amount); if (m > 0 && a > 0) resid = (a / m * 100).toFixed(1); }
     setIf('dk_resid', resid); setIf('dk_mf', p.money_factor); setIf('dk_apr', p.apr);
     setIf('dk_term', p.term); setIf('dk_miles', p.miles); setIf('dk_acq', p.acq_fee);
+    // the parsed residual is quoted at the parsed mileage — anchor base mileage there so
+    // it only adjusts when YOU change the miles (default 10k if the sheet didn't say)
+    setIf('dk_baseMiles', p.miles || '10000');
     setIf('dk_rebate', p.rebate); setIf('dk_fees', p.fees); setIf('dk_down', p.down); setIf('dk_tax', p.tax_pct);
-    dk_calc();
+    dk_calc(); if (typeof dk_matchProgram === 'function') dk_matchProgram();
   }
   async function dk_parse() {
     const text = ($('dk_sheet').value || '').trim();
@@ -5995,6 +6078,96 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     ['dragleave', 'dragend'].forEach(ev => z.addEventListener(ev, e => { if (e.target === z) z.classList.remove('drag'); }));
     z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('drag'); const fs = e.dataTransfer && e.dataTransfer.files; if (fs && fs.length) dk_addSheetFiles(fs); });
   })();
+  // ---- vehicle parsing (for Deal Hub rows + library keys) ----
+  function dk_vehParts() {
+    const parts = ($('dk_vehicle').value || '').trim().split(/\s+/).filter(Boolean);
+    let year = ''; if (parts[0] && /^(19|20)\d{2}$/.test(parts[0])) year = parts.shift();
+    const make = parts.shift() || ''; const model = parts.shift() || ''; const trim = parts.join(' ');
+    return { year, make, model, trim };
+  }
+  const dk_progKey = s => (s || '').toLowerCase().replace(/\b(19|20)\d{2}\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  // ---- program library (Stage 2) ----
+  let dk_programs = [], dk_progLoaded = false;
+  function dk_libStatus(t, type = '') { const e = $('dk_libStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  async function dk_loadPrograms() {
+    if (dk_progLoaded) return;
+    try { const r = await fetch('/desk-programs'); if (!r.ok) return; const d = await r.json(); dk_programs = d.programs || []; dk_progLoaded = true; dk_renderLibrary(); dk_matchProgram(); } catch (e) { }
+  }
+  async function dk_savePrograms() { try { await fetch('/desk-programs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ programs: dk_programs }) }); } catch (e) { } }
+  function dk_currentProgram() {
+    const g = id => $(id).value.trim();
+    return {
+      vehicle: g('dk_vehicle'), dealType: dk_dealType, msrp: g('dk_msrp'), resid: g('dk_resid'), mf: g('dk_mf'),
+      acq: g('dk_acq'), apr: g('dk_apr'), term: g('dk_term'), miles: g('dk_miles'), baseMiles: g('dk_baseMiles'),
+      rebate: g('dk_rebate'), fees: g('dk_fees'), tax: g('dk_tax'), updated: new Date().toLocaleDateString(),
+    };
+  }
+  function dk_saveProgram() {
+    const veh = $('dk_vehicle').value.trim();
+    if (!veh) { dk_libStatus('Enter the vehicle first, then save.', 'error'); return; }
+    const p = dk_currentProgram(), key = dk_progKey(veh);
+    const idx = dk_programs.findIndex(x => dk_progKey(x.vehicle) === key);
+    if (idx >= 0) dk_programs[idx] = p; else dk_programs.unshift(p);
+    dk_savePrograms(); dk_renderLibrary(); dk_matchProgram();
+    dk_libStatus((idx >= 0 ? 'Updated' : 'Saved') + ' “' + veh + '” in the library ✓', 'done');
+  }
+  function dk_loadProgram(i) {
+    const p = dk_programs[i]; if (!p) return;
+    const setV = (id, v) => { $(id).value = (v == null ? '' : String(v)); };
+    dk_setDeal(p.dealType === 'finance' ? 'finance' : 'lease');
+    setV('dk_vehicle', p.vehicle); setV('dk_msrp', p.msrp); setV('dk_resid', p.resid); setV('dk_mf', p.mf);
+    setV('dk_acq', p.acq); setV('dk_apr', p.apr); setV('dk_term', p.term); setV('dk_miles', p.miles);
+    setV('dk_baseMiles', p.baseMiles || p.miles || ''); setV('dk_rebate', p.rebate); setV('dk_fees', p.fees);
+    if (p.tax) setV('dk_tax', p.tax);
+    dk_calc(); dk_matchProgram();
+    dk_libStatus('Loaded “' + (p.vehicle || 'program') + '” — add your selling price & down.', 'done');
+  }
+  function dk_deleteProgram(i, ev) { if (ev) ev.stopPropagation(); dk_programs.splice(i, 1); dk_savePrograms(); dk_renderLibrary(); dk_matchProgram(); }
+  function dk_renderLibrary() {
+    const el = $('dk_libList'); if (!el) return;
+    if (!dk_programs.length) { el.innerHTML = '<div class="dk-libempty">No saved programs yet. Fill in a program above and hit “Save this program”.</div>'; return; }
+    const q = dk_progKey($('dk_progSearch') ? $('dk_progSearch').value : '');
+    let rows = dk_programs.map((p, i) => ({ p, i }));
+    if (q) rows = rows.filter(({ p }) => dk_progKey(p.vehicle).includes(q));
+    if (!rows.length) { el.innerHTML = '<div class="dk-libempty">No match for that search.</div>'; return; }
+    el.innerHTML = rows.map(({ p, i }) => {
+      const sub = [p.dealType === 'finance' ? (p.apr ? p.apr + '% APR' : 'Finance') : (p.resid ? p.resid + '% RV' : 'Lease'), p.mf ? 'MF ' + p.mf : '', p.term ? p.term + 'mo' : '', p.updated || ''].filter(Boolean).join(' · ');
+      return `<div class="dk-lib" onclick="dk_loadProgram(${i})"><div class="dk-lib-main"><div class="dk-lib-veh">${escapeHtml(p.vehicle || 'Untitled')}</div><div class="dk-lib-sub">${escapeHtml(sub)}</div></div><button class="dk-lib-del" onclick="dk_deleteProgram(${i},event)" title="Delete">×</button></div>`;
+    }).join('');
+  }
+  let dk_vehMatchT;
+  function dk_onVehicleInput() { dk_calc(); clearTimeout(dk_vehMatchT); dk_vehMatchT = setTimeout(dk_matchProgram, 150); }
+  function dk_matchProgram() {
+    const box = $('dk_progMatch'); if (!box) return;
+    const key = dk_progKey($('dk_vehicle').value.trim());
+    const idx = (key && dk_programs.length) ? dk_programs.findIndex(x => dk_progKey(x.vehicle) === key) : -1;
+    if (idx < 0) { box.style.display = 'none'; return; }
+    box.style.display = ''; box.innerHTML = `<span>📚 Saved program for <b>${escapeHtml(dk_programs[idx].vehicle)}</b></span><button onclick="dk_loadProgram(${idx})">Load program</button>`;
+  }
+  // ---- save the desked deal straight into the Deal Hub ----
+  async function dk_toDealHub() {
+    if (typeof dh_deals === 'undefined' || typeof dh_save !== 'function') { dk_libStatus('Deal Hub unavailable — unlock it once.', 'error'); return; }
+    if (typeof dh_load === 'function') { try { await dh_load(); } catch (e) { } }   // ensure the board is loaded before we add
+    dk_calc(); if (!dk_last || !dk_last.base) { dk_libStatus('Fill in the deal first (need a payment).', 'error'); return; }
+    const I = dk_inputs(), v = dk_vehParts(), lease = dk_dealType === 'lease';
+    const note = lease
+      ? ['Desked', I.mf ? 'MF ' + I.mf.toFixed(5) : '', 'RV ' + (+dk_effResid(I).toFixed(1)) + '%' + (I.miles ? ' @' + (I.miles / 1000) + 'k' : '')].filter(Boolean).join(' · ')
+      : ['Desked', I.apr ? I.apr + '% APR' : ''].filter(Boolean).join(' · ');
+    const deal = (typeof dh_ensureDates === 'function' ? dh_ensureDates : (x => x))({
+      _added: new Date().toLocaleDateString(),
+      year: v.year || '2026', make: v.make, model: v.model, trim: v.trim, package: '',
+      msrp: I.msrp ? String(Math.round(I.msrp)) : '',
+      orig_mo: dk_last.base ? String(Math.round(dk_last.base)) : '',
+      das: I.down ? String(Math.round(I.down)) : '',
+      term: I.term ? String(I.term) : '', miles: lease && I.miles ? String(Math.round(I.miles)) : '',
+      tax_in_mo: '', broker_fee: '', dealer: '', notes: note, source: 'Desking',
+      special: '', deal_type: lease ? 'lease' : 'finance', apr: lease ? '' : (I.apr ? String(I.apr) : ''), incentives: '',
+    });
+    dh_deals.unshift(deal);
+    if (typeof dh_refresh === 'function') dh_refresh();
+    dh_save();
+    dk_libStatus('Saved to Deal Hub ✓ — “' + [v.year || '2026', v.make, v.model, v.trim].filter(Boolean).join(' ') + '” is on your board.', 'done');
+  }
   dk_setDeal('lease');
 
   renderSold();
