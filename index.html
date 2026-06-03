@@ -2941,7 +2941,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (which === 'ad') {
       $('ad').style.background = '';                 // revert to the CSS default (background.png)
     } else {
-      $('sp').querySelector('.sp__bg').style.background = '';       // revert to the gradient
+      // revert to the Nova backdrop (inlined data URL if we have it, else the CSS default)
+      $('sp').querySelector('.sp__bg').style.background = spBgDataUrl ? `#05080d url("${spBgDataUrl}") center / cover no-repeat` : '';
       $('sp').querySelector('.sp__grid').style.display = '';
     }
   }
@@ -3420,8 +3421,29 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     spRenderInto($('spTitle').value, $('spSub') ? $('spSub').value : '', $('spBadge').value);
   }
 
+  // html2canvas resolves a relative url('sold-bg.png') against its cloned document and often
+  // drops it — so we inline the backdrop as a data URL (fetched once) and use that everywhere.
+  let spBgDataUrl = null, spBgLoading = null;
+  function spApplyBgData() {
+    if (!spBgDataUrl) return;
+    const bg = $('sp') && $('sp').querySelector('.sp__bg');
+    if (bg && (!bg.style.background || /sold-bg\.png/i.test(bg.style.background))) {
+      bg.style.background = `#05080d url("${spBgDataUrl}") center / cover no-repeat`;
+    }
+  }
+  function spLoadBgDataUrl() {
+    if (spBgDataUrl) return Promise.resolve(spBgDataUrl);
+    if (spBgLoading) return spBgLoading;
+    spBgLoading = fetch('sold-bg.png', { cache: 'force-cache' })
+      .then(r => r.ok ? r.blob() : Promise.reject(new Error('bg ' + r.status)))
+      .then(blobToDataURL)
+      .then(d => { spBgDataUrl = d; spApplyBgData(); return d; })
+      .catch(() => null);
+    return spBgLoading;
+  }
   async function renderSoldCanvas() {
     await document.fonts.ready;
+    await spLoadBgDataUrl(); spApplyBgData();      // guarantee the backdrop is embedded before capture
     if (spPhotos[1]) await waitForImage($('spImg1'));
     if (spLayout === 2 && spPhotos[2]) await waitForImage($('spImg2'));
     const scaler = $('spScaler'), stage = scaler.parentElement;
@@ -6260,6 +6282,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   dk_setDeal('lease');
 
+  if (typeof spLoadBgDataUrl === 'function') spLoadBgDataUrl();   // inline the Sold backdrop early (preview + export)
   renderSold();
   rv_renderStarPick(); rv_renderThemes(); rv_render();
   (function rvWirePhotoDrag() {                              // drag the hero photo to reposition it in the frame
