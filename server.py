@@ -652,12 +652,20 @@ def review_caption():
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 
-def _carsxe_dataurl(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        ctype = r.headers.get("Content-Type", "image/png")
-        b = r.read()
-    return f"data:{ctype};base64," + base64.b64encode(b).decode()
+def _carsxe_dataurl(url, tries=2, timeout=12):
+    """Fetch an image and return it as a data URL. The photo CDN can be slow, so
+    retry a few times before giving up."""
+    last = None
+    for _ in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                ctype = r.headers.get("Content-Type", "image/png")
+                b = r.read()
+            return f"data:{ctype};base64," + base64.b64encode(b).decode()
+        except Exception as e:
+            last = e
+    raise last
 
 
 def _rgb_to_hex(rgb):
@@ -822,12 +830,20 @@ def carsxe_image():
                 "w": im.get("width"), "h": im.get("height"),
                 "transparent": str(im.get("mime", "")).endswith("png")}
                for im in imgs]
-    try:
-        first = _carsxe_dataurl(imgs[0]["link"])
-    except Exception as e:
-        return jsonify({"error": f"Couldn't load the catalog image: {e}"}), 502
+    # load the first image that actually downloads (a single slow one shouldn't kill the request);
+    # whichever loads becomes image_data, and we float it to the front of the options.
+    first, first_url, err = None, None, None
+    for im in imgs[:3]:
+        try:
+            first = _carsxe_dataurl(im["link"]); first_url = im["link"]; break
+        except Exception as e:
+            err = e
+    if first is None:
+        return jsonify({"error": f"Couldn't load a catalog image (the photo CDN was slow) — try again: {err}"}), 502
+    if first_url and options and options[0]["url"] != first_url:
+        options.sort(key=lambda o: 0 if o["url"] == first_url else 1)
     payload = {"found": True, "success": True, "image_data": first,
-               "image_url": imgs[0]["link"], "options": options}
+               "image_url": first_url, "options": options}
     _cache_put(_CARSXE_IMG_CACHE, key, payload)
     return jsonify(payload)
 
