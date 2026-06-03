@@ -1330,6 +1330,61 @@ def desk_parse():
         return jsonify({"error": f"Couldn't read that rate sheet: {e}"}), 502
 
 
+@app.route("/broker-chat", methods=["POST"])
+def broker_chat():
+    """Broker Copilot — a conversational assistant for NovAuto's agents on the home
+    page. Multi-turn; the client sends the running message history. Login-gated
+    (every route is) but NOT behind the restricted password, so any agent can use it."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    raw = body.get("messages") or []
+    clean = []
+    for m in raw[-20:]:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        content = (m.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            clean.append({"role": role, "content": content[:4000]})
+    if not clean or clean[-1]["role"] != "user":
+        return jsonify({"error": "Ask a question first."}), 400
+    system = (
+        "You are 'Broker Copilot', the in-house AI assistant for NovAuto — a California auto "
+        "LEASE & FINANCE brokerage / auto concierge that sources and negotiates new cars for clients. "
+        "You help NovAuto's broker agents do their job. Be warm, sharp, and concise — like a seasoned "
+        "finance manager mentoring a newer agent. Plain language, short paragraphs, bullets when useful. "
+        "Avoid long essays; get to the point and offer to go deeper.\n"
+        "You can help with: lease & finance math (money factor, residual, capitalized cost, depreciation + "
+        "rent charge, due at signing, APR, amortization), explaining those to clients simply, structuring and "
+        "presenting deals, objection handling and talk tracks, lease vs finance, mileage/term tradeoffs, and how "
+        "to use the NovAuto toolkit — Deal Hub (live deal board), Desking (deal calculator with a down×term grid, "
+        "mileage→residual, a saved program library, and AI rate-sheet parsing), Lease Ad & Sold Posts (marketing "
+        "graphics), Review Generator, Invoice Generator, and Deal Proposal.\n"
+        "VOICE RULES: ALWAYS call the buyer a 'client', NEVER a 'customer'. The brand motto is "
+        "\"Friends Don't Let Friends Overpay.\" Professional but friendly.\n"
+        "MATH YOU KNOW: monthly money factor ≈ APR ÷ 2400. Lease monthly = depreciation [(adjusted cap − "
+        "residual) ÷ term] + rent charge [(adjusted cap + residual) × money factor], then add CA sales tax on the "
+        "payment. Residual is a % of MSRP. More miles/year → lower residual → higher payment. Down payment / "
+        "rebates reduce the cap cost. Due at signing = down + first payment + broker fee. Finance: tax the selling "
+        "price, finance it, standard amortization. Show the formula and a worked number when it helps.\n"
+        "LIMITS: You do NOT know live manufacturer rates, a specific client's file, or today's exact incentives — "
+        "if asked, say so and point them to the right tool (e.g. the Desking program library or the Deal Hub). "
+        "Never invent specific residual %, money factors, or incentive amounts. Ask a brief clarifying question if "
+        "the request is ambiguous. Keep general guidance only on legal/tax matters."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": system}] + clean,
+            temperature=0.5, max_tokens=700,
+        )
+        return jsonify({"reply": (resp.choices[0].message.content or "").strip()})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't reach the assistant: {e}"}), 502
+
+
 @app.route("/deal-search", methods=["POST"])
 def deal_search():
     """Natural-language filter over the deal list. Given a query and the candidate

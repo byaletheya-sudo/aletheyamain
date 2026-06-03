@@ -303,6 +303,26 @@
   .dh-agent-body { padding: 14px 16px 16px; overflow-y: auto; }
   .dh-agent-body textarea { width: 100%; }
   .dh-agent-hint { color: #8a909b; font-size: 0.78rem; line-height: 1.4; margin: 0 0 10px; }
+  /* ===== Broker Copilot chat ===== */
+  .bk-fab { display: flex; }
+  .bk-panel { width: min(420px, calc(100vw - 32px)); max-height: min(80vh, 620px); }
+  .bk-msgs { flex: 1; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; min-height: 230px; }
+  .bk-msg { max-width: 88%; padding: 9px 12px; border-radius: 14px; font-size: 0.86rem; line-height: 1.46; white-space: pre-wrap; word-wrap: break-word; }
+  .bk-msg.user { align-self: flex-end; background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 70%); color: #fff; border-bottom-right-radius: 4px; }
+  .bk-msg.bot { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); color: #e7ebf1; border-bottom-left-radius: 4px; }
+  .bk-msg.bot b { color: #fff; } .bk-msg.bot code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 5px; font-size: 0.82em; }
+  .bk-typing { align-self: flex-start; color: #8a909b; font-size: 0.8rem; padding: 2px 6px; display: inline-flex; gap: 4px; }
+  .bk-typing span { width: 6px; height: 6px; border-radius: 50%; background: #5aa6ff; opacity: .5; animation: bkBlink 1.2s infinite; }
+  .bk-typing span:nth-child(2) { animation-delay: .2s; } .bk-typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes bkBlink { 0%,80%,100% { opacity: .25; } 40% { opacity: 1; } }
+  .bk-suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 8px; }
+  .bk-chip { background: rgba(74,158,255,0.1); border: 1px solid rgba(74,158,255,0.28); color: #9cc4ff; border-radius: 999px; padding: 6px 11px; font-size: 0.75rem; cursor: pointer; transition: .14s; text-align: left; }
+  .bk-chip:hover { background: rgba(74,158,255,0.2); color: #fff; }
+  .bk-inputrow { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.015); }
+  .bk-inputrow textarea { flex: 1; min-height: 38px; max-height: 130px; resize: none; margin: 0; }
+  .bk-send { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; border: none; background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 70%); color: #fff; font-size: 1rem; cursor: pointer; transition: filter .15s, transform .12s; }
+  .bk-send:hover { filter: brightness(1.09); } .bk-send:active { transform: translateY(1px) scale(.96); }
+  .bk-send:disabled { opacity: .5; cursor: default; }
   /* ===== premium polish: motion, depth, micro-interactions ===== */
   .dh-car.open > .dh-car-deals { animation: dhReveal .26s cubic-bezier(.33,1,.68,1); }
   @keyframes dhReveal { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
@@ -1091,6 +1111,22 @@
             <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
           </button>
 
+        </div>
+      </div>
+
+      <!-- floating Broker Copilot (home only) -->
+      <button type="button" id="bkFab" class="dh-agent-fab bk-fab" onclick="bk_toggle()" title="Broker Copilot — your AI deal helper" aria-label="Broker Copilot">
+        <span class="dh-agent-orb">✦</span>
+      </button>
+      <div id="bkPanel" class="dh-agent-panel bk-panel">
+        <div class="dh-agent-head">
+          <span class="dh-agent-title">✦ Broker Copilot</span>
+          <button type="button" class="dh-agent-x" onclick="bk_toggle()" aria-label="Close">✕</button>
+        </div>
+        <div class="bk-msgs" id="bk_msgs"></div>
+        <div class="bk-inputrow">
+          <textarea id="bk_input" rows="1" placeholder="Ask me anything — lease math, talk tracks, how to use a tool…" onkeydown="bk_key(event)" oninput="bk_grow(this)"></textarea>
+          <button class="bk-send" id="bk_send" onclick="bk_ask()" aria-label="Send">➤</button>
         </div>
       </div>
     </section>
@@ -6281,6 +6317,47 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dk_libStatus('Saved to Deal Hub ✓ — “' + [v.year || '2026', v.make, v.model, v.trim].filter(Boolean).join(' ') + '” is on your board.', 'done');
   }
   dk_setDeal('lease');
+
+  // ===================== BROKER COPILOT (home chat) =====================
+  let bk_messages = [], bk_busy = false;
+  const BK_SUGGEST = [
+    'Explain money factor like I’m talking to a client',
+    'Talk track for a higher-than-expected payment',
+    'How do I use the Desking tool?',
+    'Lease vs finance — quick pros & cons',
+  ];
+  function bk_fmt(t) { return escapeHtml(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
+  function bk_scroll() { const m = $('bk_msgs'); if (m) m.scrollTop = m.scrollHeight; }
+  function bk_render(typing) {
+    const m = $('bk_msgs'); if (!m) return;
+    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Broker Copilot</b>. Ask me about lease/finance math, structuring or presenting a deal, talk tracks for a client, or how to use any tool here.</div>`;
+    const chips = bk_messages.length ? '' : `<div class="bk-suggest">${BK_SUGGEST.map((s, i) => `<button class="bk-chip" onclick="bk_suggest(${i})">${escapeHtml(s)}</button>`).join('')}</div>`;
+    const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>`).join('');
+    const typ = typing ? `<div class="bk-typing"><span></span><span></span><span></span></div>` : '';
+    m.innerHTML = greet + chips + body + typ;
+    bk_scroll();
+  }
+  function bk_toggle() {
+    const p = $('bkPanel'); const open = p.classList.toggle('open');
+    if (open) { bk_render(false); setTimeout(() => $('bk_input').focus(), 80); }
+  }
+  function bk_grow(el) { el.style.height = 'auto'; el.style.height = Math.min(130, el.scrollHeight) + 'px'; }
+  function bk_key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bk_ask(); } }
+  function bk_suggest(i) { $('bk_input').value = BK_SUGGEST[i]; bk_ask(); }
+  async function bk_ask() {
+    const inp = $('bk_input'); const t = (inp.value || '').trim();
+    if (!t || bk_busy) return;
+    inp.value = ''; bk_grow(inp);
+    bk_messages.push({ role: 'user', content: t });
+    bk_busy = true; $('bk_send').disabled = true; bk_render(true);
+    try {
+      const r = await fetch('/broker-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: bk_messages.slice(-20) }) });
+      const d = await r.json();
+      bk_messages.push({ role: 'assistant', content: d.error ? ('⚠️ ' + d.error) : (d.reply || '…') });
+    } catch (e) { bk_messages.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
+    bk_busy = false; $('bk_send').disabled = false; bk_render(false);
+    setTimeout(() => $('bk_input').focus(), 30);
+  }
 
   if (typeof spLoadBgDataUrl === 'function') spLoadBgDataUrl();   // inline the Sold backdrop early (preview + export)
   renderSold();
