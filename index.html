@@ -628,6 +628,16 @@
   .sp-drop b { color: #cdd2da; font-weight: 600; }
   .sp-drop small { opacity: .55; }
   .sp__photo.over { outline: 3px solid #4a9eff; outline-offset: -3px; }
+  .sp-bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; margin-top: 12px; }
+  .sp-bulk-grid:empty { display: none; }
+  .sp-bulk-item { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; position: relative; }
+  .sp-bulk-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #111; }
+  .sp-bulk-item .ti { width: 100%; border: none; border-top: 1px solid #222; background: #111; color: #eee; font-size: .8rem; padding: 7px 8px; outline: none; box-sizing: border-box; }
+  .sp-bulk-item .ti:focus { background: #161922; }
+  .sp-bulk-item .rm { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .sp-bulk-item .rm:hover { background: #ff4a4a; }
+  .sp-bulk-item .dot { position: absolute; top: 6px; left: 6px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,.4); }
+  .sp-bulk-item .dot.loading { background: #ffb347; } .sp-bulk-item .dot.done { background: #46d488; } .sp-bulk-item .dot.error { background: #ff5a5a; }
   .sp__photo .ph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: rgba(255,255,255,.28); font-size: 28px; font-weight: 500; letter-spacing: 1px; }
   .sp__photo img[src=""] + .ph, .sp__photo img:not([src]) + .ph { display: flex; }
   .sp__hero.one .sp__photo { flex: 1; }
@@ -1015,6 +1025,22 @@
               </div>
               <p class="hint">On a phone, <b>Share</b> opens your share sheet so you can send it straight to Instagram.</p>
               <div class="status" id="spStatus"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Bulk Queue <span style="font-weight:400;opacity:.55;font-size:.8rem;">— batch a stack, download all at once</span></h2>
+              <p class="hint" style="margin-bottom:10px;">Drop or pick <b>multiple photos</b> — each becomes its own Sold post using the badge, handle &amp; format set above. Give each a title, then Download All. <i>(iPhone HEIC works.)</i></p>
+              <div class="sp-drop" id="spBulkDrop" onclick="$('spBulkInput').click()">
+                <span>📷 <b>Drop photos here</b> or tap to add several</span>
+              </div>
+              <input type="file" id="spBulkInput" accept="image/*,.heic,.heif" multiple onchange="spBulkAdd(event.target.files); event.target.value='';" style="display:none;">
+              <div id="spBulkGrid" class="sp-bulk-grid"></div>
+              <div class="controls" id="spBulkActions" style="margin-top:12px;display:none;">
+                <button class="btn-start" id="spBulkDlBtn" onclick="spBulkDownloadAll()">⬇ Download All (<span id="spBulkCount">0</span>)</button>
+                <button class="btn-ghost" onclick="spBulkClear()">Clear</button>
+                <button class="btn-ghost" id="spBulkStopBtn" onclick="spBulkAbort=true" disabled>Stop</button>
+              </div>
+              <div class="status" id="spBulkStatus"></div>
             </div>
 
             <div class="panel">
@@ -2505,6 +2531,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     };
     wire($('spDrop1'), 1); wire($('spSlot1'), 1);
     wire($('spDrop2'), 2); wire($('spSlot2'), 2);
+    const bd = $('spBulkDrop');               // multi-photo drop for the bulk queue
+    if (bd) {
+      ['dragenter', 'dragover'].forEach(ev => bd.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); bd.classList.add('over'); }));
+      ['dragleave', 'dragend', 'drop'].forEach(ev => bd.addEventListener(ev, e => { e.preventDefault(); bd.classList.remove('over'); }));
+      bd.addEventListener('drop', e => { const fs = e.dataTransfer && e.dataTransfer.files; if (fs && fs.length) spBulkAdd(fs); });
+    }
     document.addEventListener('paste', e => {
       const v = $('view-sold'); if (!v || !v.classList.contains('active')) return;
       const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type) || /\.(heic|heif)$/i.test(x.name || ''));
@@ -2514,6 +2546,65 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       spSetPhoto(slot, f);
     });
   })();
+
+  // ---- Sold bulk queue: many photos -> many posts -> download all ----
+  let sp_bulk = [];                            // { photo, title, name }
+  let spBulkAbort = false;
+  function setSpBulk(t, type = '') { const e = $('spBulkStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  async function spBulkAdd(files) {
+    const arr = [...files]; if (!arr.length) return;
+    setSpBulk('Adding ' + arr.length + ' photo' + (arr.length > 1 ? 's' : '') + '… (HEIC may take a moment)', 'active');
+    let added = 0;
+    for (const file of arr) {
+      const ok = /^image\//i.test(file.type || '') || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(file.name || '');
+      if (!ok) continue;
+      try { const url = await spFileToDataURL(file); sp_bulk.push({ photo: url, title: '', name: (file.name || '').replace(/\.[^.]+$/, '') }); added++; }
+      catch (e) { /* skip a photo that won't decode */ }
+    }
+    spBulkRender();
+    setSpBulk(added ? ('Added ' + added + ' — give each a title, then Download All.') : 'No usable images in that drop.', added ? 'done' : 'error');
+  }
+  function spBulkRender() {
+    const g = $('spBulkGrid'); if (!g) return;
+    g.innerHTML = sp_bulk.map((it, i) =>
+      `<div class="sp-bulk-item"><span class="dot" id="spbdot-${i}"></span><button class="rm" onclick="spBulkRemove(${i})" title="Remove">×</button>` +
+      `<img src="${it.photo}" alt=""><input class="ti" value="${(it.title || '').replace(/"/g, '&quot;')}" placeholder="${(it.name || 'Title').replace(/"/g, '&quot;')}" oninput="sp_bulk[${i}].title=this.value"></div>`
+    ).join('');
+    const cnt = $('spBulkCount'); if (cnt) cnt.textContent = sp_bulk.length;
+    $('spBulkActions').style.display = sp_bulk.length ? '' : 'none';
+  }
+  function spBulkRemove(i) { sp_bulk.splice(i, 1); spBulkRender(); }
+  function spBulkClear() { sp_bulk = []; spBulkRender(); setSpBulk('', ''); }
+  function spBulkDot(i, s) { const d = $('spbdot-' + i); if (d) d.className = 'dot ' + (s || ''); }
+  async function spBulkDownloadAll() {
+    if (!sp_bulk.length) return;
+    spBulkAbort = false;
+    const dl = $('spBulkDlBtn'), stop = $('spBulkStopBtn'); dl.disabled = true; stop.disabled = false;
+    const save = { photo: spPhotos[1], title: $('spTitle').value, layout: spLayout };   // restore single state after
+    if (spLayout !== 1) spSetLayout(1);                                                  // bulk posts are one photo each
+    let ok = 0, fail = 0;
+    for (let i = 0; i < sp_bulk.length; i++) {
+      if (spBulkAbort) break;
+      const it = sp_bulk[i];
+      setSpBulk('Rendering ' + (i + 1) + ' of ' + sp_bulk.length + '…', 'active'); spBulkDot(i, 'loading');
+      try {
+        spPhotos[1] = it.photo; $('spImg1').src = it.photo;
+        $('spTitle').value = it.title || '';
+        renderSold();
+        await waitForImage($('spImg1'));
+        const canvas = await renderSoldCanvas();
+        const base = (it.title || it.name || ('sold_' + (i + 1))).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || ('sold_' + (i + 1));
+        const a = document.createElement('a'); a.download = base + '_sold' + (soldH === 1350 ? '_4x5' : '') + '.png'; a.href = canvas.toDataURL('image/png'); a.click();
+        spBulkDot(i, 'done'); ok++;
+        await sleep(450);                       // let each download settle
+      } catch (e) { spBulkDot(i, 'error'); fail++; }
+    }
+    spPhotos[1] = save.photo; $('spImg1').src = save.photo || ''; $('spTitle').value = save.title;
+    if (save.layout !== 1) spSetLayout(save.layout);
+    renderSold();
+    dl.disabled = false; stop.disabled = true;
+    setSpBulk(spBulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + ' ✓'), fail ? 'error' : 'done');
+  }
 
   function renderSold() {
     const badge = $('spBadge').value.trim();
