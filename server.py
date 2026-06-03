@@ -39,7 +39,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs", "/copilot-kb")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -1333,6 +1333,40 @@ def desk_parse():
 LIVE_DEALS_URL = "https://novautousa.com/deals"
 _LIVE_DEALS_CACHE = {"at": 0.0, "text": "", "count": 0}
 
+# ---- Concierge Copilot knowledge base (the NovAuto sales guide, etc.) ----
+# Stored on the Railway volume (GENERATED_DIR), NOT committed to the public repo.
+COPILOT_KB_FILE = os.path.join(GENERATED_DIR, "copilot_kb.txt")
+_COPILOT_KB_CACHE = {"at": 0.0, "text": None}
+
+
+def _load_copilot_kb(max_age=60):
+    now = time.time()
+    if _COPILOT_KB_CACHE["text"] is not None and (now - _COPILOT_KB_CACHE["at"] < max_age):
+        return _COPILOT_KB_CACHE["text"]
+    try:
+        with open(COPILOT_KB_FILE, encoding="utf-8") as f:
+            text = f.read().strip()
+    except Exception:
+        text = ""
+    _COPILOT_KB_CACHE.update(at=now, text=text)
+    return text
+
+
+@app.route("/copilot-kb", methods=["GET", "POST"])
+def copilot_kb():
+    """Admin (restricted) read/write of the copilot knowledge base. The text lives on
+    the volume only — never in the public repo. Injected into the copilot's prompt."""
+    if request.method == "POST":
+        text = ((request.json or {}).get("text") or "").strip()
+        try:
+            with open(COPILOT_KB_FILE, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        _COPILOT_KB_CACHE.update(at=0.0, text=None)        # bust cache
+        return jsonify({"ok": True, "chars": len(text)})
+    return jsonify({"text": _load_copilot_kb(max_age=0)})
+
 
 def _fetch_live_deals_text(max_age=300):
     """Fetch & cache the live novautousa.com/deals as a compact text block the Broker
@@ -1367,8 +1401,8 @@ def _fetch_live_deals_text(max_age=300):
 
 @app.route("/broker-chat", methods=["POST"])
 def broker_chat():
-    """Broker Copilot — a conversational assistant for NovAuto's agents on the home
-    page. Multi-turn; the client sends the running message history. Login-gated
+    """Concierge Copilot — a conversational assistant for NovAuto's agents, available
+    on every page. Multi-turn; the client sends the running message history. Login-gated
     (every route is) but NOT behind the restricted password, so any agent can use it."""
     if not API_KEY or API_KEY == "sk-your-key-here":
         return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
@@ -1385,9 +1419,9 @@ def broker_chat():
     if not clean or clean[-1]["role"] != "user":
         return jsonify({"error": "Ask a question first."}), 400
     system = (
-        "You are 'Broker Copilot', the in-house AI assistant for NovAuto — a California auto "
-        "LEASE & FINANCE brokerage / auto concierge that sources and negotiates new cars for clients. "
-        "You help NovAuto's broker agents do their job. Be warm, sharp, and concise — like a seasoned "
+        "You are 'Concierge Copilot', the in-house AI assistant for NovAuto — a California auto "
+        "LEASE & FINANCE concierge that sources and negotiates new cars for clients. "
+        "You help NovAuto's concierge agents do their job. Be warm, sharp, and concise — like a seasoned "
         "finance manager mentoring a newer agent. Plain language, short paragraphs, bullets when useful. "
         "Avoid long essays; get to the point and offer to go deeper.\n"
         "You can help with: lease & finance math (money factor, residual, capitalized cost, depreciation + "
@@ -1419,6 +1453,10 @@ def broker_chat():
         "the MOST relevant keys (e.g. someone closing a deal → 'quote, invoice'; pricing a car → 'desk'). If no tool "
         "is relevant, OMIT the line entirely. Never mention or explain this line; just append it when useful."
     )
+    kb = _load_copilot_kb()
+    if kb:
+        system += ("\n\n=== NOVAUTO PLAYBOOK / SALES GUIDE (internal knowledge — treat as authoritative; "
+                   "follow its process, terminology, scripts, and policies when answering) ===\n" + kb[:16000])
     deals_text, deals_n = _fetch_live_deals_text()
     if deals_text:
         system += ("\n\n=== LIVE DEALS on novautousa.com/deals right now (" + str(deals_n) +

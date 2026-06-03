@@ -303,7 +303,7 @@
   .dh-agent-body { padding: 14px 16px 16px; overflow-y: auto; }
   .dh-agent-body textarea { width: 100%; }
   .dh-agent-hint { color: #8a909b; font-size: 0.78rem; line-height: 1.4; margin: 0 0 10px; }
-  /* ===== Broker Copilot chat ===== */
+  /* ===== Concierge Copilot chat ===== */
   .bk-fab { display: flex; }
   .bk-panel { width: min(420px, calc(100vw - 32px)); max-height: min(80vh, 620px); }
   .bk-msgs { flex: 1; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; min-height: 230px; }
@@ -331,6 +331,13 @@
   .bk-act { display: inline-flex; align-items: center; gap: 6px; background: radial-gradient(120% 120% at 32% 26%, rgba(90,166,255,.22), rgba(42,95,208,.22) 70%); border: 1px solid rgba(120,180,255,.5); color: #d9e8ff; border-radius: 10px; padding: 7px 12px; font-size: .8rem; font-weight: 700; cursor: pointer; transition: .14s; }
   .bk-act:hover { background: radial-gradient(120% 120% at 32% 26%, #5aa6ff, #2a5fd0 70%); color: #fff; border-color: rgba(150,200,255,.7); transform: translateY(-1px); }
   .bk-act:active { transform: translateY(0) scale(.98); }
+  /* knowledge-base editor */
+  .bk-kb { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; min-height: 280px; }
+  .bk-kb-hd { font-size: .82rem; font-weight: 700; color: #dfe5ee; }
+  .bk-kb-hd small { display: block; font-weight: 400; color: #7a8696; font-size: .72rem; line-height: 1.45; margin-top: 3px; }
+  .bk-kb textarea { flex: 1; min-height: 180px; resize: none; margin: 0; font-size: .82rem; }
+  .bk-kb-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .bk-kb-foot .status { margin: 0; flex: 1; }
   /* ===== premium polish: motion, depth, micro-interactions ===== */
   .dh-car.open > .dh-car-deals { animation: dhReveal .26s cubic-bezier(.33,1,.68,1); }
   @keyframes dhReveal { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
@@ -2189,19 +2196,30 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   </main>
 </div>
 
-<!-- floating Broker Copilot — lives on every page -->
-<button type="button" id="bkFab" class="dh-agent-fab bk-fab" onclick="bk_toggle()" title="Broker Copilot — your AI deal helper" aria-label="Broker Copilot">
+<!-- floating Concierge Copilot — lives on every page -->
+<button type="button" id="bkFab" class="dh-agent-fab bk-fab" onclick="bk_toggle()" title="Concierge Copilot — your AI deal helper" aria-label="Concierge Copilot">
   <span class="dh-agent-orb">✦</span>
 </button>
 <div id="bkPanel" class="dh-agent-panel bk-panel">
   <div class="dh-agent-head">
-    <span class="dh-agent-title">✦ Broker Copilot</span>
-    <button type="button" class="dh-agent-x" onclick="bk_toggle()" aria-label="Close">✕</button>
+    <span class="dh-agent-title">✦ Concierge Copilot</span>
+    <span style="display:flex;gap:2px;align-items:center;">
+      <button type="button" class="dh-agent-x" onclick="bk_kbOpen()" title="Knowledge base" aria-label="Knowledge base">📚</button>
+      <button type="button" class="dh-agent-x" onclick="bk_toggle()" aria-label="Close">✕</button>
+    </span>
   </div>
   <div class="bk-msgs" id="bk_msgs"></div>
-  <div class="bk-inputrow">
+  <div class="bk-inputrow" id="bk_inputrow">
     <textarea id="bk_input" rows="1" placeholder="Ask me anything — lease math, talk tracks, how to use a tool…" onkeydown="bk_key(event)" oninput="bk_grow(this)"></textarea>
     <button class="bk-send" id="bk_send" onclick="bk_ask()" aria-label="Send">➤</button>
+  </div>
+  <div class="bk-kb" id="bk_kb" style="display:none;">
+    <div class="bk-kb-hd">📚 Knowledge base <small>private — stored on the server, never in the public code. Paste the NovAuto sales guide / playbook; the copilot will follow it.</small></div>
+    <textarea id="bk_kbText" placeholder="Paste the NovAuto sales agent guide here…"></textarea>
+    <div class="bk-kb-foot">
+      <span class="status" id="bk_kbStatus"></span>
+      <span style="display:flex;gap:8px;"><button class="btn-ghost" onclick="bk_kbClose()">Cancel</button><button class="btn-start" onclick="bk_kbSave()">Save</button></span>
+    </div>
   </div>
 </div>
 
@@ -6344,7 +6362,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   dk_setDeal('lease');
 
-  // ===================== BROKER COPILOT (global chat) =====================
+  // ===================== CONCIERGE COPILOT (global chat) =====================
   let bk_messages = [], bk_busy = false;
   const BK_SUGGEST = [
     'What’s the cheapest deal live on the site right now?',
@@ -6378,7 +6396,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function bk_render(typing) {
     const m = $('bk_msgs'); if (!m) return;
-    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Broker Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time — ask me what's advertised, the cheapest deal, or what's under a price. I'll also help with lease/finance math, talk tracks, and how to use any tool here.</div>`;
+    const greet = `<div class="bk-msg bot">Hey 👋 I'm your <b>Concierge Copilot</b>. I can see our <b>live deals on novautousa.com</b> in real time — ask me what's advertised, the cheapest deal, or what's under a price. I'll also help with lease/finance math, talk tracks, and how to use any tool here.</div>`;
     const chips = bk_messages.length ? '' : `<div class="bk-suggest">${BK_SUGGEST.map((s, i) => `<button class="bk-chip" onclick="bk_suggest(${i})">${escapeHtml(s)}</button>`).join('')}</div>`;
     const body = bk_messages.map(x => `<div class="bk-msg ${x.role === 'user' ? 'user' : 'bot'}">${bk_fmt(x.content)}</div>` + (x.role === 'assistant' ? bk_actHTML(x.actions) : '')).join('');
     const typ = typing ? `<div class="bk-typing"><span></span><span></span><span></span></div>` : '';
@@ -6397,6 +6415,30 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function bk_grow(el) { el.style.height = 'auto'; el.style.height = Math.min(130, el.scrollHeight) + 'px'; }
   function bk_key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bk_ask(); } }
+  // ---- knowledge base (admin: paste the NovAuto guide → stored privately on the server) ----
+  function bk_kbStatus(t, type = '') { const e = $('bk_kbStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  async function bk_kbOpen() {
+    $('bk_msgs').style.display = 'none'; $('bk_inputrow').style.display = 'none'; $('bk_kb').style.display = 'flex';
+    bk_kbStatus('Loading…', 'active');
+    try {
+      const r = await fetch('/copilot-kb');
+      if (r.status === 403) { $('bk_kbText').value = ''; bk_kbStatus('Unlock a restricted tool once (Deal Hub / Desking) to edit the knowledge base.', 'error'); return; }
+      const d = await r.json(); $('bk_kbText').value = d.text || '';
+      bk_kbStatus(($('bk_kbText').value.length || 0) + ' chars loaded', 'done');
+    } catch (e) { bk_kbStatus('✕ ' + e.message, 'error'); }
+  }
+  function bk_kbClose() { $('bk_kb').style.display = 'none'; $('bk_msgs').style.display = ''; $('bk_inputrow').style.display = ''; bk_render(false); }
+  async function bk_kbSave() {
+    const text = $('bk_kbText').value;
+    bk_kbStatus('Saving…', 'active');
+    try {
+      const r = await fetch('/copilot-kb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (r.status === 403) { bk_kbStatus('Unlock a restricted tool once to save.', 'error'); return; }
+      const d = await r.json();
+      if (d.error) { bk_kbStatus('✕ ' + d.error, 'error'); return; }
+      bk_kbStatus('Saved ✓ (' + d.chars + ' chars) — the copilot now follows it.', 'done');
+    } catch (e) { bk_kbStatus('✕ ' + e.message, 'error'); }
+  }
   function bk_suggest(i) { $('bk_input').value = BK_SUGGEST[i]; bk_ask(); }
   async function bk_ask() {
     const inp = $('bk_input'); const t = (inp.value || '').trim();
