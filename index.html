@@ -733,16 +733,17 @@
   .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
   .inv-scaler { transform-origin: top left; }
   .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; }
-  .inv-doc-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b1220; padding-bottom: 30px; }
-  .inv-wordmark { font-size: 50px; font-weight: 800; letter-spacing: -2px; color: #0b1220; line-height: 1; }
-  .inv-wordmark b { color: #2f7ff0; font-weight: 800; }
-  .inv-from { margin-top: 12px; font-size: 22px; color: #6a727f; line-height: 1.55; }
-  .inv-from span { display: block; }
+  .inv-bar { background: linear-gradient(135deg, #0b1220, #16294d); margin: -76px -78px 0; padding: 52px 78px; display: flex; justify-content: space-between; align-items: center; }
+  .inv-bar-logo img { width: 300px; height: auto; display: block; }
   .inv-meta { text-align: right; }
-  .inv-doc-title { font-size: 60px; font-weight: 800; letter-spacing: -1.5px; color: #0b1220; line-height: 1; }
-  .inv-meta-rows { margin-top: 14px; font-size: 22px; color: #4a525e; }
+  .inv-doc-title { font-size: 58px; font-weight: 800; letter-spacing: -1.5px; color: #fff; line-height: 1; }
+  .inv-meta-rows { margin-top: 14px; font-size: 22px; color: #c4d0e6; }
   .inv-meta-rows div { display: flex; gap: 20px; justify-content: flex-end; padding: 3px 0; }
-  .inv-meta-rows b { color: #98a0ab; font-weight: 600; min-width: 96px; text-align: left; }
+  .inv-meta-rows b { color: #8ea4cc; font-weight: 600; min-width: 96px; text-align: left; }
+  .inv-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 40px; margin-top: 34px; padding: 28px 32px; background: #f5f7fa; border-radius: 14px; }
+  .inv-details > div { display: flex; flex-direction: column; gap: 4px; }
+  .inv-details span { font-size: 16px; text-transform: uppercase; letter-spacing: .07em; color: #98a0ab; font-weight: 600; }
+  .inv-details b { font-size: 24px; color: #1a1f29; font-weight: 700; }
   .inv-parties { display: flex; justify-content: space-between; gap: 50px; margin-top: 40px; }
   .inv-party-r { text-align: right; }
   .inv-lbl { font-size: 18px; text-transform: uppercase; letter-spacing: .1em; color: #98a0ab; margin-bottom: 9px; font-weight: 600; }
@@ -1593,8 +1594,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <label for="inv_caddr">Address</label><input type="text" id="inv_caddr" placeholder="123 Main St, Los Angeles, CA" oninput="inv_render()">
             </div>
             <div class="panel">
-              <h2>Vehicle <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
-              <div class="row"><div><label for="inv_vehicle">Vehicle</label><input type="text" id="inv_vehicle" placeholder="2024 BMW X5" oninput="inv_render()"></div><div><label for="inv_vin">VIN / Stock #</label><input type="text" id="inv_vin" placeholder="VIN or stock #" oninput="inv_render()"></div></div>
+              <h2>Vehicle &amp; Deal <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
+              <label for="inv_vehicle">Vehicle</label><input type="text" id="inv_vehicle" placeholder="2024 BMW X5" oninput="inv_render()">
+              <div class="row"><div><label for="inv_vin">VIN / Stock #</label><input type="text" id="inv_vin" placeholder="VIN or stock #" oninput="inv_render()"></div><div><label for="inv_color">Color</label><input type="text" id="inv_color" placeholder="Alpine White" oninput="inv_render()"></div></div>
+              <div class="row3"><div><label for="inv_monthly">Monthly ($)</label><input type="text" id="inv_monthly" placeholder="499" oninput="inv_render()"></div><div><label for="inv_das">Due at signing ($)</label><input type="text" id="inv_das" placeholder="3,000" oninput="inv_render()"></div><div><label for="inv_term">Term (mo)</label><input type="text" id="inv_term" placeholder="36" oninput="inv_render()"></div></div>
+              <label for="inv_miles">Mileage (per year)</label><input type="text" id="inv_miles" placeholder="7,500" oninput="inv_render()">
+            </div>
+            <div class="panel">
+              <h2>Delivery</h2>
+              <label for="inv_delivery">Method</label>
+              <select id="inv_delivery" onchange="inv_render()"><option value="Delivered">Delivered</option><option value="Picked Up">Picked Up</option><option value="">— not specified —</option></select>
+              <label for="inv_pickup">Pickup location <span style="font-weight:400;opacity:.55;font-size:.78rem;">(if picked up)</span></label>
+              <input type="text" id="inv_pickup" placeholder="NovAuto — 123 Auto Row, Los Angeles, CA" oninput="inv_render()">
             </div>
             <div class="panel">
               <h2>Line Items</h2>
@@ -1632,14 +1643,15 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="inv-stage">
               <div class="inv-scaler" id="invScaler">
                 <div class="inv" id="inv">
-                  <div class="inv-doc-head">
-                    <div class="inv-brand"><div class="inv-wordmark">Nov<b>Auto</b></div><div class="inv-from">@NovAutoUSA<span>(818) 873&nbsp;-&nbsp;3697</span></div></div>
+                  <div class="inv-bar">
+                    <div class="inv-bar-logo"><img id="inv_logoImg" src="logo.png" crossorigin="anonymous" alt="NovAuto"></div>
                     <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
                   </div>
                   <div class="inv-parties">
                     <div class="inv-party"><div class="inv-lbl">Bill To</div><div id="inv_billEl"></div></div>
                     <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
                   </div>
+                  <div class="inv-details" id="inv_detailsEl"></div>
                   <table class="inv-table"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
                   <div class="inv-bottom">
                     <div class="inv-notes" id="inv_notesEl"></div>
@@ -4983,9 +4995,22 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_metaEl').innerHTML = `<div><b>Invoice #</b>${escapeHtml($('inv_num').value || inv_numLabel(inv_counter + 1))}</div><div><b>Date</b>${inv_fmtDate($('inv_date').value)}</div><div><b>Due</b>${inv_fmtDate($('inv_due').value)}</div>`;
     const bill = [$('inv_cname').value, $('inv_cemail').value, $('inv_cphone').value, $('inv_caddr').value].map(s => s.trim()).filter(Boolean);
     $('inv_billEl').innerHTML = bill.length ? bill.map((l, i) => `<div${i === 0 ? ' style="font-weight:700;color:#0b1220;"' : ''}>${escapeHtml(l)}</div>`).join('') : '<div style="color:#b8bec6;">—</div>';
-    const veh = [$('inv_vehicle').value.trim(), $('inv_vin').value.trim()].filter(Boolean);
-    $('inv_vehWrap').style.display = veh.length ? '' : 'none';
-    $('inv_vehEl').innerHTML = veh.map((l, i) => `<div${i === 0 ? ' style="font-weight:700;color:#0b1220;"' : ''}>${escapeHtml(l)}</div>`).join('');
+    const vehName = $('inv_vehicle').value.trim();
+    $('inv_vehWrap').style.display = vehName ? '' : 'none';
+    $('inv_vehEl').innerHTML = vehName ? `<div style="font-weight:700;color:#0b1220;">${escapeHtml(vehName)}</div>` : '';
+    // deal-details strip — only the fields that are filled in
+    const det = [], push = (lbl, val) => { if ((val || '').toString().trim()) det.push(`<div><span>${lbl}</span><b>${escapeHtml(val)}</b></div>`); };
+    const mny = id => { const v = $(id).value.trim(); return v ? inv_money(inv_num(v)) : ''; };
+    push('VIN / Stock', $('inv_vin').value);
+    push('Color', $('inv_color').value);
+    push('Monthly', mny('inv_monthly'));
+    push('Due at Signing', mny('inv_das'));
+    push('Term', $('inv_term').value.trim() ? $('inv_term').value.trim() + ' mo' : '');
+    push('Mileage', $('inv_miles').value.trim() ? Number(inv_num($('inv_miles').value)).toLocaleString('en-US') + ' /yr' : '');
+    push('Delivery', $('inv_delivery').value);
+    if ($('inv_delivery').value === 'Picked Up') push('Pickup', $('inv_pickup').value);
+    $('inv_detailsEl').innerHTML = det.join('');
+    $('inv_detailsEl').style.display = det.length ? '' : 'none';
     $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it => {
       const amt = (inv_num(it.qty) || 0) * inv_num(it.price);
       return `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item description</span>'}</td><td class="num">${escapeHtml(it.qty || '1')}</td><td class="num">${M(inv_num(it.price))}</td><td class="num">${M(amt)}</td></tr>`;
@@ -5001,8 +5026,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function inv_new() {
     inv_curId = null;
-    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
-    $('inv_tax').value = '9.75';
+    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_monthly', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
+    $('inv_tax').value = '9.75'; $('inv_delivery').value = 'Delivered';
     $('inv_notes').value = 'Thank you for your business! Deposit is non-refundable. Balance due on delivery.';
     const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
     inv_items = [{ desc: '', qty: '1', price: '' }];
@@ -5015,7 +5040,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     inv_curId = id;
     $('inv_date').value = o.date || ''; $('inv_due').value = o.due || '';
     $('inv_cname').value = o.cname || ''; $('inv_cemail').value = o.cemail || ''; $('inv_cphone').value = o.cphone || ''; $('inv_caddr').value = o.caddr || '';
-    $('inv_vehicle').value = o.vehicle || ''; $('inv_vin').value = o.vin || '';
+    $('inv_vehicle').value = o.vehicle || ''; $('inv_vin').value = o.vin || ''; $('inv_color').value = o.color || '';
+    $('inv_monthly').value = o.monthly || ''; $('inv_das').value = o.das || ''; $('inv_term').value = o.term || ''; $('inv_miles').value = o.miles || '';
+    $('inv_delivery').value = o.delivery != null ? o.delivery : 'Delivered'; $('inv_pickup').value = o.pickup || '';
     $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || '';
     inv_items = (o.items || []).map(it => ({ ...it })); if (!inv_items.length) inv_items = [{ desc: '', qty: '1', price: '' }];
     $('inv_num').value = inv_numLabel(o.number);
@@ -5030,7 +5057,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const o = {
       id: inv_curId, number, date: $('inv_date').value, due: $('inv_due').value,
       cname: $('inv_cname').value, cemail: $('inv_cemail').value, cphone: $('inv_cphone').value, caddr: $('inv_caddr').value,
-      vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, items: inv_items.map(it => ({ ...it })),
+      vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, color: $('inv_color').value,
+      monthly: $('inv_monthly').value, das: $('inv_das').value, term: $('inv_term').value, miles: $('inv_miles').value,
+      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, items: inv_items.map(it => ({ ...it })),
       tax: $('inv_tax').value, disc: $('inv_disc').value, paid: $('inv_paid').value, notes: $('inv_notes').value, savedAt: new Date().toISOString(),
     };
     const i = inv_list.findIndex(x => x.id === inv_curId);
@@ -5061,6 +5090,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     inv_status('Building PDF…', 'active');
     try {
       await document.fonts.ready;
+      try { await waitForImage($('inv_logoImg')); } catch (e) { }   // make sure the logo is in before capture
       const scaler = $('invScaler'), stage = scaler.parentElement;
       const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
       scaler.style.transform = 'none';
