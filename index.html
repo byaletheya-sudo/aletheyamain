@@ -58,7 +58,7 @@
   label { display: block; font-size: 0.75rem; color: #7b818b; margin: 12px 0 5px; font-weight: 500; }
   label:first-of-type { margin-top: 0; }
 
-  input[type="text"], input[type="date"], input[type="number"], textarea, select {
+  input[type="text"], input[type="date"], input[type="number"], input:not([type]), textarea, select {
     width: 100%; background: #0d0e10; border: 1px solid rgba(255,255,255,0.055); border-radius: 10px;
     padding: 9px 13px; color: #fff; font-size: 0.88rem; font-family: inherit;
     outline: none; transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
@@ -776,6 +776,8 @@
   .inv-totrow.grand { border-top: 1.5px solid #0b1220; margin-top: 14px; padding-top: 20px; font-size: 33px; font-weight: 700; color: #0b1220; letter-spacing: -.5px; }
   .inv-totrow.grand span:last-child { font-weight: 700; }
   .inv-totrow.bal { color: #2f7ff0; font-weight: 700; border-top: 1px solid #e3e7ec; margin-top: 6px; padding-top: 14px; }
+  .inv-payinfo { margin-top: 34px; display: flex; align-items: center; gap: 16px; }
+  .inv-payinfo-lbl { font-size: 24px; color: #5b636e; }
   .inv-pay-row { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eef1f4; font-size: 22px; color: #5b636e; }
   .inv-pay-status { font-size: 19px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 5px 14px; border-radius: 999px; }
   .inv-pay-status.paid { color: #1c7a47; background: #e6f6ec; }
@@ -819,6 +821,8 @@
   .qt-notes { margin-top: 36px; font-size: 25px; line-height: 1.55; color: #b9c6e0; white-space: pre-wrap; }
   .qt-valid { margin-top: 28px; font-size: 24px; color: #7e90b0; }
   .qt-valid b { color: #c4d0e6; font-weight: 600; }
+  .qt-pro { margin-top: 14px; font-size: 23px; color: #8ea2c4; letter-spacing: .02em; }
+  .qt-pro b { color: #fff; font-weight: 700; }
   .qt-foot { position: absolute; left: 74px; right: 74px; bottom: 56px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 26px; text-align: center; }
   .qt-foot-tag { font-size: 27px; font-weight: 700; font-style: italic; color: #fff; letter-spacing: -.3px; }
   .qt-foot-meta { margin-top: 11px; font-size: 19px; color: #7e90b0; }
@@ -1698,7 +1702,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <input type="text" id="inv_pickup" placeholder="e.g. 123 Auto Row, Los Angeles, CA" oninput="inv_render()">
             </div>
             <div class="panel">
-              <h2>Line Items</h2>
+              <h2>Line Items <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
               <div class="inv-items-head"><span>Description</span><span>Amount&nbsp;$</span><span></span></div>
               <div id="inv_items"></div>
               <button class="btn-ghost" onclick="inv_addItem()" style="margin-top:10px;">+ Add line</button>
@@ -1759,6 +1763,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
                   </div>
+                  <div class="inv-payinfo" id="inv_payInfoEl" style="display:none;"></div>
                   <div class="inv-paynote" id="inv_payNoteEl" style="display:none;"></div>
                   <div class="inv-close" id="inv_closeEl"></div>
                   <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends Overpay</div><div class="inv-foot-page" id="inv_pageEl" style="display:none;"></div></div>
@@ -1831,6 +1836,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <div class="qt-terms" id="qt_termsEl"></div>
                   <div class="qt-notes" id="qt_notesEl"></div>
                   <div class="qt-valid" id="qt_validEl"></div>
+                  <div class="qt-pro" id="qt_proEl"></div>
                   <div class="qt-foot">
                     <div class="qt-foot-tag">Friends Don't Let Friends Overpay.</div>
                     <div class="qt-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) - 873 - 3697 &nbsp;·&nbsp; Los Angeles, CA</div>
@@ -5161,6 +5167,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_partiesEl').style.display = pg.parties ? '' : 'none';
     $('inv_detailsEl').style.display = (pg.parties && inv_show.details) ? '' : 'none';
     $('inv_totEl').style.display = (pg.totals && inv_show.tot) ? '' : 'none';
+    $('inv_payInfoEl').style.display = (pg.totals && inv_show.payInfo) ? '' : 'none';
     $('inv_notesEl').style.display = (pg.totals && inv_show.notes) ? '' : 'none';
     $('inv_payNoteEl').style.display = (pg.totals && inv_show.payNote) ? '' : 'none';
     $('inv_closeEl').style.display = (pg.totals && inv_show.close) ? '' : 'none';
@@ -5266,9 +5273,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     r += `<div class="inv-totrow grand"><span>Total</span><span>${M(t.total)}</span></div>`;
     if (upfront) r += `<div class="inv-totrow"><span>${upfrontLbl}</span><span>${M(upfront)}</span></div>`;
     if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
-    const pm = $('inv_pmethod').value, ps = $('inv_pstatus').value;
-    if (pm || ps === 'paid') r += `<div class="inv-pay-row"><span>Payment${pm ? ' · ' + escapeHtml(pm) : ''}</span><span class="inv-pay-status ${ps}">${ps === 'paid' ? 'Paid ✓' : 'Unpaid'}</span></div>`;
     $('inv_totEl').innerHTML = r;
+    // payment method + status as its own visible block (not buried in the totals)
+    const pm = $('inv_pmethod').value, ps = $('inv_pstatus').value;
+    const payInfo = (pm || ps === 'paid') ? `<span class="inv-payinfo-lbl">Payment${pm ? ' · ' + escapeHtml(pm) : ''}</span><span class="inv-pay-status ${ps}">${ps === 'paid' ? 'Paid ✓' : 'Unpaid'}</span>` : '';
+    $('inv_payInfoEl').innerHTML = payInfo;
     // if they want a Zelle transfer and it's not paid yet, spell out where to send it
     const zelleUnpaid = pm === 'Zelle' && ps !== 'paid';
     $('inv_payNoteEl').innerHTML = zelleUnpaid ? `Zelle payments can be sent to <b>info@novaautopro.com</b>` : '';
@@ -5277,7 +5286,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const pro = $('inv_pro').value.trim();
     $('inv_closeEl').innerHTML = pro ? `<div class="inv-close-pro">Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b></div>` : '';
     // paginate the line items and show page 1 (the live preview)
-    inv_show = { details: det.length > 0, tot: shown.length > 0, payNote: zelleUnpaid, notes: notesV.length > 0, close: !!pro };
+    inv_show = { details: det.length > 0, tot: shown.length > 0, payInfo: payInfo !== '', payNote: zelleUnpaid, notes: notesV.length > 0, close: !!pro };
     inv_pages = inv_paginate(shown);
     inv_applyPage(inv_pages[0], 1, inv_pages.length);
     // live totals readout in the controls panel (updates as line items change)
@@ -5437,6 +5446,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const valid = $('qt_valid').value;
     $('qt_validEl').innerHTML = valid ? `Offer valid through <b>${inv_fmtDate(valid)}</b>` : '';
     $('qt_validEl').style.display = valid ? '' : 'none';
+    const pro = $('qt_pro').value.trim();
+    $('qt_proEl').innerHTML = pro ? `Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b>` : '';
+    $('qt_proEl').style.display = pro ? '' : 'none';
   }
   async function qt_capture() {
     await document.fonts.ready;
