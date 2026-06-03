@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- iPhone HEIC/HEIF photos → JPEG in the browser so they render & export anywhere -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -714,6 +715,51 @@
   .plate-dialog .controls label { margin: 0; color: #aaa; font-size: .82rem; }
   .plate-dialog .controls input[type=range] { width: 110px; }
 
+  /* ================= INVOICE GENERATOR ================= */
+  .inv-items-head { display: grid; grid-template-columns: 1fr 54px 92px 26px; gap: 6px; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: #767c86; margin-bottom: 6px; padding: 0 2px; }
+  .inv-item { display: grid; grid-template-columns: 1fr 54px 92px 26px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .inv-item input { margin: 0; }
+  .inv-item .inv-rm { width: 26px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid rgba(255,90,90,0.22); background: rgba(255,90,90,0.08); color: #ff9a9a; font-size: 15px; cursor: pointer; }
+  .inv-item .inv-rm:hover { background: #ff4a4a; color: #fff; }
+  .inv-list { display: flex; flex-direction: column; gap: 6px; }
+  .inv-list-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; cursor: pointer; font-size: .82rem; color: #c2c7cf; }
+  .inv-list-item:hover { border-color: #4a9eff; background: rgba(74,158,255,0.06); }
+  .inv-list-item.active { border-color: #4a9eff; background: rgba(74,158,255,0.09); }
+  .inv-list-item b { color: #fff; }
+  .inv-li-right { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: #8a9aae; }
+  .inv-list-item .del { width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(255,255,255,0.06); color: #9aa0aa; font-size: 13px; line-height: 1; cursor: pointer; }
+  .inv-list-item .del:hover { background: #ff4a4a; color: #fff; }
+  /* the document itself — a clean light invoice page (Letter, 1080 x 1397) */
+  .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
+  .inv-scaler { transform-origin: top left; }
+  .inv { width: 1080px; height: 1397px; background: #fff; color: #1a1f29; box-sizing: border-box; padding: 76px 78px 70px; position: relative; font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif; }
+  .inv-doc-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b1220; padding-bottom: 30px; }
+  .inv-wordmark { font-size: 50px; font-weight: 800; letter-spacing: -2px; color: #0b1220; line-height: 1; }
+  .inv-wordmark b { color: #2f7ff0; font-weight: 800; }
+  .inv-from { margin-top: 12px; font-size: 22px; color: #6a727f; line-height: 1.55; }
+  .inv-from span { display: block; }
+  .inv-meta { text-align: right; }
+  .inv-doc-title { font-size: 60px; font-weight: 800; letter-spacing: -1.5px; color: #0b1220; line-height: 1; }
+  .inv-meta-rows { margin-top: 14px; font-size: 22px; color: #4a525e; }
+  .inv-meta-rows div { display: flex; gap: 20px; justify-content: flex-end; padding: 3px 0; }
+  .inv-meta-rows b { color: #98a0ab; font-weight: 600; min-width: 96px; text-align: left; }
+  .inv-parties { display: flex; justify-content: space-between; gap: 50px; margin-top: 40px; }
+  .inv-party-r { text-align: right; }
+  .inv-lbl { font-size: 18px; text-transform: uppercase; letter-spacing: .1em; color: #98a0ab; margin-bottom: 9px; font-weight: 600; }
+  .inv-party > div:not(.inv-lbl) { font-size: 24px; color: #3a414c; line-height: 1.5; }
+  .inv-table { width: 100%; border-collapse: collapse; margin-top: 44px; font-size: 24px; }
+  .inv-table th { text-align: left; font-size: 18px; text-transform: uppercase; letter-spacing: .07em; color: #98a0ab; border-bottom: 2px solid #d9dee4; padding: 0 0 14px; font-weight: 600; }
+  .inv-table th.num, .inv-table td.num { text-align: right; }
+  .inv-table td { padding: 18px 0; border-bottom: 1px solid #eef1f4; vertical-align: top; color: #2a313c; }
+  .inv-table td.num { white-space: nowrap; color: #1a1f29; }
+  .inv-bottom { display: flex; justify-content: space-between; gap: 50px; margin-top: 40px; }
+  .inv-notes { flex: 1; font-size: 21px; color: #5b636e; line-height: 1.6; white-space: pre-wrap; }
+  .inv-totbox { width: 440px; flex: 0 0 auto; font-size: 24px; }
+  .inv-totrow { display: flex; justify-content: space-between; padding: 10px 0; color: #4a525e; }
+  .inv-totrow.grand { border-top: 2px solid #0b1220; margin-top: 10px; padding-top: 18px; font-size: 32px; font-weight: 800; color: #0b1220; }
+  .inv-totrow.bal { color: #2f7ff0; font-weight: 700; border-top: 1px solid #e3e7ec; margin-top: 6px; padding-top: 14px; }
+  .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 56px; text-align: center; font-size: 20px; color: #aab0ba; border-top: 1px solid #eef1f4; padding-top: 22px; }
+
   /* ===== cross-tool coherence: one consistent feel for every secondary/compact button ===== */
   /* unify the resting look of the plain ghost/compact action buttons */
   .bulk-photos, .bulk-dl, .t-nav-mini, .dh-toggle-btn { background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.1); color: #cdd2da; }
@@ -763,6 +809,10 @@
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></span>
       Review Generator
     </div>
+    <div class="nav-item" id="nav-invoice" onclick="showView('invoice')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span>
+      Invoice Generator
+    </div>
   </aside>
 
   <main class="main">
@@ -808,6 +858,13 @@
             <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></div>
             <h3>Review Generator</h3>
             <p>Turn a Google or Yelp review into a polished Instagram graphic — feed post or story, with an auto caption &amp; hashtags.</p>
+            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <button class="nv-tile" onclick="showView('invoice')">
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></div>
+            <h3>Invoice Generator <span class="nv-tag">PW</span></h3>
+            <p>Build a clean PDF invoice for a customer — line items, tax, totals — auto-numbered and saved to your history.</p>
             <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
           </button>
 
@@ -1516,6 +1573,87 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       </div>
     </section><!-- /#view-review -->
 
+    <section class="view" id="view-invoice">
+      <div class="view-inner" style="max-width:1400px;">
+        <h1>Invoice Generator</h1>
+        <div class="layout">
+          <div>
+            <div class="panel">
+              <h2>Invoice</h2>
+              <div class="row3">
+                <div><label for="inv_num">Invoice #</label><input type="text" id="inv_num" readonly style="opacity:.78;"></div>
+                <div><label for="inv_date">Date</label><input type="date" id="inv_date" oninput="inv_render()"></div>
+                <div><label for="inv_due">Due date</label><input type="date" id="inv_due" oninput="inv_render()"></div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Bill To</h2>
+              <label for="inv_cname">Customer name</label><input type="text" id="inv_cname" placeholder="John Smith" oninput="inv_render()">
+              <div class="row"><div><label for="inv_cemail">Email</label><input type="text" id="inv_cemail" placeholder="john@email.com" oninput="inv_render()"></div><div><label for="inv_cphone">Phone</label><input type="text" id="inv_cphone" placeholder="(818) 000-0000" oninput="inv_render()"></div></div>
+              <label for="inv_caddr">Address</label><input type="text" id="inv_caddr" placeholder="123 Main St, Los Angeles, CA" oninput="inv_render()">
+            </div>
+            <div class="panel">
+              <h2>Vehicle <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
+              <div class="row"><div><label for="inv_vehicle">Vehicle</label><input type="text" id="inv_vehicle" placeholder="2024 BMW X5" oninput="inv_render()"></div><div><label for="inv_vin">VIN / Stock #</label><input type="text" id="inv_vin" placeholder="VIN or stock #" oninput="inv_render()"></div></div>
+            </div>
+            <div class="panel">
+              <h2>Line Items</h2>
+              <div class="inv-items-head"><span>Description</span><span>Qty</span><span>Unit&nbsp;$</span><span></span></div>
+              <div id="inv_items"></div>
+              <button class="btn-ghost" onclick="inv_addItem()" style="margin-top:10px;">+ Add line</button>
+            </div>
+            <div class="panel">
+              <h2>Totals</h2>
+              <div class="row3">
+                <div><label for="inv_tax">Tax %</label><input type="text" id="inv_tax" value="9.75" oninput="inv_render()"></div>
+                <div><label for="inv_disc">Discount ($)</label><input type="text" id="inv_disc" placeholder="0" oninput="inv_render()"></div>
+                <div><label for="inv_paid">Amount paid ($)</label><input type="text" id="inv_paid" placeholder="0" oninput="inv_render()"></div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Notes / Terms</h2>
+              <textarea id="inv_notes" oninput="inv_render()" style="min-height:80px;">Thank you for your business! Deposit is non-refundable. Balance due on delivery.</textarea>
+            </div>
+            <div class="panel">
+              <h2>Export</h2>
+              <div class="controls">
+                <button class="btn-start" onclick="inv_save()">Save</button>
+                <button class="btn-ghost" onclick="inv_new()">New invoice</button>
+                <button class="btn-start" onclick="inv_downloadPDF()">⬇ Download PDF</button>
+              </div>
+              <div class="status" id="inv_status"></div>
+            </div>
+            <div class="panel">
+              <h2>Saved Invoices</h2>
+              <div id="inv_list" class="inv-list"></div>
+            </div>
+          </div>
+          <div class="preview-col">
+            <div class="inv-stage">
+              <div class="inv-scaler" id="invScaler">
+                <div class="inv" id="inv">
+                  <div class="inv-doc-head">
+                    <div class="inv-brand"><div class="inv-wordmark">Nov<b>Auto</b></div><div class="inv-from">@NovAutoUSA<span>(818) 873&nbsp;-&nbsp;3697</span></div></div>
+                    <div class="inv-meta"><div class="inv-doc-title">INVOICE</div><div class="inv-meta-rows" id="inv_metaEl"></div></div>
+                  </div>
+                  <div class="inv-parties">
+                    <div class="inv-party"><div class="inv-lbl">Bill To</div><div id="inv_billEl"></div></div>
+                    <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
+                  </div>
+                  <table class="inv-table"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
+                  <div class="inv-bottom">
+                    <div class="inv-notes" id="inv_notesEl"></div>
+                    <div class="inv-totbox" id="inv_totEl"></div>
+                  </div>
+                  <div class="inv-doc-foot">NovAuto · Thank you for choosing us.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section><!-- /#view-invoice -->
+
   </main>
 </div>
 
@@ -1740,6 +1878,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     fitStageEl(document.querySelector('#view-sold .sp-stage'), 'spScaler', (typeof soldH !== 'undefined' ? soldH : 1920));
     fitStageEl(document.querySelector('#view-test .ad-stage'), 't_adScaler', 1920);
     fitStageEl(document.querySelector('#view-review .rv-stage'), 'rvScaler', (typeof rv_format !== 'undefined' && rv_format === 'story') ? 1920 : 1350);
+    fitStageEl(document.querySelector('#view-invoice .inv-stage'), 'invScaler', 1397);
   }
   window.addEventListener('resize', fitPreviews);
 
@@ -2243,15 +2382,15 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('scrim').classList.remove('show');
   }
   // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
-  const VIEW_PATH = { home: '/novauto', ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator' };
-  const PATH_VIEW = { '/novauto': 'home', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review' };
-  const VIEW_TITLE = { home: 'Nova Tools', ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator' };
+  const VIEW_PATH = { home: '/novauto', ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator', invoice: '/invoice' };
+  const PATH_VIEW = { '/novauto': 'home', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review', '/invoice': 'invoice' };
+  const VIEW_TITLE = { home: 'Nova Tools', ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator', invoice: 'Invoice Generator' };
   // ---- restricted second-tier password gate (Lease Ad — TEST + Deal Hub) ----
   let restrictedUnlocked = false, lockPendingView = null;
-  const RESTRICTED_VIEWS = new Set(['test', 'deals']);
+  const RESTRICTED_VIEWS = new Set(['test', 'deals', 'invoice']);
   async function checkUnlock() {
     try { const r = await fetch('/unlock'); const d = await r.json(); restrictedUnlocked = !!d.unlocked; } catch (e) { }
-    if (restrictedUnlocked) { dh_load(); dh_loadContacts(); dh_loadPublished(); }   // restricted endpoints are reachable now
+    if (restrictedUnlocked) { dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); }   // restricted endpoints are reachable now
     if (restrictedUnlocked && lockPendingView) { $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; showView(v, { noPush: true }); }
   }
   function showLock(targetView) {
@@ -2266,7 +2405,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     try {
       const r = await fetch('/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
       const d = await r.json();
-      if (d.ok) { restrictedUnlocked = true; dh_load(); dh_loadContacts(); dh_loadPublished(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
+      if (d.ok) { restrictedUnlocked = true; dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); $('lockModal').style.display = 'none'; const v = lockPendingView; lockPendingView = null; if (v) showView(v); }
       else { $('lockErr').textContent = d.error || 'Incorrect password.'; }
     } catch (e) { $('lockErr').textContent = e.message; }
   }
@@ -2286,6 +2425,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (typeof dh_agentSync === 'function') dh_agentSync();  // float the import orb only on the Deal Hub
     if (name === 'review' && typeof rv_render === 'function') requestAnimationFrame(rv_render);   // re-fit the review text now it's visible
     if (name === 'sold' && typeof renderSold === 'function') requestAnimationFrame(renderSold);   // re-fit the sold title/subtitle now it's measurable
+    if (name === 'invoice' && typeof inv_render === 'function') requestAnimationFrame(inv_render);
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -4804,6 +4944,137 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dl.disabled = false; stop.disabled = true;
     setRvBulk(rv_bulkAbort ? ('Stopped — ' + ok + ' downloaded.') : ('Done — ' + ok + ' downloaded' + (fail ? (', ' + fail + ' failed') : '') + ' ✓'), fail ? 'error' : 'done');
   }
+
+  // ===================== INVOICE GENERATOR =====================
+  let inv_items = [];              // [{ desc, qty, price }]
+  let inv_list = [], inv_counter = 0, inv_curId = null, inv_loaded = false;
+  const inv_num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : 0; };
+  const inv_money = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const inv_numLabel = n => 'INV-' + (1000 + (n || 0));
+  function inv_status(t, type = '') { const e = $('inv_status'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function inv_isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function inv_fmtDate(iso) { if (!iso) return '—'; const t = new Date(iso + 'T00:00'); return isNaN(t) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+  function inv_attr(s) { return (s || '').toString().replace(/"/g, '&quot;'); }
+
+  function inv_addItem(desc = '', qty = '1', price = '') { inv_items.push({ desc, qty, price }); inv_renderItems(); inv_render(); }
+  function inv_itemEdit(i, k, v) { if (inv_items[i]) { inv_items[i][k] = v; inv_render(); } }
+  function inv_removeItem(i) { inv_items.splice(i, 1); inv_renderItems(); inv_render(); }
+  function inv_renderItems() {
+    const el = $('inv_items'); if (!el) return;
+    el.innerHTML = inv_items.map((it, i) =>
+      `<div class="inv-item"><input value="${inv_attr(it.desc)}" placeholder="Description (e.g. Vehicle deposit)" oninput="inv_itemEdit(${i},'desc',this.value)"><input value="${inv_attr(it.qty)}" placeholder="1" oninput="inv_itemEdit(${i},'qty',this.value)"><input value="${inv_attr(it.price)}" placeholder="0.00" oninput="inv_itemEdit(${i},'price',this.value)"><button class="inv-rm" onclick="inv_removeItem(${i})" title="Remove">×</button></div>`
+    ).join('');
+  }
+  function inv_totals() {
+    const subtotal = inv_items.reduce((s, it) => s + (inv_num(it.qty) || 0) * inv_num(it.price), 0);
+    const disc = inv_num($('inv_disc').value), taxPct = inv_num($('inv_tax').value);
+    const taxable = Math.max(0, subtotal - disc), tax = taxable * taxPct / 100, total = taxable + tax;
+    const paid = inv_num($('inv_paid').value), balance = total - paid;
+    return { subtotal, disc, taxPct, tax, total, paid, balance };
+  }
+  function inv_totalOf(o) {
+    const sub = (o.items || []).reduce((s, it) => s + (inv_num(it.qty) || 0) * inv_num(it.price), 0);
+    const taxable = Math.max(0, sub - inv_num(o.disc));
+    return taxable + taxable * inv_num(o.tax) / 100;
+  }
+  function inv_render() {
+    if (!$('inv_metaEl')) return;
+    const M = inv_money;
+    $('inv_metaEl').innerHTML = `<div><b>Invoice #</b>${escapeHtml($('inv_num').value || inv_numLabel(inv_counter + 1))}</div><div><b>Date</b>${inv_fmtDate($('inv_date').value)}</div><div><b>Due</b>${inv_fmtDate($('inv_due').value)}</div>`;
+    const bill = [$('inv_cname').value, $('inv_cemail').value, $('inv_cphone').value, $('inv_caddr').value].map(s => s.trim()).filter(Boolean);
+    $('inv_billEl').innerHTML = bill.length ? bill.map((l, i) => `<div${i === 0 ? ' style="font-weight:700;color:#0b1220;"' : ''}>${escapeHtml(l)}</div>`).join('') : '<div style="color:#b8bec6;">—</div>';
+    const veh = [$('inv_vehicle').value.trim(), $('inv_vin').value.trim()].filter(Boolean);
+    $('inv_vehWrap').style.display = veh.length ? '' : 'none';
+    $('inv_vehEl').innerHTML = veh.map((l, i) => `<div${i === 0 ? ' style="font-weight:700;color:#0b1220;"' : ''}>${escapeHtml(l)}</div>`).join('');
+    $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it => {
+      const amt = (inv_num(it.qty) || 0) * inv_num(it.price);
+      return `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item description</span>'}</td><td class="num">${escapeHtml(it.qty || '1')}</td><td class="num">${M(inv_num(it.price))}</td><td class="num">${M(amt)}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" style="color:#c2c8d0;padding:24px 0;">No line items yet — add one on the left.</td></tr>';
+    const t = inv_totals();
+    let r = `<div class="inv-totrow"><span>Subtotal</span><span>${M(t.subtotal)}</span></div>`;
+    if (t.disc) r += `<div class="inv-totrow"><span>Discount</span><span>−${M(t.disc)}</span></div>`;
+    r += `<div class="inv-totrow"><span>Tax (${(t.taxPct || 0)}%)</span><span>${M(t.tax)}</span></div>`;
+    r += `<div class="inv-totrow grand"><span>Total</span><span>${M(t.total)}</span></div>`;
+    if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
+    $('inv_totEl').innerHTML = r;
+    $('inv_notesEl').textContent = $('inv_notes').value || '';
+  }
+  function inv_new() {
+    inv_curId = null;
+    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
+    $('inv_tax').value = '9.75';
+    $('inv_notes').value = 'Thank you for your business! Deposit is non-refundable. Balance due on delivery.';
+    const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
+    inv_items = [{ desc: '', qty: '1', price: '' }];
+    $('inv_num').value = inv_numLabel(inv_counter + 1);
+    inv_renderItems(); inv_render(); inv_renderList();
+    inv_status('New invoice — its number is assigned when you save.', '');
+  }
+  function inv_load(id) {
+    const o = inv_list.find(x => x.id === id); if (!o) return;
+    inv_curId = id;
+    $('inv_date').value = o.date || ''; $('inv_due').value = o.due || '';
+    $('inv_cname').value = o.cname || ''; $('inv_cemail').value = o.cemail || ''; $('inv_cphone').value = o.cphone || ''; $('inv_caddr').value = o.caddr || '';
+    $('inv_vehicle').value = o.vehicle || ''; $('inv_vin').value = o.vin || '';
+    $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || '';
+    inv_items = (o.items || []).map(it => ({ ...it })); if (!inv_items.length) inv_items = [{ desc: '', qty: '1', price: '' }];
+    $('inv_num').value = inv_numLabel(o.number);
+    inv_renderItems(); inv_render(); inv_renderList();
+    inv_status('Loaded ' + inv_numLabel(o.number) + '.', '');
+  }
+  async function inv_persist() { try { await fetch('/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoices: inv_list, counter: inv_counter }) }); } catch (e) { } }
+  async function inv_save() {
+    let number;
+    if (inv_curId && inv_list.find(x => x.id === inv_curId)) { number = inv_list.find(x => x.id === inv_curId).number; }
+    else { number = ++inv_counter; inv_curId = 'inv' + Date.now().toString(36) + Math.floor(Math.random() * 1e4); }
+    const o = {
+      id: inv_curId, number, date: $('inv_date').value, due: $('inv_due').value,
+      cname: $('inv_cname').value, cemail: $('inv_cemail').value, cphone: $('inv_cphone').value, caddr: $('inv_caddr').value,
+      vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, items: inv_items.map(it => ({ ...it })),
+      tax: $('inv_tax').value, disc: $('inv_disc').value, paid: $('inv_paid').value, notes: $('inv_notes').value, savedAt: new Date().toISOString(),
+    };
+    const i = inv_list.findIndex(x => x.id === inv_curId);
+    if (i >= 0) inv_list[i] = o; else inv_list.unshift(o);
+    $('inv_num').value = inv_numLabel(number);
+    await inv_persist();
+    inv_renderList(); inv_render();
+    inv_status('Saved ' + inv_numLabel(number) + ' ✓', 'done');
+  }
+  function inv_delete(id, ev) {
+    if (ev) ev.stopPropagation();
+    if (!confirm('Delete this invoice? This can’t be undone.')) return;
+    inv_list = inv_list.filter(x => x.id !== id);
+    inv_persist(); inv_renderList();
+    if (inv_curId === id) inv_new();
+  }
+  function inv_renderList() {
+    const el = $('inv_list'); if (!el) return;
+    if (!inv_list.length) { el.innerHTML = '<p class="hint">No saved invoices yet.</p>'; return; }
+    el.innerHTML = inv_list.map(o => `<div class="inv-list-item${o.id === inv_curId ? ' active' : ''}" onclick="inv_load('${o.id}')"><span><b>${inv_numLabel(o.number)}</b> · ${escapeHtml(o.cname || '—')}</span><span class="inv-li-right">${inv_money(inv_totalOf(o))}<button class="del" onclick="inv_delete('${o.id}', event)" title="Delete">×</button></span></div>`).join('');
+  }
+  async function inv_loadAll() {
+    if (inv_loaded) return;
+    try { const r = await fetch('/invoices'); if (!r.ok) return; const d = await r.json(); inv_list = d.invoices || []; inv_counter = d.counter || 0; inv_loaded = true; inv_renderList(); if (!inv_curId) $('inv_num').value = inv_numLabel(inv_counter + 1); inv_render(); } catch (e) { }
+  }
+  async function inv_downloadPDF() {
+    if (!window.jspdf) { inv_status('PDF library still loading — try again in a second.', 'error'); return; }
+    inv_status('Building PDF…', 'active');
+    try {
+      await document.fonts.ready;
+      const scaler = $('invScaler'), stage = scaler.parentElement;
+      const prev = { pos: stage.style.position, left: stage.style.left, top: stage.style.top, w: stage.style.width, h: stage.style.height };
+      scaler.style.transform = 'none';
+      stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = '1397px';
+      const canvas = await html2canvas($('inv'), { width: 1080, height: 1397, scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
+      const pdf = new window.jspdf.jsPDF('p', 'pt', 'letter');   // 612 x 792 pt
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 612, 792);
+      const base = ($('inv_num').value || 'invoice').replace(/[^\w-]/g, '_'), c = ($('inv_cname').value || '').replace(/[^\w]/g, '');
+      pdf.save(base + (c ? '_' + c : '') + '.pdf');
+      inv_status('PDF downloaded ✓', 'done');
+    } catch (e) { inv_status('PDF failed: ' + e.message, 'error'); }
+  }
+  inv_new();
 
   renderSold();
   rv_renderStarPick(); rv_renderThemes(); rv_render();

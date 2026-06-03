@@ -39,7 +39,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -342,6 +342,7 @@ def home():
 @app.route("/leasead-test")
 @app.route("/deal-hub")
 @app.route("/review-generator")
+@app.route("/invoice")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
@@ -1314,6 +1315,32 @@ def published():
             return jsonify(d if isinstance(d, dict) else {"snapshot": {}, "at": ""})
     except Exception:
         return jsonify({"snapshot": {}, "at": ""})
+
+
+INVOICES_FILE = os.path.join(GENERATED_DIR, "invoices.json")
+
+
+@app.route("/invoices", methods=["GET", "POST"])
+def invoices():
+    """Saved customer invoices + the auto-increment counter. The client owns the
+    list and number; the server just persists it (volume-backed)."""
+    if request.method == "POST":
+        data = request.json or {}
+        rows = data.get("invoices")
+        store = {"invoices": rows if isinstance(rows, list) else [],
+                 "counter": int(data.get("counter") or 0)}
+        try:
+            with open(INVOICES_FILE, "w") as f:
+                json.dump(store, f, indent=1)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": True, "count": len(store["invoices"])})
+    try:
+        with open(INVOICES_FILE) as f:
+            d = json.load(f)
+            return jsonify({"invoices": d.get("invoices", []), "counter": int(d.get("counter") or 0)})
+    except Exception:
+        return jsonify({"invoices": [], "counter": 0})
 
 
 @app.route("/detect-plate", methods=["POST"])
