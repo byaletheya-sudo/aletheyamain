@@ -344,6 +344,7 @@ def home():
 @app.route("/review-generator")
 @app.route("/invoice")
 @app.route("/quote")
+@app.route("/desking")
 def index():
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
