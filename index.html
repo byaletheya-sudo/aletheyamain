@@ -716,8 +716,8 @@
   .plate-dialog .controls input[type=range] { width: 110px; }
 
   /* ================= INVOICE GENERATOR ================= */
-  .inv-items-head { display: grid; grid-template-columns: 1fr 54px 92px 26px; gap: 6px; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: #767c86; margin-bottom: 6px; padding: 0 2px; }
-  .inv-item { display: grid; grid-template-columns: 1fr 54px 92px 26px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .inv-items-head { display: grid; grid-template-columns: 1fr 110px 26px; gap: 6px; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: #767c86; margin-bottom: 6px; padding: 0 2px; }
+  .inv-item { display: grid; grid-template-columns: 1fr 110px 26px; gap: 6px; margin-bottom: 6px; align-items: center; }
   .inv-item input { margin: 0; }
   .inv-item .inv-rm { width: 26px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid rgba(255,90,90,0.22); background: rgba(255,90,90,0.08); color: #ff9a9a; font-size: 15px; cursor: pointer; }
   .inv-item .inv-rm:hover { background: #ff4a4a; color: #fff; }
@@ -1600,10 +1600,24 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             </div>
             <div class="panel">
               <h2>Vehicle &amp; Deal <span style="font-weight:400;opacity:.55;font-size:.8rem;">(optional)</span></h2>
+              <div class="seg" id="inv_dealSeg" style="margin-bottom:14px;">
+                <button type="button" class="seg-btn active" onclick="inv_setDeal('lease')">Lease</button>
+                <button type="button" class="seg-btn" onclick="inv_setDeal('finance')">Finance</button>
+              </div>
               <label for="inv_vehicle">Vehicle</label><input type="text" id="inv_vehicle" placeholder="2024 BMW X5" oninput="inv_render()">
               <div class="row"><div><label for="inv_vin">VIN / Stock #</label><input type="text" id="inv_vin" placeholder="VIN or stock #" oninput="inv_render()"></div><div><label for="inv_color">Color</label><input type="text" id="inv_color" placeholder="Alpine White" oninput="inv_render()"></div></div>
-              <div class="row3"><div><label for="inv_monthly">Monthly ($)</label><input type="text" id="inv_monthly" placeholder="499" oninput="inv_render()"></div><div><label for="inv_das">Due at signing ($)</label><input type="text" id="inv_das" placeholder="3,000" oninput="inv_render()"></div><div><label for="inv_term">Term (mo)</label><input type="text" id="inv_term" placeholder="36" oninput="inv_render()"></div></div>
-              <label for="inv_miles">Mileage (per year)</label><input type="text" id="inv_miles" placeholder="7,500" oninput="inv_render()">
+              <div class="row3">
+                <div><label for="inv_mpre">Monthly pre-tax ($)</label><input type="text" id="inv_mpre" placeholder="450" oninput="inv_mcalc('pre')"></div>
+                <div><label for="inv_mtax">Tax %</label><input type="text" id="inv_mtax" value="9.75" oninput="inv_mcalc('rate')"></div>
+                <div><label for="inv_mpost">Monthly w/ tax ($)</label><input type="text" id="inv_mpost" placeholder="auto" oninput="inv_mcalc('post')"></div>
+              </div>
+              <div class="row3">
+                <div><label for="inv_term">Term (mo)</label><input type="text" id="inv_term" placeholder="36" oninput="inv_render()"></div>
+                <div id="inv_f_das"><label for="inv_das">Due at signing ($)</label><input type="text" id="inv_das" placeholder="3,000" oninput="inv_render()"></div>
+                <div id="inv_f_miles"><label for="inv_miles">Mileage (/yr)</label><input type="text" id="inv_miles" placeholder="7,500" oninput="inv_render()"></div>
+                <div id="inv_f_apr" style="display:none;"><label for="inv_apr">APR %</label><input type="text" id="inv_apr" placeholder="4.9" oninput="inv_render()"></div>
+                <div id="inv_f_down" style="display:none;"><label for="inv_down">Down ($)</label><input type="text" id="inv_down" placeholder="3,000" oninput="inv_render()"></div>
+              </div>
             </div>
             <div class="panel">
               <h2>Delivery</h2>
@@ -1614,7 +1628,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             </div>
             <div class="panel">
               <h2>Line Items</h2>
-              <div class="inv-items-head"><span>Description</span><span>Qty</span><span>Unit&nbsp;$</span><span></span></div>
+              <div class="inv-items-head"><span>Description</span><span>Amount&nbsp;$</span><span></span></div>
               <div id="inv_items"></div>
               <button class="btn-ghost" onclick="inv_addItem()" style="margin-top:10px;">+ Add line</button>
             </div>
@@ -1657,7 +1671,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-party inv-party-r" id="inv_vehWrap"><div class="inv-lbl">Vehicle</div><div id="inv_vehEl"></div></div>
                   </div>
                   <div class="inv-details" id="inv_detailsEl"></div>
-                  <table class="inv-table"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
+                  <table class="inv-table"><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody id="inv_rowsEl"></tbody></table>
                   <div class="inv-bottom">
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
@@ -4963,8 +4977,28 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
 
   // ===================== INVOICE GENERATOR =====================
-  let inv_items = [];              // [{ desc, qty, price }]
+  let inv_items = [];              // [{ desc, price }]
+  let inv_dealType = 'lease';
   let inv_list = [], inv_counter = 0, inv_curId = null, inv_loaded = false;
+  function inv_setDeal(type) {
+    inv_dealType = type;
+    const btns = $('inv_dealSeg').querySelectorAll('.seg-btn');
+    btns[0].classList.toggle('active', type === 'lease'); btns[1].classList.toggle('active', type === 'finance');
+    if (typeof slideSeg === 'function') slideSeg($('inv_dealSeg'));
+    const lease = type === 'lease';
+    $('inv_f_das').style.display = lease ? '' : 'none';
+    $('inv_f_miles').style.display = lease ? '' : 'none';
+    $('inv_f_apr').style.display = lease ? 'none' : '';
+    $('inv_f_down').style.display = lease ? 'none' : '';
+    inv_render();
+  }
+  // auto pre-/post-tax monthly: edit pre or the rate -> compute w/ tax; edit w/ tax -> back out pre-tax
+  function inv_mcalc(src) {
+    const f = 1 + inv_num($('inv_mtax').value) / 100;
+    if (src === 'post') { const post = inv_num($('inv_mpost').value); $('inv_mpre').value = post ? (post / f).toFixed(2) : ''; }
+    else { const pre = inv_num($('inv_mpre').value); $('inv_mpost').value = pre ? (pre * f).toFixed(2) : ''; }
+    inv_render();
+  }
   const inv_num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : 0; };
   const inv_money = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const inv_numLabel = n => 'INV-' + (1000 + (n || 0));
@@ -4973,24 +5007,24 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function inv_fmtDate(iso) { if (!iso) return '—'; const t = new Date(iso + 'T00:00'); return isNaN(t) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
   function inv_attr(s) { return (s || '').toString().replace(/"/g, '&quot;'); }
 
-  function inv_addItem(desc = '', qty = '1', price = '') { inv_items.push({ desc, qty, price }); inv_renderItems(); inv_render(); }
+  function inv_addItem(desc = '', price = '') { inv_items.push({ desc, price }); inv_renderItems(); inv_render(); }
   function inv_itemEdit(i, k, v) { if (inv_items[i]) { inv_items[i][k] = v; inv_render(); } }
   function inv_removeItem(i) { inv_items.splice(i, 1); inv_renderItems(); inv_render(); }
   function inv_renderItems() {
     const el = $('inv_items'); if (!el) return;
     el.innerHTML = inv_items.map((it, i) =>
-      `<div class="inv-item"><input value="${inv_attr(it.desc)}" placeholder="Description (e.g. Vehicle deposit)" oninput="inv_itemEdit(${i},'desc',this.value)"><input value="${inv_attr(it.qty)}" placeholder="1" oninput="inv_itemEdit(${i},'qty',this.value)"><input value="${inv_attr(it.price)}" placeholder="0.00" oninput="inv_itemEdit(${i},'price',this.value)"><button class="inv-rm" onclick="inv_removeItem(${i})" title="Remove">×</button></div>`
+      `<div class="inv-item"><input value="${inv_attr(it.desc)}" placeholder="Description (e.g. Down payment, doc fee)" oninput="inv_itemEdit(${i},'desc',this.value)"><input value="${inv_attr(it.price)}" placeholder="0.00" oninput="inv_itemEdit(${i},'price',this.value)"><button class="inv-rm" onclick="inv_removeItem(${i})" title="Remove">×</button></div>`
     ).join('');
   }
   function inv_totals() {
-    const subtotal = inv_items.reduce((s, it) => s + (inv_num(it.qty) || 0) * inv_num(it.price), 0);
+    const subtotal = inv_items.reduce((s, it) => s + inv_num(it.price), 0);
     const disc = inv_num($('inv_disc').value), taxPct = inv_num($('inv_tax').value);
     const taxable = Math.max(0, subtotal - disc), tax = taxable * taxPct / 100, total = taxable + tax;
     const paid = inv_num($('inv_paid').value), balance = total - paid;
     return { subtotal, disc, taxPct, tax, total, paid, balance };
   }
   function inv_totalOf(o) {
-    const sub = (o.items || []).reduce((s, it) => s + (inv_num(it.qty) || 0) * inv_num(it.price), 0);
+    const sub = (o.items || []).reduce((s, it) => s + inv_num(it.price), 0);
     const taxable = Math.max(0, sub - inv_num(o.disc));
     return taxable + taxable * inv_num(o.tax) / 100;
   }
@@ -5008,19 +5042,25 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const mny = id => { const v = $(id).value.trim(); return v ? inv_money(inv_num(v)) : ''; };
     push('VIN / Stock', $('inv_vin').value);
     push('Color', $('inv_color').value);
-    push('Monthly', mny('inv_monthly'));
-    push('Due at Signing', mny('inv_das'));
+    push('Deal', inv_dealType === 'finance' ? 'Finance' : 'Lease');
+    if ($('inv_mpre').value.trim()) push('Monthly (pre-tax)', inv_money(inv_num($('inv_mpre').value)));
+    if ($('inv_mpost').value.trim()) push('Monthly (w/ tax)', inv_money(inv_num($('inv_mpost').value)));
     push('Term', $('inv_term').value.trim() ? $('inv_term').value.trim() + ' mo' : '');
-    push('Mileage', $('inv_miles').value.trim() ? Number(inv_num($('inv_miles').value)).toLocaleString('en-US') + ' /yr' : '');
+    if (inv_dealType === 'finance') {
+      if ($('inv_apr').value.trim()) push('APR', inv_num($('inv_apr').value) + '%');
+      push('Down', mny('inv_down'));
+    } else {
+      push('Due at Signing', mny('inv_das'));
+      push('Mileage', $('inv_miles').value.trim() ? Number(inv_num($('inv_miles').value)).toLocaleString('en-US') + ' /yr' : '');
+    }
     const dm = $('inv_delivery').value;
     push('Delivery', dm);
     if ($('inv_pickup').value.trim()) push(dm === 'Picked Up' ? 'Pickup Location' : 'Delivered To', $('inv_pickup').value);
     $('inv_detailsEl').innerHTML = det.join('');
     $('inv_detailsEl').style.display = det.length ? '' : 'none';
-    $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it => {
-      const amt = (inv_num(it.qty) || 0) * inv_num(it.price);
-      return `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item description</span>'}</td><td class="num">${escapeHtml(it.qty || '1')}</td><td class="num">${M(inv_num(it.price))}</td><td class="num">${M(amt)}</td></tr>`;
-    }).join('') : '<tr><td colspan="4" style="color:#c2c8d0;padding:24px 0;">No line items yet — add one on the left.</td></tr>';
+    $('inv_rowsEl').innerHTML = inv_items.length ? inv_items.map(it =>
+      `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item description</span>'}</td><td class="num">${M(inv_num(it.price))}</td></tr>`
+    ).join('') : '<tr><td colspan="2" style="color:#c2c8d0;padding:24px 0;">No line items yet — add one on the left.</td></tr>';
     const t = inv_totals();
     let r = `<div class="inv-totrow"><span>Subtotal</span><span>${M(t.subtotal)}</span></div>`;
     if (t.disc) r += `<div class="inv-totrow"><span>Discount</span><span>−${M(t.disc)}</span></div>`;
@@ -5032,11 +5072,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function inv_new() {
     inv_curId = null;
-    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_monthly', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
-    $('inv_tax').value = '9.75'; $('inv_delivery').value = 'Delivered';
+    ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_mpre', 'inv_mpost', 'inv_apr', 'inv_down', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid'].forEach(id => { if ($(id)) $(id).value = ''; });
+    $('inv_tax').value = '9.75'; $('inv_mtax').value = '9.75'; $('inv_delivery').value = 'Delivered'; inv_setDeal('lease');
     $('inv_notes').value = 'Thank you for your business! Deposit is non-refundable. Balance due on delivery.';
     const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
-    inv_items = [{ desc: '', qty: '1', price: '' }];
+    inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(inv_counter + 1);
     inv_renderItems(); inv_render(); inv_renderList();
     inv_status('New invoice — its number is assigned when you save.', '');
@@ -5047,10 +5087,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_date').value = o.date || ''; $('inv_due').value = o.due || '';
     $('inv_cname').value = o.cname || ''; $('inv_cemail').value = o.cemail || ''; $('inv_cphone').value = o.cphone || ''; $('inv_caddr').value = o.caddr || '';
     $('inv_vehicle').value = o.vehicle || ''; $('inv_vin').value = o.vin || ''; $('inv_color').value = o.color || '';
-    $('inv_monthly').value = o.monthly || ''; $('inv_das').value = o.das || ''; $('inv_term').value = o.term || ''; $('inv_miles').value = o.miles || '';
+    $('inv_mpre').value = o.mpre || ''; $('inv_mtax').value = o.mtax || '9.75'; $('inv_mpost').value = o.mpost || '';
+    $('inv_das').value = o.das || ''; $('inv_term').value = o.term || ''; $('inv_miles').value = o.miles || ''; $('inv_apr').value = o.apr || ''; $('inv_down').value = o.down || '';
     $('inv_delivery').value = o.delivery != null ? o.delivery : 'Delivered'; $('inv_pickup').value = o.pickup || '';
     $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || '';
-    inv_items = (o.items || []).map(it => ({ ...it })); if (!inv_items.length) inv_items = [{ desc: '', qty: '1', price: '' }];
+    inv_setDeal(o.dealType === 'finance' ? 'finance' : 'lease');
+    inv_items = (o.items || []).map(it => ({ desc: it.desc || '', price: it.price != null ? it.price : '' })); if (!inv_items.length) inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(o.number);
     inv_renderItems(); inv_render(); inv_renderList();
     inv_status('Loaded ' + inv_numLabel(o.number) + '.', '');
@@ -5063,9 +5105,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const o = {
       id: inv_curId, number, date: $('inv_date').value, due: $('inv_due').value,
       cname: $('inv_cname').value, cemail: $('inv_cemail').value, cphone: $('inv_cphone').value, caddr: $('inv_caddr').value,
-      vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, color: $('inv_color').value,
-      monthly: $('inv_monthly').value, das: $('inv_das').value, term: $('inv_term').value, miles: $('inv_miles').value,
-      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, items: inv_items.map(it => ({ ...it })),
+      vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, color: $('inv_color').value, dealType: inv_dealType,
+      mpre: $('inv_mpre').value, mtax: $('inv_mtax').value, mpost: $('inv_mpost').value,
+      das: $('inv_das').value, term: $('inv_term').value, miles: $('inv_miles').value, apr: $('inv_apr').value, down: $('inv_down').value,
+      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, items: inv_items.map(it => ({ desc: it.desc, price: it.price })),
       tax: $('inv_tax').value, disc: $('inv_disc').value, paid: $('inv_paid').value, notes: $('inv_notes').value, savedAt: new Date().toISOString(),
     };
     const i = inv_list.findIndex(x => x.id === inv_curId);
