@@ -2068,13 +2068,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="panel">
               <h2>Cash &amp; incentives</h2>
               <div class="row3">
-                <div><label for="dk_down" id="dk_downLbl">Cap reduction ($)</label><input type="text" id="dk_down" placeholder="3,000" oninput="dk_calc()"></div>
+                <div><label for="dk_down" id="dk_downLbl">Down payment ($)</label><input type="text" id="dk_down" placeholder="3,000" oninput="dk_calc()"></div>
                 <div><label for="dk_rebate">Rebates ($)</label><input type="text" id="dk_rebate" placeholder="500" oninput="dk_calc()"></div>
-                <div><label for="dk_fees">Other fees ($)</label><input type="text" id="dk_fees" placeholder="85" oninput="dk_calc()"></div>
+                <div><label for="dk_bf">Broker fee ($) <span style="font-weight:400;opacity:.55;font-size:.74rem;">our front-end</span></label><input type="text" id="dk_bf" placeholder="995" oninput="dk_calc()"></div>
               </div>
-              <div class="row">
+              <div class="row3">
+                <div><label for="dk_fees">Other fees ($)</label><input type="text" id="dk_fees" placeholder="85" oninput="dk_calc()"></div>
                 <div><label for="dk_tax">Sales tax %</label><input type="text" id="dk_tax" value="9.75" oninput="dk_calc()"></div>
-                <div><label for="dk_cost">Your cost ($) <span style="font-weight:400;opacity:.55;font-size:.74rem;">internal · optional</span></label><input type="text" id="dk_cost" placeholder="—" oninput="dk_calc()"></div>
+                <div><label for="dk_cost">Your cost ($) <span style="font-weight:400;opacity:.55;font-size:.74rem;">optional</span></label><input type="text" id="dk_cost" placeholder="—" oninput="dk_calc()"></div>
               </div>
             </div>
 
@@ -2104,11 +2105,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   <button class="btn-ghost" onclick="dk_toProposal()">→ Proposal</button>
                   <button class="btn-start" onclick="dk_toInvoice()">→ Invoice</button>
                 </div>
-              </div>
-              <div class="dk-slider" id="dk_downWrap">
-                <div class="dk-slider-top"><span id="dk_downSlideLbl">Choose down payment</span><b id="dk_downReadout">$0</b></div>
-                <input type="range" id="dk_downSlider" min="0" max="10000" step="250" value="0" oninput="dk_downSlide(this.value)">
-                <div class="dk-slider-scale"><span>$0</span><span id="dk_downMax">$10k</span></div>
               </div>
               <div class="dk-chiprow" id="dk_roChips"></div>
               <div class="dk-break" id="dk_roBreak"></div>
@@ -5843,7 +5839,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('dk_f_basemiles').style.display = lease ? '' : 'none';
     $('dk_mileChips').style.display = lease ? '' : 'none';
     $('dk_termTableWrap').style.display = lease ? '' : 'none';
-    $('dk_downLbl').textContent = lease ? 'Cap reduction ($)' : 'Down payment ($)';
     dk_calc();
   }
   // ---- mileage → residual: more miles = lower residual = higher payment ----
@@ -5867,7 +5862,6 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function dk_effResid(I) { return dk_baseRV(I.term || 36, I).resid + (dk_dealType === 'lease' ? dk_milesAdj(I.miles, I.baseMiles) : 0); }
   function dk_setMiles(m) { $('dk_miles').value = m; dk_calc(); }
-  function dk_downSlide(v) { $('dk_down').value = Math.round(Number(v) || 0); dk_calc(); }
   // ---- per-term residual / MF rows ----
   function dk_renderTermRows() {
     const el = $('dk_termRows'); if (!el) return;
@@ -5891,24 +5885,26 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dk_removeTermRow(i) { dk_termTable.splice(i, 1); dk_renderTermRows(); dk_calc(); }
   function dk_setTermTable(rows) { dk_termTable = (Array.isArray(rows) ? rows : []).map(r => ({ term: String(r.term || '').trim(), resid: String(r.resid || '').trim(), mf: String(r.mf || '').trim() })).filter(r => r.term); dk_renderTermRows(); }
   // ---- the math ----
-  function dk_leasePayment(msrp, price, residPct, mf, term, down, rebate, acq, fees, taxPct) {
+  function dk_leasePayment(msrp, price, residPct, mf, term, down, rebate, acq, fees, taxPct, bf) {
+    bf = bf || 0;
     const residual = msrp * (residPct / 100);
     const grossCap = price + acq + fees;               // acq + fees capitalized into the lease
-    const adjCap = Math.max(0, grossCap - (down + rebate));   // cap cost reduction = down + rebates
+    const adjCap = Math.max(0, grossCap - (down + rebate));   // down payment + rebates reduce the cap cost
     const depreciation = term > 0 ? (adjCap - residual) / term : 0;
     const rent = (adjCap + residual) * mf;             // rent (finance) charge
     const base = depreciation + rent;
     const tax = base * (taxPct / 100);                 // CA taxes the monthly payment
     const monthly = base + tax;
-    const das = down + monthly;                        // due at signing = cap reduction + 1st payment
-    return { residual, adjCap, depreciation, rent, base, tax, monthly, das };
+    const das = down + monthly + bf;                   // due at signing = down + 1st payment + broker fee
+    return { residual, adjCap, depreciation, rent, base, tax, monthly, das, bf };
   }
-  function dk_financePayment(price, apr, term, down, rebate, fees, taxPct) {
+  function dk_financePayment(price, apr, term, down, rebate, fees, taxPct, bf) {
+    bf = bf || 0;
     const tax = price * (taxPct / 100);                // tax on the sale price, financed
     const financed = Math.max(0, price + fees + tax - down - rebate);
     const r = (apr / 100) / 12;
     const monthly = term > 0 ? (r > 0 ? financed * r / (1 - Math.pow(1 + r, -term)) : financed / term) : 0;
-    return { financed, tax, monthly, base: monthly, das: down + monthly };
+    return { financed, tax, monthly, base: monthly, das: down + monthly + bf, bf };
   }
   function dk_inputs() {
     const mf = parseFloat(String($('dk_mf').value).replace(/[^0-9.]/g, '')) || 0;
@@ -5920,17 +5916,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       baseMiles: Math.round(inv_num($('dk_baseMiles').value)) || 10000,
       down: inv_num($('dk_down').value), rebate: inv_num($('dk_rebate').value),
       fees: inv_num($('dk_fees').value), tax: inv_num($('dk_tax').value),
-      cost: inv_num($('dk_cost').value),
+      bf: inv_num($('dk_bf').value), cost: inv_num($('dk_cost').value),
     };
   }
   function dk_payAt(term, down, I) {
     if (dk_dealType === 'lease') {
       const rv = dk_baseRV(term, I);                      // per-term residual/MF (or defaults)
       const effR = rv.resid + dk_milesAdj(I.miles, I.baseMiles);
-      const r = dk_leasePayment(I.msrp, I.price, effR, rv.mf, term, down, I.rebate, I.acq, I.fees, I.tax);
+      const r = dk_leasePayment(I.msrp, I.price, effR, rv.mf, term, down, I.rebate, I.acq, I.fees, I.tax, I.bf);
       return { base: r.base, monthly: r.monthly, custom: rv.custom };
     }
-    const r = dk_financePayment(I.price, I.apr, term, down, I.rebate, I.fees, I.tax); return { base: r.monthly, monthly: r.monthly, custom: false };
+    const r = dk_financePayment(I.price, I.apr, term, down, I.rebate, I.fees, I.tax, I.bf); return { base: r.monthly, monthly: r.monthly, custom: false };
   }
   function dk_pickCell(term, down) { $('dk_term').value = term; $('dk_down').value = down; dk_calc(); }
   function dk_calc() {
@@ -5947,16 +5943,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const effResid = rv.resid + (lease ? dk_milesAdj(I.miles, I.baseMiles) : 0);   // + mileage adjustment
     const milesAdj = lease ? dk_milesAdj(I.miles, I.baseMiles) : 0;
     const usingTermRow = lease && !!dk_termRowFor(baseTerm);
-    // sync the interactive controls (down slider + mileage chips). max is MSRP-anchored so it
-    // never recedes mid-drag; only a typed down beyond it expands the scale.
-    const maxDown = Math.max(10000, Math.round(I.msrp * 0.25 / 500) * 500, Math.ceil(I.down / 500) * 500);
-    const sl = $('dk_downSlider'); sl.max = maxDown; sl.value = Math.min(I.down, maxDown);
-    $('dk_downReadout').textContent = dk_m(I.down); $('dk_downMax').textContent = dk_m(maxDown);
-    $('dk_downSlideLbl').textContent = lease ? 'Choose cap reduction' : 'Choose down payment';
     $('dk_mileChips').querySelectorAll('button').forEach(b => b.classList.toggle('active', Number(b.dataset.mi) === I.miles));
     const sc = lease
-      ? dk_leasePayment(I.msrp, I.price, effResid, rv.mf, baseTerm, I.down, I.rebate, I.acq, I.fees, I.tax)
-      : dk_financePayment(I.price, I.apr, baseTerm, I.down, I.rebate, I.fees, I.tax);
+      ? dk_leasePayment(I.msrp, I.price, effResid, rv.mf, baseTerm, I.down, I.rebate, I.acq, I.fees, I.tax, I.bf)
+      : dk_financePayment(I.price, I.apr, baseTerm, I.down, I.rebate, I.fees, I.tax, I.bf);
     dk_last = { dealType: dk_dealType, base: sc.base, monthly: sc.monthly, das: sc.das, term: baseTerm, effResid, mf: rv.mf };
 
     if (!ready) {
@@ -6000,11 +5990,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       br += `<div class="r"><span>Amount financed</span><b>${dk_m(sc.financed)}</b></div>`;
       br += `<div class="r tot"><span>Monthly payment</span><b>${dk_m(sc.monthly)}/mo</b></div>`;
     }
+    // due-at-signing composition (down + first payment + broker fee)
+    br += `<div class="r" style="margin-top:8px;"><span>Down payment</span><b>${dk_m(I.down)}</b></div>`;
+    br += `<div class="r"><span>+ First month</span><b>${dk_m(sc.monthly)}</b></div>`;
+    if (I.bf) br += `<div class="r"><span>+ Broker fee</span><b>${dk_m(I.bf)}</b></div>`;
+    br += `<div class="r tot"><span>Due at signing</span><b>${dk_m(sc.das)}</b></div>`;
     $('dk_roBreak').innerHTML = br;
-    // profit (internal, optional)
-    if (I.cost > 0 && I.price > 0) {
-      const gross = I.price - I.cost;
-      $('dk_roProfit').style.display = ''; $('dk_roProfit').innerHTML = `<span>Front-end gross (internal)</span><b>${dk_m(gross)}</b>`;
+    // profit (internal, optional) — vehicle margin + the broker fee we collect
+    const vehGross = (I.cost > 0 && I.price > 0) ? (I.price - I.cost) : 0;
+    const frontGross = vehGross + I.bf;
+    if (frontGross > 0 || I.bf > 0 || vehGross !== 0) {
+      const lbl = (vehGross && I.bf) ? `incl. ${dk_m(I.bf)} broker fee` : (I.bf ? 'broker fee' : 'vehicle margin');
+      $('dk_roProfit').style.display = ''; $('dk_roProfit').innerHTML = `<span>Front-end gross (internal) <span style="opacity:.7;font-weight:500;">· ${lbl}</span></span><b>${dk_m(frontGross)}</b>`;
     } else $('dk_roProfit').style.display = 'none';
     // ---- the grid ----
     // include any per-term rows you've entered so the real curve shows up as its own row
@@ -6170,7 +6167,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     return {
       vehicle: g('dk_vehicle'), dealType: dk_dealType, msrp: g('dk_msrp'), resid: g('dk_resid'), mf: g('dk_mf'),
       acq: g('dk_acq'), apr: g('dk_apr'), term: g('dk_term'), miles: g('dk_miles'), baseMiles: g('dk_baseMiles'),
-      rebate: g('dk_rebate'), fees: g('dk_fees'), tax: g('dk_tax'),
+      rebate: g('dk_rebate'), fees: g('dk_fees'), tax: g('dk_tax'), bf: g('dk_bf'),
       terms: dk_termTable.filter(r => String(r.term).trim() && (String(r.resid).trim() || String(r.mf).trim())).map(r => ({ term: String(r.term).trim(), resid: String(r.resid).trim(), mf: String(r.mf).trim() })),
       updated: new Date().toLocaleDateString(),
     };
@@ -6191,7 +6188,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     setV('dk_vehicle', p.vehicle); setV('dk_msrp', p.msrp); setV('dk_resid', p.resid); setV('dk_mf', p.mf);
     setV('dk_acq', p.acq); setV('dk_apr', p.apr); setV('dk_term', p.term); setV('dk_miles', p.miles);
     setV('dk_baseMiles', p.baseMiles || p.miles || ''); setV('dk_rebate', p.rebate); setV('dk_fees', p.fees);
-    if (p.tax) setV('dk_tax', p.tax);
+    setV('dk_bf', p.bf); if (p.tax) setV('dk_tax', p.tax);
     dk_setTermTable(p.terms);                              // restore the per-term curve
     dk_calc(); dk_matchProgram();
     dk_libStatus('Loaded “' + (p.vehicle || 'program') + '”' + ((p.terms || []).length ? ' (with per-term curve)' : '') + ' — add your selling price & down.', 'done');
@@ -6224,9 +6221,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (typeof dh_load === 'function') { try { await dh_load(); } catch (e) { } }   // ensure the board is loaded before we add
     dk_calc(); if (!dk_last || !dk_last.base) { dk_libStatus('Fill in the deal first (need a payment).', 'error'); return; }
     const I = dk_inputs(), v = dk_vehParts(), lease = dk_dealType === 'lease';
+    const msrpNote = I.msrp ? 'MSRP ' + dk_m(I.msrp) : '';
     const note = lease
-      ? ['Desked', I.mf ? 'MF ' + I.mf.toFixed(5) : '', 'RV ' + (+dk_effResid(I).toFixed(1)) + '%' + (I.miles ? ' @' + (I.miles / 1000) + 'k' : '')].filter(Boolean).join(' · ')
-      : ['Desked', I.apr ? I.apr + '% APR' : ''].filter(Boolean).join(' · ');
+      ? ['Desked', msrpNote, I.mf ? 'MF ' + dk_baseRV(I.term || 36, I).mf.toFixed(5) : '', 'RV ' + (+dk_effResid(I).toFixed(1)) + '%' + (I.miles ? ' @' + (I.miles / 1000) + 'k' : '')].filter(Boolean).join(' · ')
+      : ['Desked', msrpNote, I.apr ? I.apr + '% APR' : ''].filter(Boolean).join(' · ');
     const deal = (typeof dh_ensureDates === 'function' ? dh_ensureDates : (x => x))({
       _added: new Date().toLocaleDateString(),
       year: v.year || '2026', make: v.make, model: v.model, trim: v.trim, package: '',
@@ -6234,7 +6232,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       orig_mo: dk_last.base ? String(Math.round(dk_last.base)) : '',
       das: I.down ? String(Math.round(I.down)) : '',
       term: I.term ? String(I.term) : '', miles: lease && I.miles ? String(Math.round(I.miles)) : '',
-      tax_in_mo: '', broker_fee: '', dealer: '', notes: note, source: 'Desking',
+      tax_in_mo: '', broker_fee: I.bf ? String(Math.round(I.bf)) : '', dealer: '', notes: note, source: 'Desking',
       special: '', deal_type: lease ? 'lease' : 'finance', apr: lease ? '' : (I.apr ? String(I.apr) : ''), incentives: '',
     });
     dh_deals.unshift(deal);
