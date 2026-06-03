@@ -221,7 +221,7 @@
   .dh-car-best small { display: block; color: #767c86; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .dh-car-caret { color: #6b7280; transition: transform .2s; flex: 0 0 auto; }
   .dh-car.open .dh-car-caret { transform: rotate(180deg); }
-  .dh-car-deals { display: none; padding: 0 6px 8px; }
+  .dh-car-deals { display: none; padding: 0 6px 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .dh-car.open .dh-car-deals { display: block; }
   .dh-deals-tbl { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
   .dh-deals-tbl th { text-align: left; color: #767c86; font-weight: 600; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 8px; white-space: nowrap; }
@@ -652,6 +652,8 @@
   .dk-lib:hover .dk-lib-del { opacity: 1; }
   .dk-lib .dk-lib-del:hover { background: rgba(255,77,79,.14); color: #ff6b6e; }
   .dk-libempty { font-size: .8rem; color: #5b6471; padding: 8px 2px; }
+  .dk-gridscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -2px; }
+  .dk-gridscroll table.dk-grid { min-width: 440px; }
   @media (max-width: 1080px) {
     .dk-layout { grid-template-columns: 1fr; }
     .dk-results { position: static; }
@@ -702,6 +704,19 @@
   @media (max-width: 768px) {
     .view-inner { padding: 24px 16px 70px; }
     h1 { font-size: 1.55rem; }
+  }
+  /* phones: stack multi-column input rows so fields aren't cramped */
+  @media (max-width: 620px) {
+    .row3 { grid-template-columns: 1fr 1fr; }
+    .nv-hero h1 { font-size: 1.7rem; }
+    .nv-grid { gap: 12px; }
+  }
+  @media (max-width: 440px) {
+    .row, .row3 { grid-template-columns: 1fr; }
+    .dk-tt-row { grid-template-columns: 1fr 1fr 1.4fr 24px; }
+    .dk-big .amt { font-size: 2.6rem; }
+    .bk-panel, .dh-agent-panel { right: 10px; bottom: 10px; width: calc(100vw - 20px); }
+    .dh-agent-fab, .bk-fab { right: 14px; bottom: 14px; }
   }
   /* ---- tool-open entrance animation ---- */
   @keyframes nvViewIn { from { opacity: 0; transform: translateY(16px) scale(.992); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
@@ -2168,7 +2183,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="dk-gridwrap">
               <h3>Payment grid <span class="dk-mf-apr" id="dk_gridMode"></span></h3>
               <div class="dk-gridsub">Monthly <b>with tax</b> · base payment below · tap a cell to lock that scenario</div>
-              <table class="dk-grid" id="dk_grid"></table>
+              <div class="dk-gridscroll"><table class="dk-grid" id="dk_grid"></table></div>
               <div class="dk-gridhint" id="dk_gridHint"></div>
             </div>
             <div class="status" id="dk_status"></div>
