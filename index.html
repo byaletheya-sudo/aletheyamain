@@ -58,11 +58,14 @@
   label { display: block; font-size: 0.75rem; color: #7b818b; margin: 12px 0 5px; font-weight: 500; }
   label:first-of-type { margin-top: 0; }
 
-  input[type="text"], textarea, select {
+  input[type="text"], input[type="date"], input[type="number"], textarea, select {
     width: 100%; background: #0d0e10; border: 1px solid rgba(255,255,255,0.055); border-radius: 10px;
     padding: 9px 13px; color: #fff; font-size: 0.88rem; font-family: inherit;
     outline: none; transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    color-scheme: dark;
   }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); opacity: .5; cursor: pointer; }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: .85; }
   input::placeholder, textarea::placeholder { color: #4d525a; }
   input:hover, textarea:hover, select:hover { border-color: rgba(255,255,255,0.11); }
   input:focus, textarea:focus, select:focus { border-color: rgba(74,158,255,0.55); background: #0f1014; box-shadow: 0 0 0 3px rgba(74,158,255,0.13); }
@@ -729,13 +732,17 @@
   .inv-tr.grand b { color: #fff; font-weight: 800; }
   .inv-tr.bal b { color: #4a9eff; }
   .inv-list { display: flex; flex-direction: column; gap: 6px; }
-  .inv-list-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; cursor: pointer; font-size: .82rem; color: #c2c7cf; }
-  .inv-list-item:hover { border-color: #4a9eff; background: rgba(74,158,255,0.06); }
-  .inv-list-item.active { border-color: #4a9eff; background: rgba(74,158,255,0.09); }
-  .inv-list-item b { color: #fff; }
-  .inv-li-right { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: #8a9aae; }
-  .inv-list-item .del { width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(255,255,255,0.06); color: #9aa0aa; font-size: 13px; line-height: 1; cursor: pointer; }
-  .inv-list-item .del:hover { background: #ff4a4a; color: #fff; }
+  .inv-list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid rgba(255,255,255,0.07); border-radius: 11px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .inv-list-item:hover { border-color: rgba(74,158,255,0.45); background: rgba(74,158,255,0.05); }
+  .inv-list-item.active { border-color: #4a9eff; background: rgba(74,158,255,0.08); }
+  .inv-li-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .inv-li-main b { color: #fff; font-size: .88rem; font-weight: 700; letter-spacing: .01em; }
+  .inv-li-sub { font-size: .75rem; color: #8a909b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inv-li-right { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; white-space: nowrap; }
+  .inv-li-amt { font-size: .85rem; font-weight: 600; color: #cdd2da; }
+  .inv-li-del { width: 26px; height: 26px; flex: 0 0 auto; padding: 0; border: none; border-radius: 8px; background: transparent; color: #6b7280; font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+  .inv-list-item:hover .inv-li-del { opacity: 1; }
+  .inv-li-del:hover { background: rgba(255,90,90,0.18); color: #ff8a8a; }
   /* the document itself — a clean light invoice page (Letter, 1080 x 1397) */
   .inv-stage { width: min(540px, 100%); border-radius: 10px; overflow: hidden; box-shadow: 0 16px 54px rgba(0,0,0,0.6); background: #fff; }
   .inv-scaler { transform-origin: top left; }
@@ -780,8 +787,7 @@
   .inv-close-pro { margin-top: 12px; font-size: 18px; color: #98a0ab; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
   .inv-close-pro b { color: #2f7ff0; font-weight: 700; letter-spacing: -.2px; text-transform: none; font-size: 22px; }
   .inv-doc-foot { position: absolute; left: 78px; right: 78px; bottom: 50px; text-align: center; border-top: 1px solid #eef1f4; padding-top: 24px; }
-  .inv-foot-tag { font-size: 25px; font-weight: 600; letter-spacing: .2px; color: #0b1220; }
-  .inv-foot-tag b { color: #0b1220; font-weight: 700; }
+  .inv-foot-tag { font-size: 24px; font-weight: 400; letter-spacing: .3px; color: #5b636e; }
   .inv-foot-meta { margin-top: 10px; font-size: 19px; color: #98a0ab; letter-spacing: .02em; }
 
   /* ================= DEAL PROPOSAL (QUOTE) CARD ================= */
@@ -1754,7 +1760,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                   </div>
                   <div class="inv-paynote" id="inv_payNoteEl" style="display:none;"></div>
                   <div class="inv-close" id="inv_closeEl"></div>
-                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
+                  <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends Overpay</div></div>
                 </div>
               </div>
             </div>
@@ -5229,10 +5235,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       `<tr><td>${escapeHtml(it.desc || '') || '<span style="color:#c2c8d0;">Item</span>'}</td><td class="num">${M(inv_num(it.price))}</td></tr>`
     ).join('');
     const t = inv_totals();
+    const upfront = inv_dealType === 'finance' ? inv_num($('inv_down').value) : inv_num($('inv_das').value);
+    const upfrontLbl = inv_dealType === 'finance' ? 'Down Payment' : 'Due at Signing';
     let r = `<div class="inv-totrow"><span>Subtotal</span><span>${M(t.subtotal)}</span></div>`;
     if (t.disc) r += `<div class="inv-totrow"><span>Discount</span><span>−${M(t.disc)}</span></div>`;
     r += `<div class="inv-totrow"><span>Tax (${(t.taxPct || 0)}%)</span><span>${M(t.tax)}</span></div>`;
     r += `<div class="inv-totrow grand"><span>Total</span><span>${M(t.total)}</span></div>`;
+    if (upfront) r += `<div class="inv-totrow"><span>${upfrontLbl}</span><span>${M(upfront)}</span></div>`;
     if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
     const pm = $('inv_pmethod').value, ps = $('inv_pstatus').value;
     if (pm || ps === 'paid') r += `<div class="inv-pay-row"><span>Payment${pm ? ' · ' + escapeHtml(pm) : ''}</span><span class="inv-pay-status ${ps}">${ps === 'paid' ? 'Paid ✓' : 'Unpaid'}</span></div>`;
@@ -5244,13 +5253,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const notesV = $('inv_notes').value.trim();
     $('inv_notesEl').textContent = notesV; $('inv_notesEl').style.display = notesV ? '' : 'none';
     const pro = $('inv_pro').value.trim();
-    $('inv_closeEl').innerHTML = `<div class="inv-close-line">It was a pleasure serving you.</div>` + (pro ? `<div class="inv-close-pro">Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b></div>` : '');
+    $('inv_closeEl').innerHTML = pro ? `<div class="inv-close-pro">Your Nova Pro &nbsp;—&nbsp; <b>${escapeHtml(pro)}</b></div>` : '';
     // live totals readout in the controls panel (updates as line items change)
     const ro = $('inv_totReadout');
     if (ro) {
       let h = `<div class="inv-tr"><span>Subtotal</span><b>${M(t.subtotal)}</b></div>`;
       if (t.disc) h += `<div class="inv-tr"><span>Discount</span><b>−${M(t.disc)}</b></div>`;
       h += `<div class="inv-tr"><span>Tax (${t.taxPct || 0}%)</span><b>${M(t.tax)}</b></div><div class="inv-tr grand"><span>Total</span><b>${M(t.total)}</b></div>`;
+      if (upfront) h += `<div class="inv-tr"><span>${upfrontLbl}</span><b>${M(upfront)}</b></div>`;
       if (t.paid) h += `<div class="inv-tr"><span>Amount Paid</span><b>−${M(t.paid)}</b></div><div class="inv-tr bal"><span>Balance Due</span><b>${M(t.balance)}</b></div>`;
       ro.innerHTML = h;
     }
@@ -5315,7 +5325,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function inv_renderList() {
     const el = $('inv_list'); if (!el) return;
     if (!inv_list.length) { el.innerHTML = '<p class="hint">No saved invoices yet.</p>'; return; }
-    el.innerHTML = inv_list.map(o => `<div class="inv-list-item${o.id === inv_curId ? ' active' : ''}" onclick="inv_load('${o.id}')"><span><b>${inv_numLabel(o.number)}</b> · ${escapeHtml(o.cname || '—')}</span><span class="inv-li-right">${inv_money(inv_totalOf(o))}<button class="del" onclick="inv_delete('${o.id}', event)" title="Delete">×</button></span></div>`).join('');
+    el.innerHTML = inv_list.map(o => {
+      const sub = [(o.cname || '').trim() || 'No client yet', (o.vehicle || '').trim()].filter(Boolean).join(' · ');
+      return `<div class="inv-list-item${o.id === inv_curId ? ' active' : ''}" onclick="inv_load('${o.id}')"><div class="inv-li-main"><b>${inv_numLabel(o.number)}</b><span class="inv-li-sub">${escapeHtml(sub)}</span></div><div class="inv-li-right"><span class="inv-li-amt">${inv_money(inv_totalOf(o))}</span><button class="inv-li-del" onclick="inv_delete('${o.id}', event)" title="Delete">×</button></div></div>`;
+    }).join('');
   }
   async function inv_loadAll() {
     if (inv_loaded) return;
