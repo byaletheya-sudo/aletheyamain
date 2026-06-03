@@ -579,6 +579,17 @@
   .dk-gridhint { font-size: .74rem; color: #5b6471; margin-top: 12px; }
   .dk-gridhint b { color: #7a8696; }
   .dk-mf-apr { font-size: .72rem; color: #6b7585; font-weight: 400; }
+  /* auto-fill (AI rate-sheet) panel */
+  .panel.dk-ai { border-color: rgba(74,158,255,.28); background: linear-gradient(180deg, rgba(74,158,255,.05), rgba(12,15,21,0)); }
+  .dk-drop { position: relative; border: 1.5px dashed #2a3242; border-radius: 12px; transition: border-color .15s, background .15s; }
+  .dk-drop.drag { border-color: #4a9eff; background: rgba(74,158,255,.08); }
+  .dk-drop textarea { width: 100%; min-height: 84px; border: none; background: transparent; resize: vertical; margin: 0; display: block; }
+  .dk-drop-hint { padding: 0 12px 10px; font-size: .72rem; color: #5b6471; pointer-events: none; }
+  .dk-drop.drag .dk-drop-hint { color: #4a9eff; }
+  .dk-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .dk-thumb { position: relative; width: 64px; height: 64px; border-radius: 9px; overflow: hidden; border: 1px solid #232938; }
+  .dk-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .dk-thumb button { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,.7); color: #fff; font-size: .7rem; line-height: 1; cursor: pointer; padding: 0; }
   @media (max-width: 1080px) {
     .dk-layout { grid-template-columns: 1fr; }
     .dk-results { position: static; }
@@ -1942,6 +1953,22 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         <div class="dk-layout">
           <!-- ---------- INPUTS ---------- -->
           <div>
+            <div class="panel dk-ai">
+              <h2>✨ Auto-fill from a rate sheet</h2>
+              <p class="hint" style="margin:-2px 0 10px;">Paste a dealer rate sheet / program text, or drop a screenshot — AI reads the residual, money factor, term &amp; fees and fills everything below.</p>
+              <div id="dk_drop" class="dk-drop">
+                <textarea id="dk_sheet" placeholder="Paste the program here…  e.g.  2026 RAV4 XLE · MSRP 42,000 · 36/10k · RV 60% · MF .00120 · acq 650 · $500 lease cash" oninput="dk_dropSync()"></textarea>
+                <div class="dk-drop-hint" id="dk_dropHint">…or drop a rate-sheet screenshot here (HEIC ok)</div>
+              </div>
+              <div id="dk_sheetThumbs" class="dk-thumbs" style="display:none;"></div>
+              <input type="file" id="dk_sheetFile" accept="image/*,.heic,.heif" multiple onchange="dk_onSheetFiles(event)" style="display:none;">
+              <div class="controls" style="margin-top:10px;">
+                <button class="btn-start" id="dk_parseBtn" onclick="dk_parse()">✨ Read &amp; auto-fill</button>
+                <button class="btn-ghost" onclick="$('dk_sheetFile').click()">⬆ Add screenshot</button>
+                <button class="btn-ghost" onclick="dk_clearSheet()">Clear</button>
+              </div>
+              <div class="status" id="dk_parseStatus"></div>
+            </div>
             <div class="panel">
               <h2>Vehicle</h2>
               <label for="dk_vehicle">Vehicle</label><input type="text" id="dk_vehicle" placeholder="2026 Toyota RAV4 XLE" oninput="dk_calc()">
@@ -5917,6 +5944,57 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => { dk_status(text, ''); });
     else { dk_status('Copy not supported — ' + text, ''); }
   }
+  // ---- AI rate-sheet auto-fill ----
+  let dk_sheetImgs = [];
+  function dk_setParseStatus(t, type = '') { const e = $('dk_parseStatus'); if (e) { e.textContent = t; e.className = 'status ' + type; } }
+  function dk_dropSync() { /* reserved for live validation */ }
+  function dk_renderSheetThumbs() {
+    const wrap = $('dk_sheetThumbs'); if (!wrap) return;
+    if (!dk_sheetImgs.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+    wrap.style.display = ''; wrap.innerHTML = dk_sheetImgs.map((u, i) => `<div class="dk-thumb"><img src="${u}" alt=""><button onclick="dk_removeSheetImg(${i})" title="Remove">×</button></div>`).join('');
+  }
+  function dk_removeSheetImg(i) { dk_sheetImgs.splice(i, 1); dk_renderSheetThumbs(); }
+  async function dk_addSheetFiles(files) {
+    const list = [...files].filter(isImageFile); if (!list.length) return;
+    dk_setParseStatus('Loading screenshot' + (list.length > 1 ? 's' : '') + '…', 'active');
+    for (const f of list) { try { dk_sheetImgs.push(await spFileToDataURL(f)); } catch (e) { } }
+    dk_renderSheetThumbs(); dk_setParseStatus(dk_sheetImgs.length + ' screenshot(s) ready — press “Read & auto-fill”.', 'done');
+  }
+  function dk_onSheetFiles(e) { const fs = e.target.files; e.target.value = ''; if (fs && fs.length) dk_addSheetFiles(fs); }
+  function dk_clearSheet() { dk_sheetImgs = []; if ($('dk_sheet')) $('dk_sheet').value = ''; dk_renderSheetThumbs(); dk_setParseStatus('', ''); }
+  function dk_applyProgram(p) {
+    const setIf = (id, v) => { if (v != null && String(v).trim() !== '') $(id).value = String(v).trim(); };
+    if (p.deal_type === 'finance' || (p.apr && !p.money_factor && !p.residual_pct && !p.residual_amount)) dk_setDeal('finance'); else dk_setDeal('lease');
+    setIf('dk_vehicle', p.vehicle); setIf('dk_msrp', p.msrp); setIf('dk_price', p.selling_price);
+    let resid = p.residual_pct;
+    if ((!resid || !String(resid).trim()) && p.residual_amount && p.msrp) { const m = inv_num(p.msrp), a = inv_num(p.residual_amount); if (m > 0 && a > 0) resid = (a / m * 100).toFixed(1); }
+    setIf('dk_resid', resid); setIf('dk_mf', p.money_factor); setIf('dk_apr', p.apr);
+    setIf('dk_term', p.term); setIf('dk_miles', p.miles); setIf('dk_acq', p.acq_fee);
+    setIf('dk_rebate', p.rebate); setIf('dk_fees', p.fees); setIf('dk_down', p.down); setIf('dk_tax', p.tax_pct);
+    dk_calc();
+  }
+  async function dk_parse() {
+    const text = ($('dk_sheet').value || '').trim();
+    if (!text && !dk_sheetImgs.length) { dk_setParseStatus('Paste a rate sheet or add a screenshot first.', 'error'); return; }
+    const btn = $('dk_parseBtn'); btn.disabled = true; btn.classList.add('loading');
+    dk_setParseStatus('Reading the rate sheet…', 'active');
+    try {
+      const r = await fetch('/desk-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, images: dk_sheetImgs }) });
+      if (r.status === 403) { dk_setParseStatus('Unlock the Desking password to use AI parsing.', 'error'); return; }
+      const d = await r.json();
+      if (d.error) { dk_setParseStatus('✕ ' + d.error, 'error'); return; }
+      dk_applyProgram(d.program || {});
+      const needPrice = dk_dealType === 'lease' && !inv_num($('dk_price').value);
+      dk_setParseStatus(needPrice ? 'Auto-filled ✓ — add the selling price to compute payments.' : 'Auto-filled ✓ — review the numbers below.', 'done');
+    } catch (e) { dk_setParseStatus('✕ ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('loading'); }
+  }
+  (function dk_wireDrop() {
+    const z = $('dk_drop'); if (!z) return;
+    ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('drag'); }));
+    ['dragleave', 'dragend'].forEach(ev => z.addEventListener(ev, e => { if (e.target === z) z.classList.remove('drag'); }));
+    z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('drag'); const fs = e.dataTransfer && e.dataTransfer.files; if (fs && fs.length) dk_addSheetFiles(fs); });
+  })();
   dk_setDeal('lease');
 
   renderSold();

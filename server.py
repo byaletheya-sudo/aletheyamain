@@ -39,7 +39,7 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices")
+RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse")
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -1226,6 +1226,85 @@ def deal_parse():
         })
     except Exception as e:
         return jsonify({"error": f"Couldn't parse those deals: {e}"}), 502
+
+
+@app.route("/desk-parse", methods=["POST"])
+def desk_parse():
+    """Read a dealer lease/finance RATE SHEET (pasted text or a screenshot) into the
+    structured program inputs the Desking calculator needs: MSRP, residual, money
+    factor / APR, term, miles, acquisition fee, rebates, fees. Picks ONE primary
+    program when several term/mileage rows are listed."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    text = (body.get("text") or "").strip()
+    images = [im for im in (body.get("images") or []) if isinstance(im, str) and im.startswith("data:image")][:6]
+    if not text and not images:
+        return jsonify({"error": "Paste a rate sheet or attach a screenshot first."}), 400
+    fields = ["vehicle", "deal_type", "msrp", "selling_price", "residual_pct",
+              "residual_amount", "money_factor", "apr", "term", "miles",
+              "acq_fee", "rebate", "fees", "down", "tax_pct", "notes"]
+    schema = {
+        "type": "object", "additionalProperties": False,
+        "required": fields,
+        "properties": {
+            **{k: {"type": "string"} for k in fields if k != "deal_type"},
+            "deal_type": {"type": "string", "enum": ["lease", "finance"]},
+        },
+    }
+    system = (
+        "You read a car dealer's LEASE/FINANCE RATE SHEET or program bulletin (the monthly "
+        "captive-lender numbers a dealer uses to structure a deal) and extract the inputs a "
+        "desking calculator needs. Output ONE program object.\n"
+        "FIELDS:\n"
+        "- vehicle: 'Year Make Model Trim' if present (e.g. '2026 Toyota RAV4 XLE'); else as much as given.\n"
+        "- deal_type: 'lease' if it quotes residual/money factor/MF/lease rate; 'finance' if it quotes "
+        "APR/financing/purchase. Default 'lease' when ambiguous but a residual or money factor appears.\n"
+        "- msrp: the MSRP / sticker (plain number, no $ or commas).\n"
+        "- selling_price: the selling/sale/cap-cost/dealer price ONLY if explicitly given. Rate sheets "
+        "usually DON'T have it — leave '' if absent (do NOT guess it from MSRP).\n"
+        "- residual_pct: the residual as a percent number ('60', '62.5'). If the sheet gives a residual "
+        "DOLLAR amount instead, put that in residual_amount and leave residual_pct '' (we'll compute it).\n"
+        "- residual_amount: residual VALUE in dollars if given as a dollar figure; else ''.\n"
+        "- money_factor: the lease money factor as a decimal ('0.00150'). If only a lease RATE / lease "
+        "APR percent is given, CONVERT it to a money factor by dividing by 2400 ('3.6%' -> '0.00150') "
+        "and output that. Else ''.\n"
+        "- apr: finance APR as a number ('5.9') for finance deals; else ''.\n"
+        "- term: months ('36'). If several terms are listed, PICK 36 if present, otherwise the most "
+        "standard / first one.\n"
+        "- miles: annual mileage for a lease ('10000'); if several, match the term you picked, preferring "
+        "10000 then 12000 then 7500; else ''.\n"
+        "- acq_fee: acquisition / bank fee ('650'); else ''.\n"
+        "- rebate: total customer rebates / incentives / lease cash as a number; else ''.\n"
+        "- fees: doc / other dealer fees as a number; else ''.\n"
+        "- down: stated cap-cost-reduction / down payment if any; else ''.\n"
+        "- tax_pct: sales-tax rate ONLY if the sheet states one; else '' (caller defaults 9.75).\n"
+        "- notes: anything important that doesn't fit (credit tier, region/zone, validity dates, "
+        "loyalty/conquest requirement, multiple-term summary). Keep it short; else ''.\n"
+        "RULES: normalize shorthand to plain numbers ('51k'->51000, '$3,500'->3500, '.0012 MF'->0.0012). "
+        "A money factor is a small decimal like 0.00120; never confuse it with APR percent. Leave any "
+        "field '' if it isn't present. Output numbers only (no $, %, commas) except 'vehicle' and 'notes'."
+    )
+    if images:
+        model = "gpt-4.1"
+        user_content = [{"type": "text", "text": text or "Read the lease/finance program off this rate sheet and extract the desking inputs."}]
+        for n, im in enumerate(images, 1):
+            user_content.append({"type": "text", "text": f"--- Sheet {n} ---"})
+            user_content.append({"type": "image_url", "image_url": {"url": im}})
+    else:
+        model = "gpt-4.1-mini"
+        user_content = text
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
+            response_format={"type": "json_schema", "json_schema": {"name": "program", "strict": True, "schema": schema}},
+        )
+        out = json.loads(resp.choices[0].message.content)
+        return jsonify({"program": {k: (out.get(k) or "").strip() if isinstance(out.get(k), str) else out.get(k) for k in fields}})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read that rate sheet: {e}"}), 502
 
 
 @app.route("/deal-search", methods=["POST"])
