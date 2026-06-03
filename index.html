@@ -767,7 +767,13 @@
   .inv-totrow.grand { border-top: 1.5px solid #0b1220; margin-top: 14px; padding-top: 20px; font-size: 33px; font-weight: 700; color: #0b1220; letter-spacing: -.5px; }
   .inv-totrow.grand span:last-child { font-weight: 700; }
   .inv-totrow.bal { color: #2f7ff0; font-weight: 700; border-top: 1px solid #e3e7ec; margin-top: 6px; padding-top: 14px; }
-  .inv-close { text-align: center; margin-top: 58px; }
+  .inv-pay-row { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eef1f4; font-size: 22px; color: #5b636e; }
+  .inv-pay-status { font-size: 19px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 5px 14px; border-radius: 999px; }
+  .inv-pay-status.paid { color: #1c7a47; background: #e6f6ec; }
+  .inv-pay-status.unpaid { color: #9a6a12; background: #fdf3e1; }
+  .inv-paynote { margin-top: 38px; padding: 22px 28px; background: #f3f8ff; border: 1px solid #dde8f8; border-left: 4px solid #2f7ff0; border-radius: 12px; font-size: 23px; color: #2a3a52; text-align: center; }
+  .inv-paynote b { color: #0b1220; font-weight: 700; }
+  .inv-close { text-align: center; margin-top: 50px; }
   .inv-close-line { font-size: 28px; font-weight: 500; color: #1a1f29; letter-spacing: -.4px; }
   .inv-close-pro { margin-top: 12px; font-size: 18px; color: #98a0ab; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
   .inv-close-pro b { color: #2f7ff0; font-weight: 700; letter-spacing: -.2px; text-transform: none; font-size: 22px; }
@@ -1654,6 +1660,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <div class="inv-tot-readout" id="inv_totReadout"></div>
             </div>
             <div class="panel">
+              <h2>Payment</h2>
+              <div class="row">
+                <div><label for="inv_pmethod">Method</label>
+                  <select id="inv_pmethod" onchange="inv_render()"><option value="">— not specified —</option><option>Zelle</option><option>Stripe</option><option>Wire</option><option>Check</option><option>Cash</option></select>
+                </div>
+                <div><label for="inv_pstatus">Status</label>
+                  <select id="inv_pstatus" onchange="inv_render()"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
               <h2>Notes / Terms</h2>
               <textarea id="inv_notes" oninput="inv_render()" style="min-height:80px;" placeholder="Any terms or notes (optional) — e.g. deposit non-refundable, balance due on delivery…"></textarea>
             </div>
@@ -1689,6 +1706,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
                     <div class="inv-notes" id="inv_notesEl"></div>
                     <div class="inv-totbox" id="inv_totEl"></div>
                   </div>
+                  <div class="inv-paynote" id="inv_payNoteEl" style="display:none;"></div>
                   <div class="inv-close" id="inv_closeEl"></div>
                   <div class="inv-doc-foot"><div class="inv-foot-tag">Friends Don't Let Friends <b>Overpay.</b></div><div class="inv-foot-meta">@NovAutoUSA &nbsp;·&nbsp; novautousa.com &nbsp;·&nbsp; (818) - 873 - 3697</div></div>
                 </div>
@@ -5094,7 +5112,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     r += `<div class="inv-totrow"><span>Tax (${(t.taxPct || 0)}%)</span><span>${M(t.tax)}</span></div>`;
     r += `<div class="inv-totrow grand"><span>Total</span><span>${M(t.total)}</span></div>`;
     if (t.paid) r += `<div class="inv-totrow"><span>Amount Paid</span><span>−${M(t.paid)}</span></div><div class="inv-totrow bal"><span>Balance Due</span><span>${M(t.balance)}</span></div>`;
+    const pm = $('inv_pmethod').value, ps = $('inv_pstatus').value;
+    if (pm || ps === 'paid') r += `<div class="inv-pay-row"><span>Payment${pm ? ' · ' + escapeHtml(pm) : ''}</span><span class="inv-pay-status ${ps}">${ps === 'paid' ? 'Paid ✓' : 'Unpaid'}</span></div>`;
     $('inv_totEl').innerHTML = r;
+    // if they want a Zelle transfer and it's not paid yet, spell out where to send it
+    const zelleUnpaid = pm === 'Zelle' && ps !== 'paid';
+    $('inv_payNoteEl').innerHTML = zelleUnpaid ? `Zelle payments can be sent to <b>info@novaautopro.com</b>` : '';
+    $('inv_payNoteEl').style.display = zelleUnpaid ? '' : 'none';
     const notesV = $('inv_notes').value.trim();
     $('inv_notesEl').textContent = notesV; $('inv_notesEl').style.display = notesV ? '' : 'none';
     const pro = $('inv_pro').value.trim();
@@ -5112,7 +5136,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function inv_new() {
     inv_curId = null;
     ['inv_cname', 'inv_cemail', 'inv_cphone', 'inv_caddr', 'inv_vehicle', 'inv_vin', 'inv_color', 'inv_mpre', 'inv_mpost', 'inv_apr', 'inv_down', 'inv_das', 'inv_term', 'inv_miles', 'inv_pickup', 'inv_disc', 'inv_paid', 'inv_pro', 'inv_notes'].forEach(id => { if ($(id)) $(id).value = ''; });
-    $('inv_tax').value = '9.75'; $('inv_mtax').value = '9.75'; $('inv_delivery').value = 'Delivered'; inv_setDeal('lease');
+    $('inv_tax').value = '9.75'; $('inv_mtax').value = '9.75'; $('inv_delivery').value = 'Delivered'; $('inv_pmethod').value = ''; $('inv_pstatus').value = 'unpaid'; inv_setDeal('lease');
     const today = new Date(); $('inv_date').value = inv_isoDate(today); $('inv_due').value = inv_isoDate(new Date(today.getTime() + 7 * 86400000));
     inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(inv_next());
@@ -5129,6 +5153,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('inv_das').value = o.das || ''; $('inv_term').value = o.term || ''; $('inv_miles').value = o.miles || ''; $('inv_apr').value = o.apr || ''; $('inv_down').value = o.down || '';
     $('inv_delivery').value = o.delivery != null ? o.delivery : 'Delivered'; $('inv_pickup').value = o.pickup || '';
     $('inv_tax').value = o.tax || '9.75'; $('inv_disc').value = o.disc || ''; $('inv_paid').value = o.paid || ''; $('inv_notes').value = o.notes || ''; $('inv_pro').value = o.pro || '';
+    $('inv_pmethod').value = o.pmethod || ''; $('inv_pstatus').value = o.pstatus || 'unpaid';
     inv_setDeal(o.dealType === 'finance' ? 'finance' : 'lease');
     inv_items = (o.items || []).map(it => ({ desc: it.desc || '', price: it.price != null ? it.price : '' })); if (!inv_items.length) inv_items = [{ desc: '', price: '' }];
     $('inv_num').value = inv_numLabel(o.number);
@@ -5147,7 +5172,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       vehicle: $('inv_vehicle').value, vin: $('inv_vin').value, color: $('inv_color').value, dealType: inv_dealType,
       mpre: $('inv_mpre').value, mtax: $('inv_mtax').value, mpost: $('inv_mpost').value,
       das: $('inv_das').value, term: $('inv_term').value, miles: $('inv_miles').value, apr: $('inv_apr').value, down: $('inv_down').value,
-      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, pro: $('inv_pro').value, items: inv_items.map(it => ({ desc: it.desc, price: it.price })),
+      delivery: $('inv_delivery').value, pickup: $('inv_pickup').value, pro: $('inv_pro').value,
+      pmethod: $('inv_pmethod').value, pstatus: $('inv_pstatus').value, items: inv_items.map(it => ({ desc: it.desc, price: it.price })),
       tax: $('inv_tax').value, disc: $('inv_disc').value, paid: $('inv_paid').value, notes: $('inv_notes').value, savedAt: new Date().toISOString(),
     };
     const i = inv_list.findIndex(x => x.id === inv_curId);
