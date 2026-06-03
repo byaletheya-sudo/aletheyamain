@@ -654,7 +654,8 @@
     color: #fff; padding: 14px 38px; border-radius: 999px;
     border: 3px solid rgba(255,255,255,0.85); background: transparent;
   }
-  .sp__title { margin-top: 24px; font-size: 78px; font-weight: 700; line-height: 1.02; letter-spacing: -1.5px; }
+  .sp__title { margin-top: 24px; font-size: 78px; font-weight: 700; line-height: 1.02; letter-spacing: -1.5px; overflow-wrap: anywhere; word-break: break-word; }
+  .sp__sub { margin-top: 12px; font-size: 42px; font-weight: 500; line-height: 1.08; letter-spacing: -.4px; color: rgba(255,255,255,.74); overflow-wrap: anywhere; word-break: break-word; }
   .sp__footer { margin-top: 22px; font-size: 30px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: .3px; }
 
   /* 4:5 feed format (1080x1350) — repositions the same elements for the shorter canvas */
@@ -663,6 +664,7 @@
   .sp.r45 .sp__hero { top: 192px; bottom: 284px; }
   .sp.r45 .sp__panel { bottom: 60px; }
   .sp.r45 .sp__title { font-size: 66px; margin-top: 20px; }
+  .sp.r45 .sp__sub { font-size: 36px; margin-top: 10px; }
   .sp.r45 .sp__hero.two .sp__photo { width: 424px; height: 424px; }
 
 
@@ -873,8 +875,10 @@
           Enter the <b>Vehicle</b> name above first so it's saved to your gallery.
           <i>(First use downloads a one-time background-removal model, ~a few seconds.)</i>
         </p>
-        <input type="file" id="carUpload" accept="image/*" onchange="handleUpload(event)"
-               style="font-size:0.85rem; color:#aaa;">
+        <div class="sp-drop" id="carDrop" onclick="$('carUpload').click()">
+          <span>📷 <b>Drop a photo</b>, tap to browse, or paste — <small>iPhone HEIC works</small></span>
+        </div>
+        <input type="file" id="carUpload" accept="image/*,.heic,.heif" onchange="handleUpload(event)" style="display:none;">
         <div class="status" id="uploadStatus"></div>
       </div>
 
@@ -981,6 +985,9 @@
               <label for="spTitle">Make / Model</label>
               <input type="text" id="spTitle" placeholder="2024 BMW M3 Competition" oninput="renderSold()">
 
+              <label for="spSub">Subtitle <span style="font-weight:400;opacity:.55;font-size:.78rem;">(optional)</span></label>
+              <input type="text" id="spSub" placeholder="Delivered to a happy client" oninput="renderSold()">
+
               <label for="spFooter">Footer</label>
               <input type="text" id="spFooter" value="@NovAutoUSA" oninput="renderSold()">
 
@@ -1085,6 +1092,7 @@
                   <div class="sp__panel">
                     <span class="sp__badge" id="spBadgeEl">JUST SOLD</span>
                     <div class="sp__title" id="spTitleEl">2024 BMW M3 Competition</div>
+                    <div class="sp__sub" id="spSubEl" style="display:none;"></div>
                     <div class="sp__footer" id="spFooterEl"></div>
                   </div>
                 </div>
@@ -1297,7 +1305,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 26 K5 GT Line — $389"></textarea>
             <div id="dh_drop" class="dh-drop" onclick="$('dh_file').click()">
               <span>📎 Drop a flyer screenshot or PDF here, or <u>browse</u></span>
-              <input type="file" id="dh_file" accept="image/*,application/pdf" multiple style="display:none;" onchange="dh_onFiles(this.files); this.value='';">
+              <input type="file" id="dh_file" accept="image/*,.heic,.heif,application/pdf" multiple style="display:none;" onchange="dh_onFiles(this.files); this.value='';">
             </div>
             <div id="dh_attachChip" style="display:none;margin-top:8px;"></div>
             <div class="controls" style="margin-top:12px;">
@@ -1870,7 +1878,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
   async function handleUpload(e) {
     const file = e.target.files && e.target.files[0];
-    if (!file) return;
+    if (file) await doCarUpload(file);
+    e.target.value = '';   // allow re-uploading the same file
+  }
+  async function doCarUpload(file) {
+    if (!file || !isImageFile(file)) { if (file) setUploadStatus('That doesn’t look like an image.', 'error'); return; }
     try {
       if (!window.__removeBg) {
         throw new Error(window.__removeBgError
@@ -1878,7 +1890,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
           : 'Background remover still loading — wait a moment and try again.');
       }
       setUploadStatus('Removing background… (first run downloads a one-time model, please wait)', 'active');
-      const blob = await window.__removeBg(file);          // imgly accepts a File/Blob
+      const usable = await heicToUsable(file);             // iPhone HEIC → JPEG first
+      const blob = await window.__removeBg(usable);        // imgly accepts a File/Blob
       const dataUrl = await blobToDataURL(blob);
       $('adCar').removeAttribute('crossorigin');
       $('adCar').src = dataUrl;
@@ -1897,10 +1910,21 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       setUploadStatus('Background removed & placed in the template. Update pricing, then Download Ad.', 'done');
     } catch (err) {
       setUploadStatus('Upload failed: ' + err.message, 'error');
-    } finally {
-      e.target.value = '';   // allow re-uploading the same file
     }
   }
+
+  // drag & drop / paste a car photo onto the Lease Ad upload
+  (function adWireDrop() {
+    const el = $('carDrop'); if (!el) return;
+    ['dragenter', 'dragover'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); }));
+    ['dragleave', 'dragend', 'drop'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove('over'); }));
+    el.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) doCarUpload(f); });
+    document.addEventListener('paste', e => {
+      const v = $('view-ads'); if (!v || !v.classList.contains('active')) return;
+      const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(isImageFile);
+      if (f) { e.preventDefault(); doCarUpload(f); }
+    });
+  })();
 
   // build a clear failure line from the server's classified error
   function failMsg(data) {
@@ -2202,6 +2226,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (typeof dh_cmpBar === 'function') dh_cmpBar();        // float the compare tray only on the Deal Hub
     if (typeof dh_agentSync === 'function') dh_agentSync();  // float the import orb only on the Deal Hub
     if (name === 'review' && typeof rv_render === 'function') requestAnimationFrame(rv_render);   // re-fit the review text now it's visible
+    if (name === 'sold' && typeof renderSold === 'function') requestAnimationFrame(renderSold);   // re-fit the sold title/subtitle now it's measurable
     if (!opts.noPush) {                                      // keep the URL in sync
       const path = VIEW_PATH[name] || '/';
       if (location.pathname !== path) history.pushState({ view: name }, '', path);
@@ -2493,15 +2518,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
 
   // iPhone photos are HEIC/HEIF — most browsers can't render them, so convert to
   // JPEG in the browser first. Other formats pass straight through.
-  async function spFileToDataURL(file) {
-    let f = file;
+  // iPhone HEIC/HEIF → a usable JPEG blob (other formats pass through). Shared by
+  // every photo input: Sold posts, the Lease Ad upload, and the Deal Hub import.
+  async function heicToUsable(file) {
     const heic = /heic|heif/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
     if (heic && window.heic2any) {
-      try { const o = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 }); f = Array.isArray(o) ? o[0] : o; }
+      try { const o = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 }); return Array.isArray(o) ? o[0] : o; }
       catch (e) { /* some HEICs decode natively (e.g. Safari) — fall back to the raw file */ }
     }
-    return await blobToDataURL(f);
+    return file;
   }
+  const isImageFile = f => /^image\//i.test(f.type || '') || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(f.name || '');
+  async function spFileToDataURL(file) { return await blobToDataURL(await heicToUsable(file)); }
   async function spSetPhoto(slot, file) {
     if (!file) return;
     const ok = /^image\//i.test(file.type || '') || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(file.name || '');
@@ -2611,13 +2639,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('spBadgeEl').textContent = badge;
     $('spBadgeEl').style.display = badge ? '' : 'none';
     $('spTitleEl').textContent = $('spTitle').value || '';
+    const sub = $('spSub') ? $('spSub').value.trim() : '';
+    const subEl = $('spSubEl');
+    if (subEl) { subEl.textContent = sub; subEl.style.display = sub ? '' : 'none'; }
     const f = $('spFooter').value.trim();
     $('spFooterEl').textContent = f;
     $('spFooterEl').style.display = f ? '' : 'none';
-    // auto-fit the title — read the current (variant-aware) CSS size as the base
+    // auto-fit the title — read the current (variant-aware) CSS size as the base.
+    // shrink to ~42% so even long names wrap to 2 lines instead of clipping.
     $('spTitleEl').style.fontSize = '';
     const spBase = parseFloat(getComputedStyle($('spTitleEl')).fontSize) || 78;
-    fitText($('spTitleEl'), spBase, Math.round(spBase * 0.6), 2);
+    fitText($('spTitleEl'), spBase, Math.round(spBase * 0.42), 2);
+    if (sub && subEl) { subEl.style.fontSize = ''; const sb = parseFloat(getComputedStyle(subEl).fontSize) || 42; fitText(subEl, sb, Math.round(sb * 0.5), 2); }
   }
 
   async function renderSoldCanvas() {
@@ -3897,8 +3930,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dh_status('Rendering ' + arr.length + ' file(s)…', 'active');
     try {
       for (const f of arr) {
-        if (f.type === 'application/pdf') { dh_pendingImages.push(...await dh_pdfToImages(f)); }
-        else if (f.type.startsWith('image/')) { dh_pendingImages.push(await dh_fileToDataURL(f)); }
+        if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')) { dh_pendingImages.push(...await dh_pdfToImages(f)); }
+        else if (isImageFile(f)) { dh_pendingImages.push(await dh_fileToDataURL(await heicToUsable(f))); }   // HEIC → JPEG so vision can read it
       }
       dh_pendingImages = dh_pendingImages.slice(0, 8);
       dh_renderAttach();
