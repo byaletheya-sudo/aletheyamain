@@ -5071,13 +5071,31 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_verifyExport() {
     const probs = (dh_vItems || []).filter(it => dh_vIsProblem(it) && !dh_vIsApproved(it));
     if (!probs.length) { dh_vStatus('No open issues to export.', ''); return; }
+    // include the full hub deal on every row so the "missing" cars (and stale/mismatched
+    // ones) are push-ready — year/make/model/trim/monthly/DAS/term/miles/APR/effective.
     const rows = probs.map(it => {
       const veh = it.state === 'missing' ? (it.hub && it.hub.label) : it.siteLabel;
-      const bestMo = it.hub ? it.hub.bestMonthly : '';
-      const dealer = it.hub && it.hub.best ? (it.hub.best.dealer || '') : '';
-      return [veh || '', it.state, (it.siteMo != null ? it.siteMo : ''), (bestMo != null ? bestMo : ''), dealer, dh_stripHtml(dh_vRowParts(it).html)];
+      const d = it.hub && it.hub.best;                  // the current best hub deal = what to push to the site
+      const fin = d && dh_isFinance(d);
+      const eff = d ? dh_zeroOf(d) : null;
+      const v = x => (x == null ? '' : x);
+      return [
+        it.state, veh || '',
+        v(d && d.year), v(d && d.make), v(d && d.model), v(d && d.trim),
+        d ? v(dh_num(d.orig_mo || d.tax_in_mo)) : '',
+        d ? v(dh_num(d.das)) : '',
+        v(d && d.term),
+        (d && !fin) ? v(d.miles) : '',
+        (d && fin) ? v(dh_num(d.apr)) : '',
+        eff != null ? eff : '',
+        v(d && d.dealer),
+        (it.siteMo != null ? it.siteMo : ''),
+        dh_stripHtml(dh_vRowParts(it).html),
+      ];
     });
-    dh_downloadCsv('site-issues.csv', ['Vehicle', 'Issue', 'Site $/mo', 'Best $/mo', 'Dealer', 'Detail'], rows);
+    dh_downloadCsv('site-issues.csv',
+      ['Issue', 'Vehicle', 'Year', 'Make', 'Model', 'Trim', 'Monthly', 'DAS/Down', 'Term', 'Miles', 'APR', 'Effective', 'Dealer', 'Site $/mo', 'Detail'],
+      rows);
     dh_vStatus('Exported ' + probs.length + ' issue' + (probs.length !== 1 ? 's' : '') + ' ✓', 'done');
   }
   // export the full "updates since last push" list (every new/beaten/changed/expired car)
