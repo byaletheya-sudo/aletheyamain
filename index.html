@@ -1708,6 +1708,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <input type="text" id="dh_search" placeholder="Search or ask…  e.g. “SUV under $500”, “cheap AMG”  (↵)" oninput="dh_onSearchInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();dh_smartSearch();}" style="flex:1;min-width:200px;">
               <button type="button" class="dh-toggle-btn" onclick="dh_smartSearch()" title="Smart search">✨ Ask</button>
               <select id="dh_sort" class="dh-sort" onchange="dh_setSort(this.value)" title="Sort cars">
+                <option value="alpha">A–Z (model)</option>
                 <option value="best">Cheapest first</option>
                 <option value="newest">Newest first</option>
                 <option value="dealers">Most dealers</option>
@@ -4963,7 +4964,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('dhExportModal').style.display = 'none';
   }
   // ---- By Car view ----
-  let dh_mode = 'car', dh_sort = 'best', dh_showExpired = false, dh_searchKeys = null;
+  let dh_mode = 'car', dh_sort = 'alpha', dh_showExpired = false, dh_searchKeys = null;
   const dh_compare = new Set();
   function dh_toggleExpired() { dh_showExpired = !dh_showExpired; dh_renderByCar(); }
   // floating import agent: orb in the corner -> popup
@@ -5360,7 +5361,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     // sort cars inside each make by the chosen key (deals[0] is already the cheapest deal)
     const dealersOf = g => new Set(g.deals.map(d => (d.dealer || '').trim().toLowerCase()).filter(Boolean)).size;
     const newestOf = g => Math.max(...g.deals.map(d => { const t = new Date(dh_lastDate(d)).getTime(); return isFinite(t) ? t : 0; }), 0);
+    const ALPHA = { numeric: true, sensitivity: 'base' };   // "RX 350" before "RX 500h"
     const sortCars = cars => {
+      if (dh_sort === 'alpha') return cars.sort((a, b) => dh_trimDisp(a.deals[0]).localeCompare(dh_trimDisp(b.deals[0]), undefined, ALPHA));
       if (dh_sort === 'newest') return cars.sort((a, b) => newestOf(b) - newestOf(a) || cardLabel(a).localeCompare(cardLabel(b)));
       if (dh_sort === 'dealers') return cars.sort((a, b) => dealersOf(b) - dealersOf(a) || (dh_zeroOf(a.deals[0]) ?? 1e9) - (dh_zeroOf(b.deals[0]) ?? 1e9));
       return cars.sort((a, b) => (dh_zeroOf(a.deals[0]) ?? 1e9) - (dh_zeroOf(b.deals[0]) ?? 1e9)); // best price
@@ -5371,9 +5374,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const dealCount = cars.reduce((n, g) => n + g.deals.length, 0);
       // cascade: group this make's trims by model; a model with 2+ trims nests them (Make ▸ Model ▸ Trim)
       const byModel = {};
-      cars.forEach(g => { const d0 = g.deals[0]; const k = dh_norm((d0.year || '') + '|' + (d0.model || '')); (byModel[k] = byModel[k] || []).push(g); });
+      cars.forEach(g => { const d0 = g.deals[0]; const k = dh_norm(d0.year || '') + '|' + dh_modelKey(d0.model || ''); (byModel[k] = byModel[k] || []).push(g); });
       let modelGroups = Object.values(byModel).map(group => ({ cars: sortCars(group), label: [group[0].deals[0].year, group[0].deals[0].model].map(s => (s || '').toString().trim()).filter(Boolean).join(' ') }));
       modelGroups.sort((a, b) => {
+        if (dh_sort === 'alpha') return a.label.localeCompare(b.label, undefined, ALPHA);
         if (dh_sort === 'newest') return newestOf(b.cars[0]) - newestOf(a.cars[0]);
         if (dh_sort === 'dealers') return dealersOf(b.cars[0]) - dealersOf(a.cars[0]);
         return (dh_zeroOf(a.cars[0].deals[0]) ?? 1e9) - (dh_zeroOf(b.cars[0].deals[0]) ?? 1e9);
