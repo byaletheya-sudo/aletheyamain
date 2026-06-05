@@ -193,6 +193,7 @@ CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
 _CARSXE_ALLOWED = set()     # image URLs the catalog returned to us (the only ones we'll proxy)
 _CARSXE_IMG_CACHE = {}      # vehicle -> image response, so repeats never re-hit the catalog
 _CARSXE_META_CACHE = {}     # vehicle -> colors + trims
+_CARSXE_CANON_CACHE = {}    # vehicle -> canonical make/model/trim (name cleanup)
 _CARSXE_PROXY_CACHE = {}    # image url -> data URL
 _CARSXE_CACHE_MAX = 150     # keep the last ~150 of each (FIFO)
 
@@ -766,6 +767,80 @@ def carsxe_meta():
     if colors or trims:
         _cache_put(_CARSXE_META_CACHE, mkey, payload)
     return jsonify(payload)
+
+
+def _carsxe_canon(make, model, year, trim):
+    """Resolve messy make/model/trim against CarsXE /v1/ymm 'bestMatch' so the Deal
+    Hub can snap a dealer's free-text car to the manufacturer's official spelling.
+    Returns {found, make, model, trim, name, keys} — '' for any field it can't read.
+    'keys' lists the bestMatch field names so we can adjust the field-picking if
+    CarsXE names things differently than expected."""
+    params = {"key": CARSXE_API_KEY, "make": make, "model": model, "format": "json"}
+    if year:
+        params["year"] = year
+    if trim:
+        params["trim"] = trim
+    url = "https://api.carsxe.com/v1/ymm?" + urllib.parse.urlencode(params)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = json.loads(r.read().decode("utf-8", "ignore"))
+    except Exception as e:
+        return {"found": False, "error": str(e)[:140]}
+    best = body.get("bestMatch") or body.get("data") or {}
+    if not isinstance(best, dict):
+        best = {}
+    attrs = best.get("attributes") if isinstance(best.get("attributes"), dict) else {}
+
+    def pick(*names):
+        for src in (best, attrs):
+            for n in names:
+                v = src.get(n)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+                if isinstance(v, (int, float)):
+                    return str(v)
+        return ""
+
+    keys = list(best.keys())[:30] + (["attributes." + k for k in list(attrs.keys())[:25]] if attrs else [])
+    return {
+        "found": bool(best),
+        "make": pick("make", "make_name", "manufacturer", "brand"),
+        "model": pick("model", "model_name"),
+        "trim": pick("trim", "trim_name", "trim_level", "trim_description", "style", "style_name"),
+        "name": pick("name", "full_name", "vehicle", "description", "vehicle_name"),
+        "keys": keys,
+    }
+
+
+@app.route("/carsxe-canon", methods=["POST"])
+def carsxe_canon():
+    """Batch name-cleanup: snap each {year,make,model,trim} to CarsXE's official
+    spelling. Bounded + cached so one request can't run forever or re-hit the API."""
+    if not CARSXE_API_KEY:
+        return jsonify({"error": "CARSXE_API_KEY is not set on the server."}), 500
+    data = request.json or {}
+    cars = data.get("cars") or []
+    if not isinstance(cars, list) or not cars:
+        return jsonify({"results": []})
+    capped = len(cars) > 40
+    out = []
+    for c in cars[:40]:
+        make = (c.get("make") or "").strip()
+        model = (c.get("model") or "").strip()
+        year = str(c.get("year") or "").strip()
+        trim = (c.get("trim") or "").strip()
+        if not (make and model):
+            out.append({"in": c, "found": False})
+            continue
+        mkey = "|".join([year, make.lower(), model.lower(), trim.lower()])
+        res = _CARSXE_CANON_CACHE.get(mkey)
+        if res is None:
+            res = _carsxe_canon(make, model, year, trim)
+            if res.get("found"):
+                _cache_put(_CARSXE_CANON_CACHE, mkey, res)
+        out.append({"in": c, **res})
+    return jsonify({"results": out, "capped": capped})
 
 
 @app.route("/carsxe-image", methods=["POST"])

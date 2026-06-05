@@ -1696,6 +1696,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
             <div class="controls" style="margin:0;">
               <span id="dh_count" style="opacity:.5;font-size:.78rem;"></span>
               <button class="btn-ghost" onclick="dh_verifyOpen()" title="Check the live site against these deals">🔍 Verify site</button>
+              <button class="btn-ghost" onclick="dh_canonOpen()" title="Snap make/model/trim to CarsXE's official names">✨ Clean names</button>
               <button class="btn-ghost" onclick="dh_export()">Export CSV</button>
               <button class="btn-ghost" onclick="dh_clear()">Clear all</button>
             </div>
@@ -2267,6 +2268,23 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     <div class="dh-modal-foot">
       <button class="btn-ghost" onclick="dh_syncCancel()">Cancel</button>
       <button class="btn-start" onclick="dh_syncApply()">Apply selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- CarsXE name cleanup: snap make/model/trim to official names, review before applying -->
+<div class="dh-modal" id="dhCanonModal">
+  <div class="dh-modal-card">
+    <div class="dh-modal-head">Clean names with CarsXE <span id="dhCanonSummary"></span></div>
+    <div class="dh-adj-tools">
+      <span>Apply to:</span>
+      <button type="button" class="dh-link" onclick="dh_canonToggleAll(true)">All</button>
+      <button type="button" class="dh-link" onclick="dh_canonToggleAll(false)">None</button>
+    </div>
+    <div class="dh-adj-list" id="dhCanonList"></div>
+    <div class="dh-modal-foot">
+      <button class="btn-ghost" onclick="dh_canonCancel()">Cancel</button>
+      <button class="btn-start" onclick="dh_canonApply()">Apply selected</button>
     </div>
   </div>
 </div>
@@ -4699,6 +4717,67 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     });
     $('dhSyncModal').style.display = 'none'; dh_syncPlans = [];
     if (added || updated) { dh_refresh(); dh_save(); $('dh_input').value = ''; dh_clearAttach(); dh_status('Imported: ' + updated + ' updated, ' + added + ' added ✓', 'done'); }
+    else dh_status('Nothing selected — no changes applied.', '');
+  }
+  // ---- CarsXE name cleanup: snap make/model/trim to the manufacturer's official spelling ----
+  let dh_canonPlans = [];
+  function dh_canonSame(a, b) { return (a || '').toString().trim().toLowerCase() === (b || '').toString().trim().toLowerCase(); }
+  function dh_canonSameCar(d, c) { return ['year', 'make', 'model', 'trim'].every(f => dh_canonSame(d[f], c[f])); }
+  async function dh_canonOpen() {
+    if (!dh_deals.length) { dh_status('No deals to clean.', ''); return; }
+    // one lookup per unique year+make+model+trim (ignoring powertrain/package)
+    const seen = new Map();
+    dh_deals.forEach(d => {
+      const k = ['year', 'make', 'model', 'trim'].map(f => (d[f] || '').toString().trim().toLowerCase()).join('|');
+      if (!seen.has(k)) seen.set(k, { year: d.year || '', make: d.make || '', model: d.model || '', trim: d.trim || '' });
+    });
+    const cars = [...seen.values()];
+    dh_status('Checking ' + cars.length + ' car' + (cars.length > 1 ? 's' : '') + ' against CarsXE…', '');
+    let res;
+    try {
+      const r = await fetch('/carsxe-canon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cars }) });
+      res = await r.json();
+    } catch (e) { dh_status('CarsXE request failed.', 'error'); return; }
+    if (res.error) { dh_status(res.error, 'error'); return; }
+    const plans = [];
+    (res.results || []).forEach(it => {
+      if (!it.found) return;
+      const cur = it.in;
+      const next = { make: it.make || cur.make, model: it.model || cur.model, trim: it.trim || cur.trim };
+      if (dh_canonSame(next.make, cur.make) && dh_canonSame(next.model, cur.model) && dh_canonSame(next.trim, cur.trim)) return;
+      plans.push({ cur, next, name: it.name || '' });
+    });
+    dh_canonPlans = plans;
+    const matched = (res.results || []).filter(it => it.found).length;
+    dh_canonRender(plans, cars.length, matched, res.capped);
+    $('dhCanonModal').style.display = 'flex';
+    dh_status('', '');
+  }
+  function dh_canonRender(plans, total, matched, capped) {
+    $('dhCanonSummary').textContent = plans.length + ' change' + (plans.length === 1 ? '' : 's') + ' · ' + matched + '/' + total + ' matched' + (capped ? ' · first 40 only' : '');
+    if (!plans.length) { $('dhCanonList').innerHTML = '<div class="dh-empty" style="padding:18px;">CarsXE matched your cars — no name changes needed.</div>'; return; }
+    $('dhCanonList').innerHTML = plans.map((p, i) => {
+      const before = [p.cur.year, p.cur.make, p.cur.model, p.cur.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ');
+      const after = [p.cur.year, p.next.make, p.next.model, p.next.trim].map(s => (s || '').toString().trim()).filter(Boolean).join(' ');
+      return `<label class="dh-adj-item"><input type="checkbox" class="dh-canon-cb" data-i="${i}" checked>
+        <div style="flex:1;min-width:0;"><div class="dh-adj-chg"><span class="old">${escapeHtml(before)}</span><span class="arr">→</span><span class="new">${escapeHtml(after)}</span></div>${p.name ? '<div class="dh-adj-chg" style="color:#767c86;">' + escapeHtml(p.name) + '</div>' : ''}</div></label>`;
+    }).join('');
+  }
+  function dh_canonToggleAll(on) { document.querySelectorAll('#dhCanonList .dh-canon-cb').forEach(cb => cb.checked = on); }
+  function dh_canonCancel() { $('dhCanonModal').style.display = 'none'; dh_canonPlans = []; dh_status('Cancelled — nothing changed.', ''); }
+  function dh_canonApply() {
+    const today = new Date().toLocaleDateString();
+    let n = 0;
+    document.querySelectorAll('#dhCanonList .dh-canon-cb').forEach(cb => {
+      if (!cb.checked) return;
+      const p = dh_canonPlans[+cb.dataset.i]; if (!p) return;
+      dh_deals.forEach(d => {
+        if (!dh_canonSameCar(d, p.cur)) return;
+        d.make = p.next.make; d.model = p.next.model; d.trim = p.next.trim; d._updated = today; n++;
+      });
+    });
+    $('dhCanonModal').style.display = 'none'; dh_canonPlans = [];
+    if (n) { dh_refresh(); dh_save(); dh_status('Cleaned ' + n + ' deal' + (n > 1 ? 's' : '') + ' with CarsXE ✓', 'done'); }
     else dh_status('Nothing selected — no changes applied.', '');
   }
   // apply a plain-English instruction ("decrease Diana's payments $15", "9.75% tax included")
