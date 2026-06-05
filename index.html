@@ -4563,7 +4563,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (approved) sum.push(`<span class="appr">${approved} approved</span>`);
     sum.push(`<span style="opacity:.55;font-weight:600;">${onSite} on site</span>`);
     const syncBtn = onSite ? `<button class="dh-vbtn dh-vsync" onclick="dh_verifyMarkPushed()" title="Set your pushed/live baseline to what's actually on the site — clears false ‘new, not on the site yet’ alerts">✓ Sync pushed-state from site</button>` : '';
-    el.innerHTML = `<div class="dh-vsum">${sum.join('')}${syncBtn}</div><div class="dh-vlist">${rows}</div>`;
+    const expBtn = probs ? `<button class="dh-vbtn" onclick="dh_verifyExport()" title="Download every open issue as a CSV so you can work the list">⬇ Export issues</button>` : '';
+    el.innerHTML = `<div class="dh-vsum">${sum.join('')}${expBtn}${syncBtn}</div><div class="dh-vlist">${rows}</div>`;
   }
   // after verifying, set the "pushed to site" baseline to what's ACTUALLY live: every car
   // found on the site becomes live; cars missing from the site drop out of the snapshot.
@@ -4606,7 +4607,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       return `<div class="dh-upd-row new"><span class="dh-upd-txt">🆕 <b>${it.label}</b> — new, not on the site yet (${dh_money(dh_zeroOf(it.best))} eff)</span>${pushBtn(i)}</div>`;
     }).join('');
     el.innerHTML = `<div class="dh-upd dh-upd-alert">
-      <div class="dh-upd-head"><span>🔔 ${items.length} update${items.length > 1 ? 's' : ''} since your last push <span style="opacity:.6;font-weight:400;">· ${ago}</span></span><button class="btn-start" onclick="dh_publishLive()">Mark all pushed ✓</button></div>
+      <div class="dh-upd-head"><span>🔔 ${items.length} update${items.length > 1 ? 's' : ''} since your last push <span style="opacity:.6;font-weight:400;">· ${ago}</span></span><span style="display:flex;gap:8px;"><button class="btn-ghost" onclick="dh_updExport()" title="Download every update as a CSV">⬇ Export</button><button class="btn-start" onclick="dh_publishLive()">Mark all pushed ✓</button></span></div>
       <div class="dh-upd-list">${rows}${items.length > 8 ? `<div class="dh-upd-row dh-upd-more" style="opacity:.7;cursor:pointer;" onclick="dh_updToggleMore()">${dh_updExpanded ? '▲ Show less' : '+ ' + (items.length - 8) + ' more… (show all)'}</div>` : ''}</div>
     </div>`;
   }
@@ -4998,6 +4999,38 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const a = document.createElement('a'); a.download = dh_exportScope === 'sel' ? 'selected-deals.csv' : dh_exportScope === 'win' ? 'best-deals.csv' : 'deals.csv';
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([head, ...lines].join('\n')); a.click();
     $('dhExportModal').style.display = 'none';
+  }
+  // shared CSV download (used by the verify-issues and updates-list exports)
+  function dh_csvEsc(v) { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function dh_downloadCsv(filename, header, rows) {
+    const lines = [header.map(dh_csvEsc).join(',')].concat(rows.map(r => r.map(dh_csvEsc).join(',')));
+    const a = document.createElement('a'); a.download = filename;
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n')); a.click();
+  }
+  const dh_stripHtml = s => (s || '').replace(/<[^>]*>/g, '').replace(/\s{2,}/g, ' ').trim();
+  // export every OPEN problem from the verify run, so you can work the list without hunting each car
+  function dh_verifyExport() {
+    const probs = (dh_vItems || []).filter(it => dh_vIsProblem(it) && !dh_vIsApproved(it));
+    if (!probs.length) { dh_vStatus('No open issues to export.', ''); return; }
+    const rows = probs.map(it => {
+      const veh = it.state === 'missing' ? (it.hub && it.hub.label) : it.siteLabel;
+      const bestMo = it.hub ? it.hub.bestMonthly : '';
+      const dealer = it.hub && it.hub.best ? (it.hub.best.dealer || '') : '';
+      return [veh || '', it.state, (it.siteMo != null ? it.siteMo : ''), (bestMo != null ? bestMo : ''), dealer, dh_stripHtml(dh_vRowParts(it).html)];
+    });
+    dh_downloadCsv('site-issues.csv', ['Vehicle', 'Issue', 'Site $/mo', 'Best $/mo', 'Dealer', 'Detail'], rows);
+    dh_vStatus('Exported ' + probs.length + ' issue' + (probs.length !== 1 ? 's' : '') + ' ✓', 'done');
+  }
+  // export the full "updates since last push" list (every new/beaten/changed/expired car)
+  function dh_updExport() {
+    const items = dh_lastUpdates || [];
+    if (!items.length) { dh_status('No updates to export.', ''); return; }
+    const rows = items.map(it => {
+      const s = it.st, was = s.snap ? s.snap.eff : '';
+      return [it.label, s.state, (dh_zeroOf(it.best) != null ? dh_zeroOf(it.best) : ''), (was != null ? was : ''), (s.delta != null ? Math.round(s.delta) : ''), it.best.dealer || ''];
+    });
+    dh_downloadCsv('updates-since-push.csv', ['Vehicle', 'Status', 'Eff $/mo', 'Was (live) $/mo', 'Delta', 'Dealer'], rows);
+    dh_status('Exported ' + items.length + ' update' + (items.length !== 1 ? 's' : '') + ' ✓', 'done');
   }
   // ---- By Car view ----
   let dh_mode = 'car', dh_sort = 'alpha', dh_showExpired = false, dh_searchKeys = null;
