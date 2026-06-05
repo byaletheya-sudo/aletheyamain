@@ -4458,6 +4458,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // to another). For trucks the drivetrain IS the distinguishing trim, so these
   // must match across the two spellings.
   const dh_canon = s => (s || '').toString().toLowerCase()
+    // BMW xDrive45 / sDrive40i / eDrive40: the trailing number is the VARIANT (iX 45,
+    // i4 40, X3 30i) — pull it out FIRST so the AWD rule below doesn't swallow it and
+    // erase the car's identity (site "iX xDrive45" would otherwise become just "awd").
+    .replace(/\b[xse][\s-]?drive[\s-]?(\d+i?)\b/g, ' $1 ')
     .replace(/\b(?:all[\s-]*wheel[\s-]*drive|awd|4matic\+?|x[\s-]?drive\d*|4motion|quattro)\b/g, ' awd ')
     .replace(/\b(?:four[\s-]*wheel[\s-]*drive|4wd|4x4|4wheel)\b/g, ' fourwd ')
     .replace(/\b(?:rear[\s-]*wheel[\s-]*drive|rwd|2wd)\b/g, ' twowd ')
@@ -4487,6 +4491,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       let anchor = false;
       for (const t of sm) { if (c.ftoks.has(t)) { anchor = true; break; } }
       if (!anchor) { for (const t of c.mtoks) { if (sf.has(t)) { anchor = true; break; } } }
+      // also anchor on a shared model-NUMBER token ("ix45", "cx90", "330i") — a strong
+      // identity signal that survives when the model/trim split differs across sources
+      // (site "iX" + "xDrive45" vs hub "iX 45" both reduce to the "ix45" token).
+      if (!anchor) { for (const t of sf) { if (/\d/.test(t) && t.length > 1 && c.ftoks.has(t)) { anchor = true; break; } } }
       if (!anchor) continue;
       let inter = 0; sf.forEach(t => { if (c.ftoks.has(t)) inter++; });
       const sym = (sf.size - inter) + (c.ftoks.size - inter);
