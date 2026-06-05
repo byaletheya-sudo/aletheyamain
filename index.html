@@ -4476,23 +4476,39 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!anchor) continue;
       let inter = 0; sf.forEach(t => { if (c.ftoks.has(t)) inter++; });
       const sym = (sf.size - inter) + (c.ftoks.size - inter);
-      const pd = Math.abs((c.bestMonthly ?? 9e9) - (sp ?? 0));
+      // tiebreak on the CLOSEST of the car's variant prices, not just its best — so a
+      // site AWD listing lands on the car whose AWD deal it actually matches, not a
+      // different trim that merely shares the "awd" token at a similar price.
+      const pd = (c.monthlies && c.monthlies.length) ? Math.min(...c.monthlies.map(m => Math.abs(m - (sp ?? 0)))) : Math.abs((c.bestMonthly ?? 9e9) - (sp ?? 0));
       if (inter > bInter || (inter === bInter && (sym < bSym || (sym === bSym && pd < bPd)))) {
-        best = c; bInter = inter; bSym = sym; bPd = pd;     // most overlap, then fewest leftovers, then closest price
+        best = c; bInter = inter; bSym = sym; bPd = pd;     // most overlap, then fewest leftovers, then closest variant price
       }
     }
     return best;
   }
   function dh_verifyReconcile(rows) {
-    const bests = dh_bestByCar();
-    const hubCars = Object.entries(bests).map(([key, v]) => ({
-      key, best: v.best, anyActive: v.anyActive,
-      mkt: dh_makeKey(v.best.make),
-      mtoks: dh_vtoks(v.best.model || ''),
-      ftoks: dh_vtoks([v.best.model || '', v.best.trim || '', v.best.package || ''].join(' ')),
-      year: (v.best.year || '').toString().trim(), label: dh_carLabel(v.best),
-      bestMonthly: dh_num(v.best.orig_mo || v.best.tax_in_mo),
-    }));
+    // group EVERY deal by car so a car's match tokens + comparison prices reflect all
+    // its variants (e.g. a FWD $546 and an AWD $581 deal under one trim), not just the
+    // single best deal — otherwise a sometimes-noted drivetrain leaks the match to the
+    // wrong trim and flags a false mismatch.
+    const groups = {};
+    dh_deals.forEach(d => { const k = dh_carKey(d); (groups[k] = groups[k] || []).push(d); });
+    const hubCars = Object.entries(groups).map(([key, arr]) => {
+      const active = arr.filter(d => !dh_isExpired(d));
+      const pool = active.length ? active : arr;
+      const best = pool.slice().sort((a, b) => (dh_zeroOf(a) ?? 1e9) - (dh_zeroOf(b) ?? 1e9))[0];
+      const ftoks = new Set();
+      pool.forEach(d => dh_vtoks([d.model || '', d.trim || '', d.package || ''].join(' ')).forEach(t => ftoks.add(t)));
+      return {
+        key, best, anyActive: active.length > 0,
+        mkt: dh_makeKey(best.make),
+        mtoks: dh_vtoks(best.model || ''),
+        ftoks,
+        monthlies: pool.map(d => dh_num(d.orig_mo || d.tax_in_mo)).filter(v => v != null),
+        year: (best.year || '').toString().trim(), label: dh_carLabel(best),
+        bestMonthly: dh_num(best.orig_mo || best.tax_in_mo),
+      };
+    });
     const matched = new Set(), items = [];
     rows.forEach(row => {
       const siteMo = dh_num(row.monthly);
@@ -4501,10 +4517,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!c) { items.push({ state: 'orphan', siteLabel, siteMo }); return; }
       matched.add(c.key);
       if (!c.anyActive || dh_isExpired(c.best)) { items.push({ state: 'expired', siteLabel, siteMo, hub: c }); return; }
-      const hubMo = c.bestMonthly;
-      if (siteMo == null || hubMo == null) { items.push({ state: 'match', siteLabel, hub: c }); return; }
+      // compare the site listing to the CLOSEST of this car's variant prices (the deal it
+      // actually shows), not the car's overall-best — so a site AWD price isn't judged
+      // against a cheaper FWD deal of the same car.
+      const hubMo = (c.monthlies.length && siteMo != null) ? c.monthlies.reduce((a, m) => Math.abs(m - siteMo) < Math.abs(a - siteMo) ? m : a) : c.bestMonthly;
+      if (siteMo == null || hubMo == null) { items.push({ state: 'match', siteLabel, hub: c, hubMo }); return; }
       const diff = siteMo - hubMo;
-      if (Math.abs(diff) <= 1) items.push({ state: 'match', siteLabel, hub: c });
+      if (Math.abs(diff) <= 1) items.push({ state: 'match', siteLabel, hub: c, hubMo });
       else items.push({ state: diff > 0 ? 'stale' : 'mismatch', siteLabel, hub: c, siteMo, hubMo, diff });
     });
     hubCars.forEach(c => { if (c.anyActive && !dh_isExpired(c.best) && !matched.has(c.key)) items.push({ state: 'missing', hub: c }); });
@@ -4534,7 +4553,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_vRowParts(it) {
     const M = v => dh_money(v);
     switch (it.state) {
-      case 'match': return { cls: 'ok', html: `✅ <b>${it.siteLabel}</b> — matches (${M(it.hub.bestMonthly)}/mo)` };
+      case 'match': return { cls: 'ok', html: `✅ <b>${it.siteLabel}</b> — matches (${M(it.hubMo ?? it.hub.bestMonthly)}/mo)` };
       case 'stale': return { cls: 'err', html: `🔴 <b>${it.siteLabel}</b> — out of date: site ${M(it.siteMo)}/mo, best now ${M(it.hubMo)}/mo <span class="dh-vdelta">(${M(Math.abs(it.diff))} cheaper available)</span>` };
       case 'mismatch': return { cls: 'err', html: `🔴 <b>${it.siteLabel}</b> — price mismatch: site ${M(it.siteMo)}/mo, lowest current ${M(it.hubMo)}/mo` };
       case 'expired': return { cls: 'warn', html: `⏰ <b>${it.siteLabel}</b> — live on the site, but this deal has expired in the hub` };
