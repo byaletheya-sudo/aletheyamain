@@ -4716,12 +4716,12 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (!m.make && isMake(m.model)) { m.make = m.model; m.model = ''; }
     if (!m.make && isMake(m.contact)) { m.make = m.contact; m.contact = ''; }
     const cn = dh_dealerNorm(m.contact || '');
-    const want = { year: dh_norm(m.year || ''), make: (DH_MAKE_ALIAS[dh_norm(m.make || '')] || dh_norm(m.make || '')), model: dh_norm(m.model || ''), trim: dh_norm(m.trim || '') };
+    const want = { year: dh_norm(m.year || ''), make: dh_makeKey(m.make || ''), model: dh_modelKey(m.model || ''), trim: dh_trimKey(m.trim || '') };
     const matches = d => {
       if (cn && dh_dealerNorm(d.dealer) !== cn) return false;
       for (const f of ['year', 'make', 'model', 'trim']) {
         if (!want[f]) continue;
-        const have = f === 'make' ? (DH_MAKE_ALIAS[dh_norm(d.make)] || dh_norm(d.make)) : dh_norm(d[f]);
+        const have = f === 'make' ? dh_makeKey(d.make) : f === 'model' ? dh_modelKey(d.model) : f === 'trim' ? dh_trimKey(d.trim) : dh_norm(d[f]);
         if (have !== want[f] && !have.includes(want[f]) && !want[f].includes(have)) return false;
       }
       return true;
@@ -5045,9 +5045,20 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // trim as shown/keyed: trim + its powertrain, so "Preferred" gas and "Preferred"
   // hybrid become distinct cards.
   function dh_trimDisp(d) { return [(d.trim || '').toString().trim(), dh_pwr(d)].filter(Boolean).join(' '); }
+  // Model identity for grouping: glue letter+number runs and drop spacing/punctuation
+  // so "IS 350"/"IS350", "RX 350"/"RX350", "GLC 300"/"GLC300" all key identically and
+  // a single car never splits into two cards over a stray space. Reuses dh_glue (which
+  // also folds drivetrain wording) for parity with the live-site matcher.
+  function dh_modelKey(model) { return dh_glue(model).replace(/[^a-z0-9]+/g, ''); }
+  // Trim identity: spacing/punctuation-insensitive so "M Sport"/"MSport", "AMG Line"/
+  // "AMGLine", "GT-Line"/"GT Line", "xDrive 40"/"xDrive40" all key the same. Uses
+  // dh_norm (NOT dh_glue) on purpose — dh_glue's drivetrain fold eats trailing digits
+  // and would wrongly collapse xDrive30i and xDrive40i to one AWD token.
+  function dh_trimKey(trim) { return dh_norm(trim).replace(/[^a-z0-9]+/g, ''); }
+  // make: dh_makeKey folds synonyms (Chevy->Chevrolet, Benz->Mercedes-Benz) AND strips
+  // spacing, so "Land Rover"/"Landrover" and "Mercedes Benz"/"Mercedes-Benz" never split.
   function dh_carKey(d) {
-    let make = dh_norm(d.make); make = DH_MAKE_ALIAS[make] || make;
-    const k = [dh_norm(d.year), make, dh_norm(d.model), dh_norm(d.trim)];
+    const k = [dh_norm(d.year), dh_makeKey(d.make), dh_modelKey(d.model), dh_trimKey(d.trim)];
     const p = dh_norm(dh_pwr(d));
     if (p) k.push(p);                       // powertrain variants get their own key; a base trim keeps its original key
     return k.join('|');

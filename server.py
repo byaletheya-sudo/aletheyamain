@@ -1083,6 +1083,9 @@ def deal_parse():
         "'VW'->'Volkswagen', 'Mercedes'/'Benz'/'MB'->'Mercedes-Benz', 'Range Rover'->'Land Rover', "
         "'Alfa'->'Alfa Romeo'. If a make truly isn't in the list, output your best clean guess.\n"
         "- Clean the 'model' to its standard spelling/casing ('k5'->'K5', 'corolla cross'->'Corolla Cross').\n"
+        "- Use the manufacturer's STANDARD spacing for alphanumeric model codes and be CONSISTENT — "
+        "always write a given model the same way (e.g. 'IS 350', 'RX 350', 'GLC 300', 'F-150'); never "
+        "emit the same vehicle two different ways ('IS 350' on one line, 'IS350' on the next).\n"
     ) if makes else ""
     props = {k: {"type": "string"} for k in DEAL_FIELDS}
     schema = {
