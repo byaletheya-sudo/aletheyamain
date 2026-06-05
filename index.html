@@ -2366,6 +2366,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     <button class="btn-ghost" onclick="dh_cmpClear()">Clear</button>
     <button class="btn-ghost" onclick="dh_export('sel')">⬇ CSV</button>
     <button class="btn-ghost" onclick="dh_publishSelected()" title="Mark just these as pushed to your live site">🚀 Mark pushed</button>
+    <button class="btn-ghost" onclick="dh_canonOpen()" title="Snap the selected cars' names to CarsXE's official spelling">✨ Clean names</button>
     <button class="btn-ghost" onclick="dh_sendCarsToAd()">🎨 Make Ads</button>
     <button class="btn-start" onclick="dh_openCompare()">Compare →</button>
   </div>
@@ -4726,14 +4727,19 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   function dh_canonSameCar(d, c) { return ['year', 'make', 'model', 'trim'].every(f => dh_canonSame(d[f], c[f])); }
   async function dh_canonOpen() {
     if (!dh_deals.length) { dh_status('No deals to clean.', ''); return; }
+    // clean just the SELECTED cars when a selection is active (so you can reach any
+    // make, not only the first 40 in storage order); otherwise clean the whole hub.
+    const sel = dh_compare.size > 0;
+    const pool = sel ? dh_deals.filter(d => dh_compare.has(dh_carKey(d))) : dh_deals;
+    if (!pool.length) { dh_status('No cars selected to clean.', ''); return; }
     // one lookup per unique year+make+model+trim (ignoring powertrain/package)
     const seen = new Map();
-    dh_deals.forEach(d => {
+    pool.forEach(d => {
       const k = ['year', 'make', 'model', 'trim'].map(f => (d[f] || '').toString().trim().toLowerCase()).join('|');
       if (!seen.has(k)) seen.set(k, { year: d.year || '', make: d.make || '', model: d.model || '', trim: d.trim || '' });
     });
     const cars = [...seen.values()];
-    dh_status('Checking ' + cars.length + ' car' + (cars.length > 1 ? 's' : '') + ' against CarsXE…', '');
+    dh_status('Checking ' + cars.length + ' ' + (sel ? 'selected ' : '') + 'car' + (cars.length > 1 ? 's' : '') + ' against CarsXE…', '');
     let res;
     try {
       const r = await fetch('/carsxe-canon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cars }) });
