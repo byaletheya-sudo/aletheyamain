@@ -5030,6 +5030,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     'landrover': 'land rover', 'range rover': 'land rover', 'rangerover': 'land rover',
     'alfa': 'alfa romeo', 'mini cooper': 'mini', 'beemer': 'bmw', 'bimmer': 'bmw'
   };
+  // Common trim-level abbreviations folded to their full name (per WORD) so "PREM"/
+  // "Premium", "Prem Plus"/"Premium Plus", "LUX"/"Luxury" share a card. Conservative
+  // on purpose — an unlisted abbreviation just stays as-is (no risk of a false merge).
+  const DH_TRIM_ALIAS = {
+    'prem': 'premium', 'premplus': 'premiumplus', 'lux': 'luxury',
+    'ltd': 'limited', 'plat': 'platinum', 'pref': 'preferred', 'sel': 'select'
+  };
   const dh_norm = s => (s || '').toString().trim().toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ');
   // A powertrain in the package field (Gas / Hybrid / PHEV / Electric) is a
   // different vehicle, not just an option — so it's part of the car's identity.
@@ -5044,7 +5051,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // trim as shown/keyed: trim + its powertrain, so "Preferred" gas and "Preferred"
   // hybrid become distinct cards.
-  function dh_trimDisp(d) { return [(d.trim || '').toString().trim(), dh_pwr(d)].filter(Boolean).join(' '); }
+  function dh_trimDisp(d) {
+    const t = (d.trim || '').toString().replace(/\bgas\b/ig, '').replace(/\s+/g, ' ').trim();   // "Gas" is noise in the label
+    const p = dh_pwr(d);
+    return [t, p === 'Gas' ? '' : p].filter(Boolean).join(' ');                                  // show Hybrid/PHEV/Electric, never Gas
+  }
   // Model identity for grouping: glue letter+number runs and drop spacing/punctuation
   // so "IS 350"/"IS350", "RX 350"/"RX350", "GLC 300"/"GLC300" all key identically and
   // a single car never splits into two cards over a stray space. Reuses dh_glue (which
@@ -5054,13 +5065,19 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // "AMGLine", "GT-Line"/"GT Line", "xDrive 40"/"xDrive40" all key the same. Uses
   // dh_norm (NOT dh_glue) on purpose — dh_glue's drivetrain fold eats trailing digits
   // and would wrongly collapse xDrive30i and xDrive40i to one AWD token.
-  function dh_trimKey(trim) { return dh_norm(trim).replace(/[^a-z0-9]+/g, ''); }
+  function dh_trimKey(trim) {
+    // drop a stray "Gas" baked into the trim (it's the default powertrain, never a real
+    // trim distinction — Hybrid/PHEV/Electric are KEPT so those stay separate cars),
+    // then expand abbreviations per word so "PREM"/"Premium" etc. fold to one card.
+    const words = dh_norm(trim).replace(/\bgas\b/g, ' ').split(/\s+/).filter(Boolean);
+    return words.map(w => DH_TRIM_ALIAS[w] || w).join('').replace(/[^a-z0-9]+/g, '');
+  }
   // make: dh_makeKey folds synonyms (Chevy->Chevrolet, Benz->Mercedes-Benz) AND strips
   // spacing, so "Land Rover"/"Landrover" and "Mercedes Benz"/"Mercedes-Benz" never split.
   function dh_carKey(d) {
     const k = [dh_norm(d.year), dh_makeKey(d.make), dh_modelKey(d.model), dh_trimKey(d.trim)];
     const p = dh_norm(dh_pwr(d));
-    if (p) k.push(p);                       // powertrain variants get their own key; a base trim keeps its original key
+    if (p && p !== 'gas') k.push(p);        // only Hybrid/PHEV/Electric split; Gas is the default and never gets its own card
     return k.join('|');
   }
   function dh_carLabel(d) { return [d.year, (T_MAKE_SHORT[d.make] || d.make), d.model, dh_trimDisp(d)].map(s => (s || '').toString().trim()).filter(Boolean).join(' '); }
