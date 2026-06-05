@@ -93,6 +93,9 @@
   .btn-start:active { transform: translateY(0); }
   .btn-start:disabled { background: #1d1e22; color: #585d66; box-shadow: none; cursor: not-allowed; transform: none; }
   @keyframes btnpulse { 0%,100% { box-shadow: 0 4px 18px rgba(47,127,240,0.30); } 50% { box-shadow: 0 4px 26px rgba(47,127,240,0.6); } }
+  @keyframes dh-spin { to { transform: rotate(360deg); } }
+  .dh-spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.14); border-top-color: var(--dh-price,#8ce1c3); animation: dh-spin 0.8s linear infinite; }
+  .dh-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 36px 18px; color: #9aa0aa; font-size: 0.86rem; }
   .btn-start.loading { animation: btnpulse 1.1s ease-in-out infinite; }
   .btn-ghost { background: rgba(255,255,255,0.06); color: #e6e7ea; border: 1px solid rgba(255,255,255,0.1); }
   .btn-ghost:hover { background: rgba(255,255,255,0.1); }
@@ -4739,13 +4742,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!seen.has(k)) seen.set(k, { year: d.year || '', make: d.make || '', model: d.model || '', trim: d.trim || '' });
     });
     const cars = [...seen.values()];
+    // open the modal right away in a loading state so the click clearly registers
+    // (the lookup runs one CarsXE call per car, so it can take a few seconds)
+    $('dhCanonSummary').textContent = 'checking…';
+    $('dhCanonList').innerHTML = '<div class="dh-loading"><div class="dh-spinner"></div><div>Checking ' + cars.length + ' ' + (sel ? 'selected ' : '') + 'car' + (cars.length > 1 ? 's' : '') + ' against CarsXE…</div></div>';
+    $('dhCanonModal').style.display = 'flex';
     dh_status('Checking ' + cars.length + ' ' + (sel ? 'selected ' : '') + 'car' + (cars.length > 1 ? 's' : '') + ' against CarsXE…', '');
     let res;
     try {
       const r = await fetch('/carsxe-canon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cars }) });
       res = await r.json();
-    } catch (e) { dh_status('CarsXE request failed.', 'error'); return; }
-    if (res.error) { dh_status(res.error, 'error'); return; }
+    } catch (e) { $('dhCanonList').innerHTML = '<div class="dh-empty" style="padding:18px;">CarsXE request failed — try again.</div>'; $('dhCanonSummary').textContent = ''; dh_status('CarsXE request failed.', 'error'); return; }
+    if (res.error) { $('dhCanonList').innerHTML = '<div class="dh-empty" style="padding:18px;">' + escapeHtml(res.error) + '</div>'; $('dhCanonSummary').textContent = ''; dh_status(res.error, 'error'); return; }
     const plans = [];
     (res.results || []).forEach(it => {
       if (!it.found) return;
