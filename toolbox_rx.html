@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RX Update · Aletheya Toolbox</title>
+<style>
+  :root{ --bg:#05080d; --panel:#0e1218; --panel2:#11151c; --line:#1d222e; --line2:#262c3a;
+    --text:#eef2f8; --muted:#7a8696; --accent:#a98bff; --accent2:#8a5cf0; --good:#46d488; --bad:#ff6b6b; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    background-image:radial-gradient(60% 45% at 50% 0%, rgba(138,92,240,.16), rgba(8,16,30,0) 70%);
+    -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; }
+  .top{ width:100%; max-width:1000px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:22px 24px; }
+  .wordmark{ font-size:1.1rem; font-weight:800; letter-spacing:-.4px; } .wordmark span{ color:var(--accent); }
+  .top .right{ display:flex; gap:10px; }
+  .top a.btnlink{ color:var(--muted); text-decoration:none; font-size:.8rem; font-weight:600; border:1px solid var(--line2);
+    padding:7px 14px; border-radius:9px; transition:.15s; } .top a.btnlink:hover{ color:var(--text); border-color:var(--accent); }
+  .wrap{ width:100%; max-width:1000px; margin:0 auto; padding:8px 24px 90px; }
+  .head .crumb{ color:var(--accent); font-size:.7rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; margin-bottom:8px; }
+  .head h1{ font-size:1.9rem; font-weight:800; letter-spacing:-.8px; }
+  .head p{ color:var(--muted); margin-top:8px; font-size:.95rem; line-height:1.55; max-width:660px; }
+  .card{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line);
+    border-radius:16px; padding:22px 24px; margin-top:18px; }
+  .card h2{ font-size:1.02rem; font-weight:750; letter-spacing:-.3px; display:flex; align-items:center; gap:10px; }
+  .card .step{ width:24px; height:24px; border-radius:7px; background:rgba(169,139,255,.14); color:var(--accent);
+    border:1px solid rgba(169,139,255,.3); display:inline-flex; align-items:center; justify-content:center; font-size:.78rem; font-weight:800; }
+  .card .sub{ color:var(--muted); font-size:.85rem; margin-top:6px; line-height:1.5; }
+  label.lbl{ display:block; font-size:.72rem; font-weight:700; letter-spacing:.04em; color:var(--muted);
+    margin:0 0 6px; text-transform:uppercase; }
+  input[type=text], select, textarea{ width:100%; background:#0a0d12; border:1px solid var(--line2); border-radius:9px;
+    padding:11px 13px; color:#fff; font-size:.92rem; outline:none; font-family:inherit; }
+  input:focus, select:focus, textarea:focus{ border-color:var(--accent); }
+  textarea{ min-height:90px; resize:vertical; line-height:1.5; }
+  .gridcols{ display:grid; gap:14px; margin-top:14px; }
+  .c2{ grid-template-columns:1fr 1fr; } .c3{ grid-template-columns:1fr 1fr 1fr; } .c4{ grid-template-columns:2fr 1fr 1fr 1fr; }
+  @media(max-width:640px){ .c2,.c3,.c4{ grid-template-columns:1fr; } }
+  .field{ min-width:0; }
+  .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:16px; }
+  .grow{ flex:1; min-width:180px; }
+  button{ border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:.9rem; cursor:pointer; font-family:inherit; transition:.15s; }
+  .primary{ background:var(--accent2); color:#fff; } .primary:hover{ background:#7a4ce0; } .primary:disabled{ opacity:.5; cursor:default; }
+  .ghost{ background:transparent; color:var(--muted); border:1px solid var(--line2); } .ghost:hover{ color:var(--text); border-color:var(--accent); }
+  .tiny{ padding:7px 11px; font-size:.8rem; }
+  .drop{ margin-top:14px; border:1.5px dashed var(--line2); border-radius:13px; padding:22px; text-align:center; cursor:pointer;
+    transition:.15s; background:#0a0d12; } .drop:hover,.drop.over{ border-color:var(--accent); background:rgba(169,139,255,.05); }
+  .drop svg{ width:26px; height:26px; stroke:var(--accent); margin-bottom:8px; }
+  .drop .big{ font-weight:650; font-size:.92rem; } .drop .small{ color:var(--muted); font-size:.78rem; margin-top:4px; }
+  .thumbs{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .thumb{ position:relative; width:84px; height:84px; border-radius:9px; overflow:hidden; border:1px solid var(--line2); }
+  .thumb img{ width:100%; height:100%; object-fit:cover; }
+  .thumb .rm{ position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%; background:rgba(0,0,0,.65);
+    color:#fff; font-size:.7rem; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .listrow{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .listrow .x{ flex:0 0 auto; width:34px; height:38px; border-radius:8px; border:1px solid var(--line2); background:transparent;
+    color:var(--muted); cursor:pointer; font-size:1rem; } .listrow .x:hover{ color:var(--bad); border-color:var(--bad); }
+  .listrow .icd{ flex:0 0 130px; }
+  .cbs{ display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; }
+  .cb{ display:flex; align-items:center; gap:9px; font-weight:600; font-size:.9rem; }
+  .cb input{ width:18px; height:18px; accent-color:var(--accent); }
+  .msg{ margin-top:14px; padding:11px 14px; border-radius:9px; font-size:.88rem; display:none; }
+  .msg.show{ display:block; }
+  .msg.err{ background:rgba(255,107,107,.1); color:#ff9b9b; border:1px solid rgba(255,107,107,.3); }
+  .msg.ok{ background:rgba(70,212,136,.1); color:#7be0a8; border:1px solid rgba(70,212,136,.3); }
+  .msg.info{ background:rgba(169,139,255,.1); color:#cdb9ff; border:1px solid rgba(169,139,255,.3); }
+  .seg{ display:inline-flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden; }
+  .seg button{ background:transparent; color:var(--muted); border:none; border-radius:0; padding:10px 18px; }
+  .seg button.on{ background:rgba(169,139,255,.16); color:#cdb9ff; }
+  .spin{ display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff;
+    border-radius:50%; animation:sp .6s linear infinite; vertical-align:-2px; margin-right:7px; } @keyframes sp{ to{ transform:rotate(360deg); } }
+  .docmeta{ color:var(--muted); font-size:.82rem; margin-top:10px; line-height:1.5; }
+  .addbtn{ margin-top:10px; }
+  footer{ max-width:1000px; margin:0 auto; padding:20px 24px 30px; color:#566072; font-size:.74rem; } footer b{ color:#8a94a3; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wordmark">Aletheya <span>Toolbox</span></div>
+    <div class="right">
+      <a class="btnlink" href="/toolbox">← Toolbox</a>
+      <a class="btnlink" href="/">All workspaces</a>
+      <a class="btnlink" href="/logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="head">
+      <div class="crumb">Toolbox · RX Update</div>
+      <h1>RX Update</h1>
+      <p>Medical / Psychiatric Update faxes for Mountainview ADHC. Pick the doctor, drop in a chart screenshot or paste the details, let AI pull the diagnoses & meds, review, then export to PDF or Word.</p>
+    </div>
+
+    <!-- STEP 1: Doctor -->
+    <div class="card">
+      <h2><span class="step">1</span> Primary Physician</h2>
+      <div class="sub">Pick a provider to auto-fill the name, address, phone & fax. You can tweak any field.</div>
+      <div class="gridcols c2">
+        <div class="field">
+          <label class="lbl">Doctor</label>
+          <select id="docPick"><option value="">— Select a doctor —</option></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Specialty</label>
+          <input type="text" id="docSpecialty" placeholder="MD / NP / Nephrologist…">
+        </div>
+      </div>
+      <div class="gridcols c2">
+        <div class="field"><label class="lbl">First name</label><input type="text" id="docFirst"></div>
+        <div class="field"><label class="lbl">Last name</label><input type="text" id="docLast"></div>
+      </div>
+      <div class="gridcols c2">
+        <div class="field"><label class="lbl">Address line 1</label><input type="text" id="docAddr1"></div>
+        <div class="field"><label class="lbl">Address line 2</label><input type="text" id="docAddr2"></div>
+      </div>
+      <div class="gridcols c4">
+        <div class="field"><label class="lbl">City</label><input type="text" id="docCity"></div>
+        <div class="field"><label class="lbl">State</label><input type="text" id="docState"></div>
+        <div class="field"><label class="lbl">Zip</label><input type="text" id="docZip"></div>
+        <div class="field"><label class="lbl">NPI</label><input type="text" id="docNpi"></div>
+      </div>
+      <div class="gridcols c2">
+        <div class="field"><label class="lbl">Phone</label><input type="text" id="docPhone"></div>
+        <div class="field"><label class="lbl">Fax</label><input type="text" id="docFax"></div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Source -->
+    <div class="card">
+      <h2><span class="step">2</span> Patient data</h2>
+      <div class="sub">Drop or paste a screenshot of the Plan of Care, and/or paste text. Add instructions like "remove Norco" or "add Metformin 500 mg BID".</div>
+      <div class="drop" id="imgDrop">
+        <input type="file" id="imgInput" accept="image/*" multiple class="hidden" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        <div class="big">Drop, click, or paste (⌘V) screenshots here</div>
+        <div class="small">Plan of Care, medication list, provider screen — add as many as you like</div>
+      </div>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="gridcols" style="margin-top:14px">
+        <div class="field"><label class="lbl">Or paste text (optional)</label><textarea id="srcText" placeholder="Paste patient details, diagnoses, medications…"></textarea></div>
+        <div class="field"><label class="lbl">Instructions (optional)</label><textarea id="srcInstr" placeholder="e.g. Remove Norco. Add Metformin 500 mg BID. DOB is 07/21/1945." style="min-height:60px"></textarea></div>
+      </div>
+      <div class="row">
+        <button class="primary" id="parseBtn">Parse with AI</button>
+        <span class="sub" style="margin:0">Fills the fields below — review before exporting.</span>
+      </div>
+      <div class="msg" id="parseMsg"></div>
+    </div>
+
+    <!-- STEP 3: Review -->
+    <div class="card">
+      <h2><span class="step">3</span> Review &amp; edit</h2>
+      <div class="gridcols c2">
+        <div class="field"><label class="lbl">Patient name</label><input type="text" id="patName"></div>
+        <div class="field"><label class="lbl">Date of birth</label><input type="text" id="patDob" placeholder="MM/DD/YYYY"></div>
+      </div>
+      <div class="gridcols c2">
+        <div class="field"><label class="lbl">Assessment date ("…will be assessed on")</label><input type="text" id="assessDate" placeholder="MM/DD/YYYY"></div>
+        <div class="field"><label class="lbl">Form date (top &amp; bottom)</label><input type="text" id="formDate" placeholder="MM/DD/YYYY"></div>
+      </div>
+
+      <div style="margin-top:20px">
+        <label class="lbl">Diagnoses (with ICD codes)</label>
+        <div id="dxList"></div>
+        <button class="ghost tiny addbtn" id="addDx">+ Add diagnosis</button>
+      </div>
+
+      <div style="margin-top:20px">
+        <label class="lbl">Medications</label>
+        <div id="medList"></div>
+        <button class="ghost tiny addbtn" id="addMed">+ Add medication</button>
+      </div>
+
+      <div class="cbs">
+        <label class="cb"><input type="checkbox" id="disPt"> Disallow Skilled PT</label>
+        <label class="cb"><input type="checkbox" id="disOt"> Disallow Skilled OT</label>
+        <label class="cb"><input type="checkbox" id="disSt"> Disallow Skilled ST</label>
+      </div>
+
+      <div class="field" style="margin-top:18px">
+        <label class="lbl">Significant events (last 6 months)</label>
+        <textarea id="sigEvents" style="min-height:60px"></textarea>
+      </div>
+    </div>
+
+    <!-- STEP 4: Export -->
+    <div class="card">
+      <h2><span class="step">4</span> Export</h2>
+      <div class="row">
+        <div class="seg" id="fmtSeg">
+          <button data-fmt="pdf" class="on">PDF</button>
+          <button data-fmt="docx">Word</button>
+        </div>
+        <div class="grow"><input type="text" id="outName" placeholder="File name (optional)"></div>
+        <button class="primary" id="exportBtn">Export</button>
+      </div>
+      <div class="msg" id="exportMsg"></div>
+    </div>
+  </div>
+
+  <footer>© <b>Aletheya</b> · Internal toolbox · <b>Confidential.</b> Authorized use only — handle PHI accordingly.</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+let DOCTORS = [];
+let images = [];      // data URLs
+let fmt = 'pdf';
+
+function msg(el,t,k){ el.className='msg show '+(k||'info'); el.textContent=t; }
+function clr(el){ el.className='msg'; el.textContent=''; }
+function today(){ const d=new Date(); return String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+'/'+d.getFullYear(); }
+
+/* ---- Doctors ---- */
+fetch('/toolbox/doctors').then(r=>r.json()).then(d=>{
+  DOCTORS=d.doctors||[];
+  const sel=$('#docPick');
+  DOCTORS.forEach(doc=>{ const o=document.createElement('option'); o.value=doc.index; o.textContent=doc.label; sel.appendChild(o); });
+});
+$('#docPick').addEventListener('change', e=>{
+  const i=e.target.value; if(i==='') return;
+  const d=DOCTORS[+i]||{};
+  $('#docFirst').value=d.first||''; $('#docLast').value=d.last||''; $('#docSpecialty').value=d.specialty||'';
+  $('#docAddr1').value=d.addr1||''; $('#docAddr2').value=d.addr2||''; $('#docCity').value=d.city||'';
+  $('#docState').value=d.state||''; $('#docZip').value=d.zip||''; $('#docNpi').value=d.npi||'';
+  $('#docPhone').value=d.phone||''; $('#docFax').value=d.fax||'';
+});
+function collectDoctor(){
+  return { prefix:'', first:$('#docFirst').value.trim(), last:$('#docLast').value.trim(), specialty:$('#docSpecialty').value.trim(),
+    addr1:$('#docAddr1').value.trim(), addr2:$('#docAddr2').value.trim(), city:$('#docCity').value.trim(),
+    state:$('#docState').value.trim(), zip:$('#docZip').value.trim(), npi:$('#docNpi').value.trim(),
+    phone:$('#docPhone').value.trim(), fax:$('#docFax').value.trim() };
+}
+
+/* ---- Images ---- */
+const imgDrop=$('#imgDrop'), imgInput=$('#imgInput');
+imgDrop.addEventListener('click', ()=>imgInput.click());
+imgInput.addEventListener('change', ()=>{ [...imgInput.files].forEach(addImageFile); imgInput.value=''; });
+['dragover','dragenter'].forEach(e=>imgDrop.addEventListener(e,ev=>{ev.preventDefault();imgDrop.classList.add('over');}));
+['dragleave','drop'].forEach(e=>imgDrop.addEventListener(e,ev=>{ev.preventDefault();imgDrop.classList.remove('over');}));
+imgDrop.addEventListener('drop', ev=>{ [...ev.dataTransfer.files].forEach(addImageFile); });
+window.addEventListener('paste', ev=>{
+  const items=ev.clipboardData?.items||[];
+  for(const it of items){ if(it.type.startsWith('image/')){ const f=it.getAsFile(); if(f) addImageFile(f); } }
+});
+function addImageFile(file){
+  if(!file.type.startsWith('image/')) return;
+  const r=new FileReader();
+  r.onload=()=>{ images.push(r.result); renderThumbs(); };
+  r.readAsDataURL(file);
+}
+function renderThumbs(){
+  const c=$('#thumbs'); c.innerHTML='';
+  images.forEach((src,i)=>{
+    const d=document.createElement('div'); d.className='thumb';
+    d.innerHTML=`<img src="${src}"><div class="rm" data-i="${i}">✕</div>`;
+    c.appendChild(d);
+  });
+  c.querySelectorAll('.rm').forEach(b=>b.addEventListener('click',()=>{ images.splice(+b.dataset.i,1); renderThumbs(); }));
+}
+
+/* ---- Dynamic lists ---- */
+function dxRow(name='',icd=''){
+  const row=document.createElement('div'); row.className='listrow';
+  row.innerHTML=`<input type="text" class="dx-name" placeholder="Diagnosis" value="${esc(name)}">
+    <input type="text" class="dx-icd icd" placeholder="ICD-10" value="${esc(icd)}">
+    <button class="x" title="Remove">✕</button>`;
+  row.querySelector('.x').addEventListener('click',()=>row.remove());
+  return row;
+}
+function medRow(val=''){
+  const row=document.createElement('div'); row.className='listrow';
+  row.innerHTML=`<input type="text" class="med-name" placeholder="e.g. Aspirin 81 mg QD PO" value="${esc(val)}">
+    <button class="x" title="Remove">✕</button>`;
+  row.querySelector('.x').addEventListener('click',()=>row.remove());
+  return row;
+}
+function esc(s){ return String(s).replace(/"/g,'&quot;'); }
+$('#addDx').addEventListener('click',()=>$('#dxList').appendChild(dxRow()));
+$('#addMed').addEventListener('click',()=>$('#medList').appendChild(medRow()));
+function setDx(list){ const c=$('#dxList'); c.innerHTML=''; (list&&list.length?list:[{}]).forEach(d=>c.appendChild(dxRow(d.name||'',d.icd||''))); }
+function setMeds(list){ const c=$('#medList'); c.innerHTML=''; (list&&list.length?list:['']).forEach(m=>c.appendChild(medRow(m))); }
+function getDx(){ return [...document.querySelectorAll('#dxList .listrow')].map(r=>({name:r.querySelector('.dx-name').value.trim(), icd:r.querySelector('.dx-icd').value.trim()})).filter(d=>d.name||d.icd); }
+function getMeds(){ return [...document.querySelectorAll('#medList .med-name')].map(i=>i.value.trim()).filter(Boolean); }
+
+/* ---- Parse ---- */
+$('#parseBtn').addEventListener('click', async ()=>{
+  const text=$('#srcText').value.trim(), instr=$('#srcInstr').value.trim();
+  if(!images.length && !text){ msg($('#parseMsg'),'Add a screenshot or some text first.','err'); return; }
+  const b=$('#parseBtn'); b.disabled=true; const old=b.innerHTML; b.innerHTML='<span class="spin"></span>Reading…';
+  clr($('#parseMsg'));
+  try{
+    const r=await fetch('/toolbox/rx-parse',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text, images, instructions:instr})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Parse failed');
+    if(d.patient_name) $('#patName').value=d.patient_name;
+    if(d.dob) $('#patDob').value=d.dob;
+    if(d.diagnoses) setDx(d.diagnoses);
+    if(d.medications) setMeds(d.medications);
+    if(d.significant_events) $('#sigEvents').value=d.significant_events;
+    const nd=(d.diagnoses||[]).length, nm=(d.medications||[]).length;
+    msg($('#parseMsg'),`Pulled ${nd} diagnosis${nd!==1?'es':''} and ${nm} medication${nm!==1?'s':''}. Review below, then export.`,'ok');
+  }catch(e){ msg($('#parseMsg'),e.message,'err'); }
+  finally{ b.disabled=false; b.innerHTML=old; }
+});
+
+/* ---- Format toggle ---- */
+$('#fmtSeg').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+  $('#fmtSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  btn.classList.add('on'); fmt=btn.dataset.fmt;
+}));
+
+/* ---- Export ---- */
+$('#exportBtn').addEventListener('click', async ()=>{
+  const payload={
+    doctor:collectDoctor(),
+    patient_name:$('#patName').value.trim(), dob:$('#patDob').value.trim(),
+    assess_date:$('#assessDate').value.trim(), date:$('#formDate').value.trim(),
+    diagnoses:getDx(), medications:getMeds(),
+    disallow_pt:$('#disPt').checked, disallow_ot:$('#disOt').checked, disallow_st:$('#disSt').checked,
+    significant_events:$('#sigEvents').value.trim(),
+  };
+  const b=$('#exportBtn'); b.disabled=true; const old=b.innerHTML; b.innerHTML='<span class="spin"></span>Building…';
+  clr($('#exportMsg'));
+  try{
+    const r=await fetch('/toolbox/rx-export',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({format:fmt, data:payload, filename:$('#outName').value.trim()})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||'Export failed'); }
+    const blob=await r.blob();
+    const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="?([^"]+)"?/);
+    const fn=m?m[1]:('RX-Update.'+(fmt==='docx'?'docx':'pdf'));
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fn;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+    msg($('#exportMsg'),`Exported ${fmt==='docx'?'Word document':'PDF'} — check your downloads.`,'ok');
+  }catch(e){ msg($('#exportMsg'),e.message,'err'); }
+  finally{ b.disabled=false; b.innerHTML=old; }
+});
+
+/* ---- init ---- */
+setDx([{}]); setMeds(['']);
+$('#assessDate').value=today(); $('#formDate').value=today();
+</script>
+</body>
+</html>

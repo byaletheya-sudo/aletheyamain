@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aletheya Toolbox</title>
+<style>
+  :root{
+    --bg:#05080d; --panel:#0e1218; --panel2:#11151c; --line:#1d222e; --line2:#262c3a;
+    --text:#eef2f8; --muted:#7a8696; --accent:#a98bff; --accent2:#8a5cf0; --good:#46d488; --bad:#ff6b6b;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    background-image:
+      radial-gradient(60% 45% at 50% 0%, rgba(138,92,240,.18), rgba(8,16,30,0) 70%),
+      radial-gradient(50% 40% at 90% 100%, rgba(169,139,255,.08), rgba(8,16,30,0) 70%);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:inherit; }
+  .top{ width:100%; max-width:980px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:22px 24px; }
+  .wordmark{ font-size:1.1rem; font-weight:800; letter-spacing:-.4px; }
+  .wordmark span{ color:var(--accent); }
+  .top .right{ display:flex; gap:10px; align-items:center; }
+  .top a.btnlink{ color:var(--muted); text-decoration:none; font-size:.8rem; font-weight:600;
+    border:1px solid var(--line2); padding:7px 14px; border-radius:9px; transition:.15s; }
+  .top a.btnlink:hover{ color:var(--text); border-color:var(--accent); }
+
+  .wrap{ width:100%; max-width:980px; margin:0 auto; padding:8px 24px 80px; }
+  .head h1{ font-size:1.9rem; font-weight:800; letter-spacing:-.8px; }
+  .head .crumb{ color:var(--accent); font-size:.7rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; margin-bottom:8px; }
+  .head p{ color:var(--muted); margin-top:8px; font-size:.95rem; line-height:1.55; max-width:640px; }
+
+  /* tool tabs (room to grow) */
+  .tools{ display:flex; gap:10px; margin:26px 0 22px; flex-wrap:wrap; }
+  .tool{ display:flex; align-items:center; gap:9px; padding:11px 16px; border-radius:12px;
+    border:1px solid var(--line); background:var(--panel2); cursor:pointer; font-weight:650; font-size:.9rem; transition:.15s; }
+  .tool.active{ border-color:var(--accent); background:rgba(169,139,255,.1); color:#cdb9ff; }
+  .tool svg{ width:18px; height:18px; }
+  .tool.disabled{ opacity:.45; cursor:default; }
+  .tool .soon{ font-size:.58rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    border:1px solid var(--line2); padding:2px 6px; border-radius:99px; }
+
+  .card{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line);
+    border-radius:16px; padding:24px; margin-bottom:18px; }
+  .card h2{ font-size:1.05rem; font-weight:750; letter-spacing:-.3px; display:flex; align-items:center; gap:10px; }
+  .card .step{ width:24px; height:24px; border-radius:7px; background:rgba(169,139,255,.14); color:var(--accent);
+    border:1px solid rgba(169,139,255,.3); display:inline-flex; align-items:center; justify-content:center; font-size:.78rem; font-weight:800; }
+  .card .sub{ color:var(--muted); font-size:.85rem; margin-top:6px; line-height:1.5; }
+
+  .drop{ margin-top:16px; border:1.5px dashed var(--line2); border-radius:13px; padding:30px 20px; text-align:center;
+    cursor:pointer; transition:.15s; background:#0a0d12; }
+  .drop:hover,.drop.over{ border-color:var(--accent); background:rgba(169,139,255,.05); }
+  .drop svg{ width:30px; height:30px; stroke:var(--accent); margin-bottom:10px; }
+  .drop .big{ font-weight:650; font-size:.95rem; }
+  .drop .small{ color:var(--muted); font-size:.8rem; margin-top:5px; }
+  .drop.has{ border-style:solid; border-color:rgba(169,139,255,.4); }
+  .filechip{ display:inline-flex; align-items:center; gap:8px; margin-top:4px; color:#cdb9ff; font-weight:650; font-size:.92rem; }
+  .filechip svg{ width:16px; height:16px; margin:0; }
+
+  .modes{ display:flex; gap:8px; margin:18px 0 4px; border-bottom:1px solid var(--line); }
+  .mode{ padding:10px 14px; cursor:pointer; font-weight:650; font-size:.88rem; color:var(--muted);
+    border-bottom:2px solid transparent; margin-bottom:-1px; transition:.15s; }
+  .mode.active{ color:var(--text); border-color:var(--accent); }
+
+  .pane{ display:none; padding-top:18px; }
+  .pane.active{ display:block; }
+
+  .fields{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-top:6px; }
+  .field label{ display:block; font-size:.74rem; font-weight:700; letter-spacing:.04em; color:var(--muted);
+    margin-bottom:6px; text-transform:uppercase; }
+  .field .ftype{ color:#6a6f86; font-weight:600; text-transform:none; letter-spacing:0; }
+  .field input[type=text], .field select, textarea{
+    width:100%; background:#0a0d12; border:1px solid var(--line2); border-radius:9px; padding:11px 13px;
+    color:#fff; font-size:.92rem; outline:none; font-family:inherit; }
+  .field input:focus, .field select:focus, textarea:focus{ border-color:var(--accent); }
+  .field.cb{ display:flex; align-items:center; gap:10px; background:#0a0d12; border:1px solid var(--line2);
+    border-radius:9px; padding:11px 13px; }
+  .field.cb input{ width:18px; height:18px; accent-color:var(--accent); }
+  .field.cb label{ margin:0; text-transform:none; letter-spacing:0; font-size:.88rem; color:var(--text); font-weight:600; }
+
+  textarea{ min-height:160px; resize:vertical; line-height:1.55; }
+
+  .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:18px; }
+  .grow{ flex:1; min-width:200px; }
+  button{ border:none; border-radius:10px; padding:12px 20px; font-weight:700; font-size:.92rem; cursor:pointer;
+    font-family:inherit; transition:.15s; }
+  .primary{ background:var(--accent2); color:#fff; }
+  .primary:hover{ background:#7a4ce0; }
+  .primary:disabled{ opacity:.5; cursor:default; }
+  .ghost{ background:transparent; color:var(--muted); border:1px solid var(--line2); }
+  .ghost:hover{ color:var(--text); border-color:var(--accent); }
+  .inp{ background:#0a0d12; border:1px solid var(--line2); border-radius:9px; padding:11px 13px; color:#fff; font-size:.92rem; outline:none; font-family:inherit; }
+  .inp:focus{ border-color:var(--accent); }
+
+  .msg{ margin-top:14px; padding:11px 14px; border-radius:9px; font-size:.88rem; display:none; }
+  .msg.show{ display:block; }
+  .msg.err{ background:rgba(255,107,107,.1); color:#ff9b9b; border:1px solid rgba(255,107,107,.3); }
+  .msg.ok{ background:rgba(70,212,136,.1); color:#7be0a8; border:1px solid rgba(70,212,136,.3); }
+  .msg.info{ background:rgba(169,139,255,.1); color:#cdb9ff; border:1px solid rgba(169,139,255,.3); }
+
+  .hidden{ display:none !important; }
+  .spin{ display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.35);
+    border-top-color:#fff; border-radius:50%; animation:sp .6s linear infinite; vertical-align:-2px; margin-right:7px; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  .hint{ color:var(--muted); font-size:.82rem; line-height:1.55; margin-top:10px; }
+  code{ background:#0a0d12; border:1px solid var(--line2); border-radius:5px; padding:1px 6px; font-size:.84rem; color:#cdb9ff; }
+  footer{ max-width:980px; margin:0 auto; padding:20px 24px 30px; color:#566072; font-size:.74rem; }
+  footer b{ color:#8a94a3; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wordmark">Aletheya <span>Toolbox</span></div>
+    <div class="right">
+      <a class="btnlink" href="/toolbox">← Toolbox</a>
+      <a class="btnlink" href="/">All workspaces</a>
+      <a class="btnlink" href="/logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="head">
+      <div class="crumb">Toolbox</div>
+      <h1>PDF Filler</h1>
+      <p>Upload a fillable PDF template, give it data three ways — type it, let AI parse a paste, or run a whole spreadsheet — and export finished PDFs.</p>
+    </div>
+
+    <div class="tools">
+      <div class="tool active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
+        PDF Filler
+      </div>
+      <div class="tool disabled">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        More tools <span class="soon">Soon</span>
+      </div>
+    </div>
+
+    <!-- STEP 1: template -->
+    <div class="card">
+      <h2><span class="step">1</span> Choose your PDF template</h2>
+      <div class="sub">A fillable PDF with form fields (made in Acrobat, etc.). We'll auto-detect every field.</div>
+      <div class="drop" id="drop">
+        <input type="file" id="tplInput" accept="application/pdf,.pdf" class="hidden">
+        <div id="dropEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          <div class="big">Drop a PDF here or click to browse</div>
+          <div class="small">Fillable AcroForm PDF · stays on the server only long enough to read & fill</div>
+        </div>
+        <div id="dropFilled" class="hidden">
+          <div class="filechip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            <span id="tplName">template.pdf</span>
+          </div>
+          <div class="small" id="tplMeta"></div>
+        </div>
+      </div>
+      <div class="msg" id="tplMsg"></div>
+    </div>
+
+    <!-- STEP 2: data + export (hidden until a template with fields loads) -->
+    <div class="card hidden" id="step2">
+      <h2><span class="step">2</span> Fill the fields</h2>
+      <div class="sub"><span id="fieldCount">0</span> fields detected. Choose how to enter the data.</div>
+
+      <div class="modes">
+        <div class="mode active" data-mode="manual">Type it</div>
+        <div class="mode" data-mode="ai">AI parse</div>
+        <div class="mode" data-mode="batch">Spreadsheet (batch)</div>
+      </div>
+
+      <!-- AI parse pane -->
+      <div class="pane" id="pane-ai">
+        <div class="hint">Paste any source text — an email, notes, an order, a quote — and AI maps it onto the fields below. Review and tweak, then export.</div>
+        <textarea id="aiText" placeholder="Paste the information here…"></textarea>
+        <div class="row">
+          <button class="primary" id="aiParseBtn">Parse with AI</button>
+          <span class="hint" style="margin:0">Fills the form below — nothing is exported until you hit Export.</span>
+        </div>
+        <div class="msg" id="aiMsg"></div>
+      </div>
+
+      <!-- Manual pane (shared form, also used to review AI output) -->
+      <div class="pane active" id="pane-manual">
+        <div class="fields" id="fieldsGrid"></div>
+      </div>
+
+      <!-- Batch pane -->
+      <div class="pane" id="pane-batch">
+        <div class="hint">One PDF per spreadsheet row. Column headers must match the PDF field names. Add an optional <code>filename</code> column to name each output. Get a head-start template with the exact headers:</div>
+        <div class="row">
+          <button class="ghost" id="csvTplBtn">Download CSV template</button>
+        </div>
+        <div class="drop" id="sheetDrop" style="margin-top:16px">
+          <input type="file" id="sheetInput" accept=".csv,.xlsx,.xlsm,text/csv" class="hidden">
+          <div id="sheetEmpty">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            <div class="big">Drop a CSV / Excel file or click to browse</div>
+            <div class="small">Each row becomes one filled PDF, delivered as a .zip</div>
+          </div>
+          <div id="sheetFilled" class="hidden">
+            <div class="filechip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18"/></svg><span id="sheetName"></span></div>
+          </div>
+        </div>
+        <div class="row">
+          <button class="primary" id="batchBtn" disabled>Generate ZIP of PDFs</button>
+        </div>
+        <div class="msg" id="batchMsg"></div>
+      </div>
+
+      <!-- shared export bar (manual + ai) -->
+      <div class="row" id="exportBar">
+        <div class="grow">
+          <input class="inp" id="outName" placeholder="Output file name (optional)" style="width:100%">
+        </div>
+        <button class="ghost" id="clearBtn">Clear</button>
+        <button class="primary" id="exportBtn">Export PDF</button>
+      </div>
+      <div class="msg" id="exportMsg"></div>
+    </div>
+  </div>
+
+  <footer>© <b>Aletheya</b> · Internal toolbox · <b>Confidential.</b> Authorized use only.</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+let templateFile = null;   // the uploaded PDF (File)
+let sheetFile = null;      // the uploaded spreadsheet (File)
+let FIELDS = [];           // [{name,type,options?,states?,value?}]
+
+function msg(el, text, kind){ el.className = 'msg show ' + (kind||'info'); el.textContent = text; }
+function clearMsg(el){ el.className = 'msg'; el.textContent=''; }
+
+/* ---------- Step 1: template upload ---------- */
+const drop = $('#drop'), tplInput = $('#tplInput');
+drop.addEventListener('click', ()=> tplInput.click());
+['dragover','dragenter'].forEach(e=> drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(e=> drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', ev=>{ const f = ev.dataTransfer.files[0]; if(f) loadTemplate(f); });
+tplInput.addEventListener('change', ()=>{ if(tplInput.files[0]) loadTemplate(tplInput.files[0]); });
+
+async function loadTemplate(file){
+  if(file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')){
+    msg($('#tplMsg'),'That isn’t a PDF.','err'); return;
+  }
+  templateFile = file;
+  $('#dropEmpty').classList.add('hidden');
+  $('#dropFilled').classList.remove('hidden');
+  drop.classList.add('has');
+  $('#tplName').textContent = file.name;
+  $('#tplMeta').textContent = 'Reading fields…';
+  clearMsg($('#tplMsg'));
+  const fd = new FormData(); fd.append('template', file);
+  try{
+    const r = await fetch('/toolbox/pdf-fields', {method:'POST', body:fd});
+    const data = await r.json();
+    if(!r.ok){ throw new Error(data.error || 'Could not read PDF'); }
+    FIELDS = data.fields || [];
+    if(!FIELDS.length){
+      $('#tplMeta').textContent = '';
+      $('#step2').classList.add('hidden');
+      msg($('#tplMsg'), data.message || 'No fillable fields found in this PDF.', 'err');
+      return;
+    }
+    $('#tplMeta').textContent = FIELDS.length + ' field' + (FIELDS.length>1?'s':'') + ' · ' + (data.pages||1) + ' page' + ((data.pages||1)>1?'s':'');
+    $('#fieldCount').textContent = FIELDS.length;
+    buildFields();
+    $('#step2').classList.remove('hidden');
+    $('#step2').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }catch(e){
+    $('#tplMeta').textContent = '';
+    msg($('#tplMsg'), e.message, 'err');
+  }
+}
+
+/* ---------- Build the manual form ---------- */
+function fieldId(name){ return 'f_' + btoa(unescape(encodeURIComponent(name))).replace(/[^a-zA-Z0-9]/g,''); }
+
+function buildFields(){
+  const grid = $('#fieldsGrid'); grid.innerHTML='';
+  FIELDS.forEach(f=>{
+    const id = fieldId(f.name);
+    const wrap = document.createElement('div');
+    if(f.type === 'checkbox'){
+      wrap.className = 'field cb';
+      wrap.innerHTML = `<input type="checkbox" id="${id}"><label for="${id}">${escapeHtml(f.name)}</label>`;
+    } else if(f.type === 'choice' && f.options && f.options.length){
+      wrap.className = 'field';
+      const opts = ['<option value=""></option>'].concat(f.options.map(o=>`<option>${escapeHtml(o)}</option>`)).join('');
+      wrap.innerHTML = `<label>${escapeHtml(f.name)} <span class="ftype">choice</span></label><select id="${id}">${opts}</select>`;
+    } else {
+      wrap.className = 'field';
+      const t = f.type==='signature' ? 'signature' : 'text';
+      wrap.innerHTML = `<label>${escapeHtml(f.name)} <span class="ftype">${t}</span></label><input type="text" id="${id}">`;
+    }
+    grid.appendChild(wrap);
+    if(f.value && f.type!=='checkbox'){ const el=$('#'+id); if(el) el.value=f.value; }
+  });
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function collectValues(){
+  const out = {};
+  FIELDS.forEach(f=>{
+    const el = $('#'+fieldId(f.name)); if(!el) return;
+    if(f.type==='checkbox') out[f.name] = el.checked;
+    else if(el.value !== '') out[f.name] = el.value;
+  });
+  return out;
+}
+function applyValues(vals){
+  FIELDS.forEach(f=>{
+    if(!(f.name in vals)) return;
+    const el = $('#'+fieldId(f.name)); if(!el) return;
+    const v = vals[f.name];
+    if(f.type==='checkbox') el.checked = (v===true || /^(1|true|yes|x|on|checked)$/i.test(String(v)));
+    else el.value = v;
+  });
+}
+
+/* ---------- Mode tabs ---------- */
+document.querySelectorAll('.mode').forEach(m=>{
+  m.addEventListener('click', ()=>{
+    document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));
+    m.classList.add('active');
+    const mode = m.dataset.mode;
+    // AI shares the manual form for review, so show both panes for ai/manual.
+    $('#pane-ai').classList.toggle('active', mode==='ai');
+    $('#pane-manual').classList.toggle('active', mode==='ai' || mode==='manual');
+    $('#pane-batch').classList.toggle('active', mode==='batch');
+    $('#exportBar').style.display = (mode==='batch') ? 'none' : 'flex';
+    clearMsg($('#exportMsg'));
+  });
+});
+
+/* ---------- AI parse ---------- */
+$('#aiParseBtn').addEventListener('click', async ()=>{
+  const text = $('#aiText').value.trim();
+  if(!text){ msg($('#aiMsg'),'Paste some text first.','err'); return; }
+  const btn = $('#aiParseBtn'); btn.disabled=true; const old=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span>Parsing…';
+  clearMsg($('#aiMsg'));
+  try{
+    const r = await fetch('/toolbox/pdf-parse', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({fields: FIELDS, text})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error||'Parse failed');
+    const vals = data.values||{};
+    const n = Object.keys(vals).length;
+    applyValues(vals);
+    if(n===0) msg($('#aiMsg'),'Couldn’t confidently match any fields. Try adding more detail, or fill them in below.','info');
+    else msg($('#aiMsg'),`Filled ${n} of ${FIELDS.length} fields below — review, adjust, then Export.`,'ok');
+  }catch(e){ msg($('#aiMsg'), e.message, 'err'); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+});
+
+/* ---------- Export single ---------- */
+$('#exportBtn').addEventListener('click', async ()=>{
+  if(!templateFile){ msg($('#exportMsg'),'Upload a template first.','err'); return; }
+  const btn=$('#exportBtn'); btn.disabled=true; const old=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span>Building…';
+  clearMsg($('#exportMsg'));
+  try{
+    const fd = new FormData();
+    fd.append('template', templateFile);
+    fd.append('values', JSON.stringify(collectValues()));
+    const name = $('#outName').value.trim();
+    if(name) fd.append('filename', name);
+    const r = await fetch('/toolbox/pdf-fill', {method:'POST', body:fd});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||'Export failed'); }
+    const blob = await r.blob();
+    downloadBlob(blob, (name|| (templateFile.name.replace(/\.pdf$/i,'')+'-filled')) + (name&&name.endsWith('.pdf')?'':'.pdf'));
+    msg($('#exportMsg'),'Done — your PDF downloaded.','ok');
+  }catch(e){ msg($('#exportMsg'), e.message, 'err'); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+});
+
+$('#clearBtn').addEventListener('click', ()=>{ buildFields(); $('#aiText').value=''; clearMsg($('#exportMsg')); clearMsg($('#aiMsg')); });
+
+/* ---------- Batch ---------- */
+$('#csvTplBtn').addEventListener('click', ()=>{
+  const headers = FIELDS.map(f=>f.name);
+  headers.push('filename');
+  const csv = headers.map(csvCell).join(',') + '\r\n';
+  downloadBlob(new Blob([csv],{type:'text/csv'}), 'pdf-filler-template.csv');
+});
+function csvCell(s){ s=String(s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+
+const sheetDrop=$('#sheetDrop'), sheetInput=$('#sheetInput');
+sheetDrop.addEventListener('click', ()=> sheetInput.click());
+['dragover','dragenter'].forEach(e=> sheetDrop.addEventListener(e, ev=>{ev.preventDefault(); sheetDrop.classList.add('over');}));
+['dragleave','drop'].forEach(e=> sheetDrop.addEventListener(e, ev=>{ev.preventDefault(); sheetDrop.classList.remove('over');}));
+sheetDrop.addEventListener('drop', ev=>{ const f=ev.dataTransfer.files[0]; if(f) setSheet(f); });
+sheetInput.addEventListener('change', ()=>{ if(sheetInput.files[0]) setSheet(sheetInput.files[0]); });
+function setSheet(f){
+  sheetFile=f;
+  $('#sheetEmpty').classList.add('hidden');
+  $('#sheetFilled').classList.remove('hidden');
+  sheetDrop.classList.add('has');
+  $('#sheetName').textContent=f.name;
+  $('#batchBtn').disabled=false;
+}
+$('#batchBtn').addEventListener('click', async ()=>{
+  if(!templateFile||!sheetFile){ msg($('#batchMsg'),'Need both a template and a spreadsheet.','err'); return; }
+  const btn=$('#batchBtn'); btn.disabled=true; const old=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span>Generating…';
+  clearMsg($('#batchMsg'));
+  try{
+    const fd=new FormData();
+    fd.append('template', templateFile);
+    fd.append('sheet', sheetFile);
+    const name=$('#outName').value.trim(); if(name) fd.append('filename', name);
+    const r=await fetch('/toolbox/pdf-batch',{method:'POST', body:fd});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||'Batch failed'); }
+    const blob=await r.blob();
+    downloadBlob(blob, (name||'pdf-filler')+'-batch.zip');
+    msg($('#batchMsg'),'Done — your ZIP of filled PDFs downloaded.','ok');
+  }catch(e){ msg($('#batchMsg'), e.message, 'err'); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+});
+
+function downloadBlob(blob, filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1500);
+}
+</script>
+</body>
+</html>

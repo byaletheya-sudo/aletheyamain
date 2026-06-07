@@ -3,10 +3,14 @@ from openai import OpenAI
 import base64
 import os
 import re
+import io
+import csv
 import json
 import hmac
 import time
+import zipfile
 import secrets
+import rx_form
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -40,6 +44,10 @@ if not os.environ.get("APP_PASSWORD"):
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
 RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs", "/copilot-kb")
+
+# Aletheya Toolbox — a separate, non-Nova workspace with its OWN password gate.
+# Override with TOOLBOX_PASSWORD in the host env (recommended — this repo is public).
+TOOLBOX_PASSWORD = os.environ.get("TOOLBOX_PASSWORD") or "arvin"
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -86,6 +94,59 @@ def login_page(message="", next_path="/novauto"):
     <p class="legal"><b>Confidential &amp; Proprietary.</b> This application and all concepts, designs, workflows, data, and content within are the exclusive property of <b>NovAuto</b> and are intended solely for authorized internal use by its personnel. Unauthorized access, use, copying, reproduction, distribution, or disclosure of any ideas or materials herein is strictly prohibited and may result in legal action.</p>
   </form>
 </body></html>"""
+
+
+def toolbox_login_page(message=""):
+    msg = f'<p class="err">{message}</p>' if message else ""
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aletheya Toolbox</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#05080d; color:#fff;
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background-image: radial-gradient(70% 50% at 50% 35%, rgba(155,109,255,.28), rgba(8,16,30,0) 70%); }}
+  .card {{ width:340px; max-width:90vw; background:#101319; border:1px solid #232733; border-radius:16px; padding:34px 28px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.5); }}
+  .brand {{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; margin-bottom:4px; }}
+  .brand span {{ color:#a98bff; }}
+  .sub {{ color:#6b7280; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; margin-bottom:24px; }}
+  input {{ width:100%; background:#0a0d12; border:1px solid #2a2f3a; border-radius:9px; padding:13px 15px; color:#fff; font-size:.95rem; outline:none; }}
+  input:focus {{ border-color:#a98bff; }}
+  button {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#8a5cf0; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
+  button:hover {{ background:#7a4ce0; }}
+  .err {{ color:#ff6b6b; font-size:.82rem; margin-bottom:12px; }}
+  .legal {{ margin-top:20px; padding-top:16px; border-top:1px solid #1c2029; font-size:.66rem; line-height:1.5; color:#5a6472; text-align:left; }}
+  .legal b {{ color:#8a94a3; font-weight:700; }}
+</style></head>
+<body>
+  <form class="card" method="POST" action="/toolbox-login">
+    <div class="brand">Aletheya <span>Toolbox</span></div>
+    <div class="sub">Internal tools</div>
+    {msg}
+    <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+    <button type="submit">Enter</button>
+    <p class="legal"><b>Confidential &amp; Proprietary.</b> This workspace and all content within are the exclusive property of <b>Aletheya</b> and intended solely for authorized internal use. Unauthorized access, use, or disclosure is strictly prohibited.</p>
+  </form>
+</body></html>"""
+
+
+@app.route("/toolbox-login", methods=["GET", "POST"])
+def toolbox_login():
+    if request.method == "POST":
+        ip = _client_ip() + ":tb"
+        cnt, t0 = _LOGIN_FAILS.get(ip, (0, time.time()))
+        if time.time() - t0 > _LOGIN_WINDOW:
+            cnt, t0 = 0, time.time()
+        if cnt >= _LOGIN_MAX:
+            return toolbox_login_page("Too many attempts — wait a few minutes and try again."), 429
+        if hmac.compare_digest(request.form.get("password", ""), TOOLBOX_PASSWORD):
+            session["toolbox_ok"] = True
+            _LOGIN_FAILS.pop(ip, None)
+            return redirect("/toolbox")
+        _LOGIN_FAILS[ip] = (cnt + 1, t0)
+        return toolbox_login_page("Incorrect password — try again."), 401
+    if session.get("toolbox_ok"):
+        return redirect("/toolbox")
+    return toolbox_login_page()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -135,8 +196,20 @@ PUBLIC_PATHS = ("/", "/login", "/logo.png")
 
 @app.before_request
 def require_login():
-    if request.path in PUBLIC_PATHS:
+    p = request.path
+    if p in PUBLIC_PATHS:
         return None
+    # The Aletheya Toolbox is its own workspace gated by its own password
+    # (session["toolbox_ok"]) — completely independent of the Nova login.
+    if p.startswith("/toolbox"):
+        if p == "/toolbox-login":
+            return None
+        if session.get("toolbox_ok"):
+            return None
+        if request.method == "GET":
+            return redirect("/toolbox-login")
+        return jsonify({"error": "This area is locked.", "locked": True}), 403
+    # Everything else is the Nova workspace, gated by APP_PASSWORD.
     if session.get("ok"):
         return None
     # remember where they were headed so login can send them straight back
@@ -373,6 +446,372 @@ def bg_economy():
 @app.route("/nova-plate.png")
 def nova_plate():
     return send_file(os.path.join(BASE_DIR, "nova-plate.png"))
+
+
+@app.route("/toolbox")
+def toolbox():
+    return send_file(os.path.join(BASE_DIR, "toolbox.html"))
+
+
+@app.route("/toolbox/pdf")
+def toolbox_pdf_page():
+    return send_file(os.path.join(BASE_DIR, "toolbox_pdf.html"))
+
+
+@app.route("/toolbox/rx")
+def toolbox_rx_page():
+    return send_file(os.path.join(BASE_DIR, "toolbox_rx.html"))
+
+
+# ---------------------------------------------------------------------------
+# Aletheya Toolbox · PDF Filler
+# Reads a fillable PDF (AcroForm) template, fills its named fields, and exports.
+# Three ways in: type values, AI-parse pasted text, or batch from a spreadsheet.
+# ---------------------------------------------------------------------------
+
+def _pdf_field_info(reader):
+    """Return a clean list of the template's form fields for the UI."""
+    out = []
+    fields = reader.get_fields() or {}
+    for name, f in fields.items():
+        ftype = f.get("/FT")
+        kind = {"/Tx": "text", "/Btn": "checkbox", "/Ch": "choice", "/Sig": "signature"}.get(ftype, "text")
+        info = {"name": name, "type": kind}
+        # Checkbox/radio: surface the "on" state(s) so we know what value turns it on.
+        states = f.get("/_States_")
+        if states:
+            info["states"] = [str(s) for s in states]
+        # Dropdown / list options.
+        opts = f.get("/Opt") or f.get("/_States_")
+        if kind == "choice" and opts:
+            info["options"] = [str(o[1]) if isinstance(o, (list, tuple)) else str(o) for o in opts]
+        cur = f.get("/V")
+        if cur is not None:
+            info["value"] = str(cur)
+        out.append(info)
+    return out
+
+
+def _fill_pdf(template_bytes, values):
+    """Fill every page's form fields with `values` (name -> value) and return bytes."""
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(template_bytes))
+    writer = PdfWriter()
+    writer.append(reader)
+    # Coerce booleans to the checkbox "on" state where we can detect it.
+    fields = reader.get_fields() or {}
+    clean = {}
+    for k, v in values.items():
+        if k not in fields:
+            continue
+        f = fields[k]
+        if f.get("/FT") == "/Btn":
+            states = [str(s) for s in (f.get("/_States_") or [])]
+            on = next((s for s in states if s not in ("/Off", "Off")), "/Yes")
+            if isinstance(v, bool):
+                clean[k] = on if v else "/Off"
+            elif str(v).strip().lower() in ("1", "true", "yes", "x", "on", "checked", "✓"):
+                clean[k] = on
+            elif str(v).strip().lower() in ("0", "false", "no", "off", "", "unchecked"):
+                clean[k] = "/Off"
+            else:
+                clean[k] = str(v)
+        else:
+            clean[k] = "" if v is None else str(v)
+    for page in writer.pages:
+        try:
+            writer.update_page_form_field_values(page, clean, auto_regenerate=False)
+        except Exception:
+            pass
+    # Make viewers render the filled values without re-saving.
+    try:
+        writer.set_need_appearances_writer(True)
+    except Exception:
+        pass
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+@app.route("/toolbox/pdf-fields", methods=["POST"])
+def toolbox_pdf_fields():
+    """Inspect an uploaded PDF template and return its fillable fields."""
+    f = request.files.get("template")
+    if not f:
+        return jsonify({"error": "No PDF uploaded."}), 400
+    try:
+        from pypdf import PdfReader
+        data = f.read()
+        reader = PdfReader(io.BytesIO(data))
+        fields = _pdf_field_info(reader)
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read that PDF: {e}"}), 400
+    if not fields:
+        return jsonify({"fields": [], "message": "This PDF has no fillable form fields. Use a PDF with form fields (AcroForm) made in Acrobat or similar."})
+    return jsonify({"fields": fields, "pages": len(reader.pages)})
+
+
+@app.route("/toolbox/pdf-fill", methods=["POST"])
+def toolbox_pdf_fill():
+    """Fill a single PDF from a JSON map of field values and return the PDF."""
+    f = request.files.get("template")
+    if not f:
+        return jsonify({"error": "No PDF uploaded."}), 400
+    try:
+        values = json.loads(request.form.get("values", "{}"))
+    except Exception:
+        return jsonify({"error": "Bad values payload."}), 400
+    try:
+        out = _fill_pdf(f.read(), values or {})
+    except Exception as e:
+        return jsonify({"error": f"Couldn't fill the PDF: {e}"}), 500
+    name = (request.form.get("filename") or "filled").strip() or "filled"
+    if not name.lower().endswith(".pdf"):
+        name += ".pdf"
+    return send_file(io.BytesIO(out), mimetype="application/pdf",
+                     as_attachment=True, download_name=name)
+
+
+@app.route("/toolbox/pdf-parse", methods=["POST"])
+def toolbox_pdf_parse():
+    """AI-map free-form pasted text onto the template's field names."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    data = request.json or {}
+    fields = data.get("fields") or []
+    text = (data.get("text") or "").strip()
+    if not fields:
+        return jsonify({"error": "No template fields provided."}), 400
+    if not text:
+        return jsonify({"error": "Paste some text to parse."}), 400
+    # Describe the fields so the model knows the exact keys to emit.
+    lines = []
+    for f in fields:
+        d = f"- {f['name']} ({f.get('type','text')}"
+        if f.get("options"):
+            d += "; options: " + ", ".join(f["options"])
+        elif f.get("states"):
+            d += "; on-state: " + (f["states"][0] if f["states"] else "/Yes")
+        d += ")"
+        lines.append(d)
+    field_list = "\n".join(lines)
+    prompt = (
+        "You map free-form information onto a fixed set of PDF form fields.\n"
+        "Return ONLY a JSON object whose keys are EXACT field names from the list below.\n"
+        "Only include a key when you can confidently determine its value from the text; "
+        "omit fields you cannot fill. For checkboxes, use true/false. For dropdowns/choices, "
+        "use one of the listed options verbatim. Do not invent data.\n\n"
+        f"FIELDS:\n{field_list}\n\nTEXT:\n{text}"
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        out = json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        return jsonify({"error": f"AI parse failed: {e}"}), 500
+    names = {f["name"] for f in fields}
+    values = {k: v for k, v in out.items() if k in names}
+    return jsonify({"values": values})
+
+
+def _read_spreadsheet(file_storage):
+    """Parse an uploaded CSV or XLSX into (headers, list-of-row-dicts)."""
+    name = (file_storage.filename or "").lower()
+    raw = file_storage.read()
+    rows = []
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        grid = [[("" if c is None else c) for c in r] for r in ws.iter_rows(values_only=True)]
+    else:
+        text = raw.decode("utf-8-sig", "ignore")
+        grid = list(csv.reader(io.StringIO(text)))
+    grid = [r for r in grid if any(str(c).strip() for c in r)]
+    if not grid:
+        return [], []
+    headers = [str(h).strip() for h in grid[0]]
+    for r in grid[1:]:
+        row = {headers[i]: (str(r[i]).strip() if i < len(r) and r[i] is not None else "")
+               for i in range(len(headers))}
+        rows.append(row)
+    return headers, rows
+
+
+@app.route("/toolbox/pdf-batch", methods=["POST"])
+def toolbox_pdf_batch():
+    """Fill the template once per spreadsheet row; return a zip of PDFs.
+
+    Spreadsheet column headers are matched to PDF field names (exact, then
+    case-insensitive). An optional 'filename' column names each output PDF.
+    """
+    tpl = request.files.get("template")
+    sheet = request.files.get("sheet")
+    if not tpl or not sheet:
+        return jsonify({"error": "Upload both a PDF template and a spreadsheet."}), 400
+    template_bytes = tpl.read()
+    try:
+        from pypdf import PdfReader
+        field_names = list((PdfReader(io.BytesIO(template_bytes)).get_fields() or {}).keys())
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read the PDF template: {e}"}), 400
+    if not field_names:
+        return jsonify({"error": "The PDF template has no fillable form fields."}), 400
+    try:
+        headers, rows = _read_spreadsheet(sheet)
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read the spreadsheet: {e}"}), 400
+    if not rows:
+        return jsonify({"error": "The spreadsheet has no data rows."}), 400
+    # Map headers -> field names (exact, else case-insensitive).
+    lower = {fn.lower(): fn for fn in field_names}
+    colmap = {}
+    for h in headers:
+        if h in field_names:
+            colmap[h] = h
+        elif h.lower() in lower:
+            colmap[h] = lower[h.lower()]
+    if not colmap:
+        return jsonify({"error": "No spreadsheet columns matched the PDF field names. "
+                                 "Make the column headers match the field names exactly. "
+                                 f"PDF fields: {', '.join(field_names)}"}), 400
+    base = (request.form.get("filename") or "filled").strip() or "filled"
+    zbuf = io.BytesIO()
+    used = set()
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        for i, row in enumerate(rows, 1):
+            values = {colmap[h]: row[h] for h in colmap if row.get(h, "") != ""}
+            try:
+                pdf = _fill_pdf(template_bytes, values)
+            except Exception:
+                continue
+            fn = (row.get("filename") or row.get("Filename") or f"{base}-{i}").strip()
+            fn = re.sub(r"[^\w.\- ]+", "", fn) or f"{base}-{i}"
+            if not fn.lower().endswith(".pdf"):
+                fn += ".pdf"
+            if fn in used:
+                fn = f"{fn[:-4]}-{i}.pdf"
+            used.add(fn)
+            z.writestr(fn, pdf)
+    zbuf.seek(0)
+    return send_file(zbuf, mimetype="application/zip",
+                     as_attachment=True, download_name=f"{base}-batch.zip")
+
+
+# ---------------------------------------------------------------------------
+# Aletheya Toolbox · RX Update (Medical / Psychiatric Update) generator
+# ---------------------------------------------------------------------------
+
+@app.route("/toolbox/doctors")
+def toolbox_doctors():
+    """The provider directory — used to populate the doctor picker."""
+    out = []
+    for i, d in enumerate(rx_form.DOCTORS):
+        out.append({"index": i, "label": rx_form.doctor_label(d), **d})
+    return jsonify({"doctors": out})
+
+
+@app.route("/toolbox/rx-parse", methods=["POST"])
+def toolbox_rx_parse():
+    """Read a chart screenshot and/or pasted text into structured RX-Update data."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    data = request.json or {}
+    text = (data.get("text") or "").strip()
+    images = data.get("images") or []          # list of data URLs
+    instructions = (data.get("instructions") or "").strip()
+    if not text and not images:
+        return jsonify({"error": "Add a screenshot or some text to parse."}), 400
+
+    sys = (
+        "You extract patient data from an Adult Day Health Care chart (e.g. TurboADHC "
+        "Plan of Care) for a Medical/Psychiatric Update fax. Return ONLY a JSON object "
+        "with these keys:\n"
+        '  patient_name (string, "First Last"),\n'
+        "  dob (string, MM/DD/YYYY),\n"
+        "  diagnoses (array of {name, icd}) — use the ICD-10 code exactly as shown,\n"
+        "  medications (array of strings — full sig if shown, e.g. 'Aspirin 81 mg QD PO'),\n"
+        "  significant_events (string, may be empty).\n"
+        "Read carefully from the image(s) and text. Do not invent data — omit what you can't read. "
+        "If the user gives instructions (e.g. remove or add a medication, fix a name), follow them."
+    )
+    user_content = []
+    parts = []
+    if text:
+        parts.append("SOURCE TEXT:\n" + text)
+    if instructions:
+        parts.append("INSTRUCTIONS:\n" + instructions)
+    if not parts:
+        parts.append("Extract everything you can from the attached image(s).")
+    user_content.append({"type": "text", "text": "\n\n".join(parts)})
+    for url in images[:6]:
+        if isinstance(url, str) and url.startswith("data:image"):
+            user_content.append({"type": "image_url", "image_url": {"url": url}})
+
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "system", "content": sys},
+                      {"role": "user", "content": user_content}],
+            response_format={"type": "json_object"},
+        )
+        out = json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        return jsonify({"error": f"AI parse failed: {e}"}), 500
+
+    # Normalize shape.
+    result = {
+        "patient_name": str(out.get("patient_name") or "").strip(),
+        "dob": str(out.get("dob") or "").strip(),
+        "diagnoses": [],
+        "medications": [],
+        "significant_events": str(out.get("significant_events") or "").strip(),
+    }
+    for dx in (out.get("diagnoses") or []):
+        if isinstance(dx, dict):
+            name = str(dx.get("name") or dx.get("diagnosis") or "").strip()
+            icd = str(dx.get("icd") or dx.get("icd_code") or dx.get("code") or "").strip()
+        else:
+            name, icd = str(dx).strip(), ""
+        if name or icd:
+            result["diagnoses"].append({"name": name, "icd": icd})
+    for m in (out.get("medications") or []):
+        m = (m if isinstance(m, str) else str(m.get("name", "")) if isinstance(m, dict) else str(m)).strip()
+        if m:
+            result["medications"].append(m)
+    return jsonify(result)
+
+
+@app.route("/toolbox/rx-export", methods=["POST"])
+def toolbox_rx_export():
+    """Render the RX Update to PDF or Word from the structured data."""
+    data = request.json or {}
+    fmt = (data.get("format") or "pdf").lower()
+    payload = data.get("data") or {}
+    try:
+        if fmt == "docx":
+            blob = rx_form.render_rx_docx(payload)
+            mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ext = ".docx"
+        else:
+            blob = rx_form.render_rx_pdf(payload)
+            mime = "application/pdf"
+            ext = ".pdf"
+    except Exception as e:
+        return jsonify({"error": f"Couldn't build the document: {e}"}), 500
+    base = (data.get("filename") or "").strip()
+    if not base:
+        pn = (payload.get("patient_name") or "RX-Update").strip().replace(" ", "-")
+        base = f"RX-Update-{pn}" if pn else "RX-Update"
+    base = re.sub(r"[^\w.\-]+", "", base) or "RX-Update"
+    if base.lower().endswith(ext):
+        base = base[:-len(ext)]
+    return send_file(io.BytesIO(blob), mimetype=mime, as_attachment=True, download_name=base + ext)
 
 
 @app.route("/status")
