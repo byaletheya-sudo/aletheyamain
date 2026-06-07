@@ -246,7 +246,7 @@ window.addEventListener('paste', ev=>{
 function addImageFile(file){
   if(!file.type.startsWith('image/')) return;
   const r=new FileReader();
-  r.onload=()=>{ images.push(r.result); renderThumbs(); };
+  r.onload=()=>{ images.push(r.result); renderThumbs(); scheduleAutoParse(); };
   r.readAsDataURL(file);
 }
 function renderThumbs(){
@@ -283,10 +283,17 @@ function setMeds(list){ const c=$('#medList'); c.innerHTML=''; (list&&list.lengt
 function getDx(){ return [...document.querySelectorAll('#dxList .listrow')].map(r=>({name:r.querySelector('.dx-name').value.trim(), icd:r.querySelector('.dx-icd').value.trim()})).filter(d=>d.name||d.icd); }
 function getMeds(){ return [...document.querySelectorAll('#medList .med-name')].map(i=>i.value.trim()).filter(Boolean); }
 
-/* ---- Parse ---- */
-$('#parseBtn').addEventListener('click', async ()=>{
+/* ---- Parse (manual button + auto after paste) ---- */
+let parsing=false, autoTimer=null;
+function scheduleAutoParse(){            // debounce so multi-image / fast pastes fire once
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(()=>{ if(!parsing) runParse(); }, 600);
+}
+async function runParse(){
   const text=$('#srcText').value.trim(), instr=$('#srcInstr').value.trim();
-  if(!images.length && !text){ msg($('#parseMsg'),'Add a screenshot or some text first.','err'); return; }
+  if(!images.length && !text) return;   // nothing to read yet (silent for auto)
+  if(parsing) return;
+  parsing=true;
   const b=$('#parseBtn'); b.disabled=true; const old=b.innerHTML; b.innerHTML='<span class="spin"></span>Reading…';
   clr($('#parseMsg'));
   try{
@@ -301,8 +308,15 @@ $('#parseBtn').addEventListener('click', async ()=>{
     const nd=(d.diagnoses||[]).length, nm=(d.medications||[]).length;
     msg($('#parseMsg'),`Pulled ${nd} diagnosis${nd!==1?'es':''} and ${nm} medication${nm!==1?'s':''}. Review below, then export.`,'ok');
   }catch(e){ msg($('#parseMsg'),e.message,'err'); }
-  finally{ b.disabled=false; b.innerHTML=old; }
+  finally{ parsing=false; b.disabled=false; b.innerHTML=old; }
+}
+$('#parseBtn').addEventListener('click', ()=>{
+  if(!images.length && !$('#srcText').value.trim()){ msg($('#parseMsg'),'Add a screenshot or some text first.','err'); return; }
+  runParse();
 });
+// Auto-parse right after pasting text, instructions, or an image.
+$('#srcText').addEventListener('paste', scheduleAutoParse);
+$('#srcInstr').addEventListener('paste', scheduleAutoParse);
 
 /* ---- Format toggle ---- */
 $('#fmtSeg').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
