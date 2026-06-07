@@ -27,6 +27,10 @@ RX_PDF = {
     "date_top": "text_59legf",      # RN "Date"
     "date_md": "text_60deru",       # MD-signature "Date" (left blank per request)
 }
+# Fixed font size for the diagnosis/medication grid cells (so long text clips
+# instead of auto-shrinking). Matches the size short entries render at.
+RX_GRID_FONT = 9
+
 # Diagnoses, column-major (down col 1, then col 2, then col 3) — 24 cells.
 RX_DX = [
     "text_2ttsg", "text_3rzsp", "text_4ppkg", "text_5pyda", "text_6gait", "text_7je", "text_8gspl", "text_9kdil",
@@ -148,57 +152,101 @@ def _g(d, *keys, default=""):
 # ---------------------------------------------------------------------------
 # PDF
 # ---------------------------------------------------------------------------
-def render_rx_pdf(data):
-    """Fill the real fillable RX-Update template (pixel-exact) from structured data."""
-    from pypdf import PdfReader, PdfWriter
+def _template_rects():
+    """Map each template field name -> [x0, y0, x1, y1] (PDF points)."""
+    from pypdf import PdfReader
     reader = PdfReader(RX_TEMPLATE)
-    writer = PdfWriter()
-    writer.append(reader)
+    acro = reader.trailer["/Root"]["/AcroForm"]
+    rects = {}
+    for ref in acro["/Fields"]:
+        o = ref.get_object()
+        rc = o.get("/Rect")
+        if rc is None and o.get("/Kids"):
+            rc = o["/Kids"][0].get_object().get("/Rect")
+        if o.get("/T") is not None and rc is not None:
+            rects[str(o["/T"])] = [float(x) for x in rc]
+    return rects
 
+
+def render_rx_pdf(data):
+    """Overlay text onto the blank template at the exact field positions, with a
+    FIXED font size — long entries are cut off at the cell edge (never shrunk).
+    The form fields are flattened so it renders identically in every viewer."""
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import NameObject
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    rects = _template_rects()
     doc = data.get("doctor") or {}
-    vals = {
-        RX_PDF["doctor_name"]: doctor_name(doc),
-        RX_PDF["doctor_addr1"]: doctor_street(doc),
-        RX_PDF["doctor_addr2"]: doctor_csz(doc),
-        RX_PDF["doctor_phone"]: _g(doc, "phone"),
-        RX_PDF["doctor_fax"]: _g(doc, "fax"),
-        RX_PDF["assess_date"]: _g(data, "assess_date"),
-        RX_PDF["patient_name"]: _g(data, "patient_name"),
-        RX_PDF["dob"]: _g(data, "dob"),
-        RX_PDF["date_top"]: _g(data, "date"),
-        # RX_PDF["date_md"] intentionally left blank (no date in front of MD signature).
-    }
 
-    # Diagnoses — "ICD  Title", column-major into the grid.
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    FONT = "Helvetica"
+
+    def draw(name, text, size, pad=2.5):
+        text = "" if text is None else str(text).strip()
+        if not text or name not in rects:
+            return
+        x0, y0, x1, y1 = rects[name]
+        max_w = (x1 - x0) - pad * 2
+        # Cut off (truncate) anything that doesn't fit — no shrinking.
+        while text and stringWidth(text, FONT, size) > max_w:
+            text = text[:-1]
+        baseline = y0 + ((y1 - y0) - size) / 2 + size * 0.18
+        c.setFont(FONT, size)
+        c.drawString(x0 + pad, baseline, text)
+
+    # Doctor block
+    draw(RX_PDF["doctor_name"], doctor_name(doc), 9.5)
+    draw(RX_PDF["doctor_addr1"], doctor_street(doc), 9.5)
+    draw(RX_PDF["doctor_addr2"], doctor_csz(doc), 9.5)
+    draw(RX_PDF["doctor_phone"], _g(doc, "phone"), 9.5)
+    draw(RX_PDF["doctor_fax"], _g(doc, "fax"), 9.5)
+    # Patient / dates
+    draw(RX_PDF["assess_date"], _g(data, "assess_date"), 10)
+    draw(RX_PDF["patient_name"], _g(data, "patient_name"), 10)
+    draw(RX_PDF["dob"], _g(data, "dob"), 10)
+    draw(RX_PDF["date_top"], _g(data, "date"), 10)
+    # date_md intentionally left blank (no date in front of MD signature)
+
+    # Diagnoses — "ICD  Title", column-major, cut off if too long.
     dlist = [dx_text(d) for d in (data.get("diagnoses") or []) if dx_text(d)]
     for fn, val in zip(RX_DX, dlist):
-        vals[fn] = val
-
-    # Medications — column-major into the grid.
+        draw(fn, val, RX_GRID_FONT)
+    # Medications — column-major.
     mlist = [m.strip() for m in (data.get("medications") or []) if m and m.strip()]
     for fn, val in zip(RX_MED, mlist):
-        vals[fn] = val
-
-    # Significant events — wrap across the two lines.
+        draw(fn, val, RX_GRID_FONT)
+    # Significant events across the two lines.
     ln1, ln2 = _wrap2(_g(data, "significant_events"))
-    if ln1:
-        vals[RX_PDF["sig1"]] = ln1
-    if ln2:
-        vals[RX_PDF["sig2"]] = ln2
+    draw(RX_PDF["sig1"], ln1, 9)
+    draw(RX_PDF["sig2"], ln2, 9)
 
-    vals = {k: ("" if v is None else str(v)) for k, v in vals.items()}
-    for page in writer.pages:
-        try:
-            writer.update_page_form_field_values(page, vals, auto_regenerate=False)
-        except Exception:
-            pass
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    overlay = PdfReader(buf).pages[0]
+
+    base = PdfReader(RX_TEMPLATE)
+    page = base.pages[0]
+    page.merge_page(overlay)
+
+    writer = PdfWriter()
+    writer.add_page(page)
+    # Flatten: drop the (now-empty) form fields so nothing double-renders.
     try:
-        writer.set_need_appearances_writer(True)
+        if "/AcroForm" in writer._root_object:
+            del writer._root_object[NameObject("/AcroForm")]
+        if "/Annots" in writer.pages[0]:
+            del writer.pages[0][NameObject("/Annots")]
     except Exception:
         pass
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
+
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 # ---------------------------------------------------------------------------
