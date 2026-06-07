@@ -221,23 +221,28 @@ def render_rx_pdf(data):
     L(LM + 18, fy, f"Please sign and fax this form to RN at Mountainview ADHC @ {CLINIC['fax_number']}. Thank you so",
       "Helvetica", 11)
     L(LM + 18, fy - 14, "much.", "Helvetica", 11)
-    L(LM, fy - 32, f"This fax sent on behalf of {CLINIC['rn']}", "Times-Roman", 10)
-    c.line(LM, fy - 30, 280, fy - 30)
+
+    fax_text = f"This fax sent on behalf of {CLINIC['rn']}"
+    L(LM, fy - 32, fax_text, "Times-Roman", 10)
+    fw = c.stringWidth(fax_text, "Times-Roman", 10)
+    c.line(LM, fy - 35, LM + fw, fy - 35)             # underline sits just BELOW the text
 
     the_date = _g(data, "date")
-    # top date (RN line)
-    c.line(420, fy - 30, 545, fy - 30)
+    # top date blank (to the right of the fax line)
+    c.line(420, fy - 35, 545, fy - 35)
     if the_date:
-        C(482, fy - 27, the_date, "Times-Roman", 10)
-    L(440, fy - 42, "Date", "Times-Roman", 10)
+        C(482, fy - 32, the_date, "Times-Roman", 10)
+    C(482, fy - 47, "Date", "Times-Roman", 10)
 
     # MD signature + bottom date
-    L(LM + 40, fy - 64, "MD Signature:", "Helvetica-Bold", 11)
-    c.line(140, fy - 66, 400, fy - 66)
+    sig_label = "MD Signature:"
+    L(LM + 40, fy - 66, sig_label, "Helvetica-Bold", 11)
+    sw = c.stringWidth(sig_label, "Helvetica-Bold", 11)
+    c.line(LM + 40 + sw + 8, fy - 66, 400, fy - 66)   # signature blank starts after the label
     c.line(420, fy - 66, 545, fy - 66)
     if the_date:
         C(482, fy - 63, the_date, "Times-Roman", 10)
-    L(440, fy - 78, "Date", "Times-Roman", 10)
+    C(482, fy - 78, "Date", "Times-Roman", 10)
 
     c.showPage()
     c.save()
@@ -338,7 +343,8 @@ def render_rx_docx(data):
 
     para(f"Please sign and fax this form to RN at Mountainview ADHC @ {CLINIC['fax_number']}. Thank you so much.",
          size=11)
-    para(f"This fax sent on behalf of {CLINIC['rn']}", size=10, space_after=2)
+    p = document.add_paragraph(); p.paragraph_format.space_after = Pt(2)
+    r = p.add_run(f"This fax sent on behalf of {CLINIC['rn']}"); r.font.size = Pt(10); r.underline = True
 
     the_date = _g(data, "date")
     p = document.add_paragraph()
