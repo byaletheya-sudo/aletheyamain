@@ -263,7 +263,10 @@ API_KEY = load_api_key()
 
 # the catalog (image source). Set CARSXE_API_KEY in the host env.
 CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
-_CARSXE_ALLOWED = set()     # image URLs the catalog returned to us (the only ones we'll proxy)
+_CARSXE_ALLOWED = set()     # exact image URLs the catalog returned (fast-path proxy allow)
+_CARSXE_HOSTS = set()       # CDN hosts the catalog served from — learned so a URL still proxies
+                            # after the exact-set is lost (server restart) or evicted
+_CARSXE_CDN_ROOTS = ('carsxe.com', 'imagin.studio')   # seeded vendor CDNs so proxy works even before the first fetch post-restart
 _CARSXE_IMG_CACHE = {}      # vehicle -> image response, so repeats never re-hit the catalog
 _CARSXE_META_CACHE = {}     # vehicle -> colors + trims
 _CARSXE_CANON_CACHE = {}    # vehicle -> canonical make/model/trim (name cleanup)
@@ -277,6 +280,37 @@ def _cache_put(cache, key, val):
     if len(cache) >= _CARSXE_CACHE_MAX:
         cache.pop(next(iter(cache)))   # evict oldest
     cache[key] = val
+
+
+def _carsxe_host(url):
+    try:
+        return urllib.parse.urlparse(url).netloc.lower().split(":")[0]
+    except Exception:
+        return ""
+
+
+def _carsxe_remember(url):
+    """Record a catalog image URL (and its CDN host) as safe to proxy."""
+    if not url:
+        return
+    _CARSXE_ALLOWED.add(url)
+    h = _carsxe_host(url)
+    if h:
+        _CARSXE_HOSTS.add(h)
+
+
+def _carsxe_proxy_ok(url):
+    """Proxy guard: exact URL we've seen, OR any URL on a CDN host the catalog has
+    served from / a known vendor CDN. Host-based so a thumbnail still loads after the
+    exact allow-set is lost to a restart or FIFO eviction (was a silent 'URL not allowed')."""
+    if url in _CARSXE_ALLOWED:
+        return True
+    h = _carsxe_host(url)
+    if not h:
+        return False
+    if h in _CARSXE_HOSTS:
+        return True
+    return any(h == r or h.endswith("." + r) for r in _CARSXE_CDN_ROOTS)
 
 
 # CarVector (trial image source). Set CARVECTOR_API_KEY in the host env.
@@ -1093,13 +1127,18 @@ def review_caption():
         return jsonify({"error": info["detail"] or info["reason"], "reason": info["reason"]}), info["status"]
 
 
-def _carsxe_dataurl(url, tries=2, timeout=12):
-    """Fetch an image and return it as a data URL. The photo CDN can be slow, so
-    retry a few times before giving up."""
+def _carsxe_dataurl(url, tries=3, timeout=20):
+    """Fetch an image and return it as a data URL. The photo CDN can be slow and some
+    hosts reject bare requests, so send browser-like headers and retry before giving up."""
     last = None
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8",
+        "Referer": "https://api.carsxe.com/",
+    }
     for _ in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 ctype = r.headers.get("Content-Type", "image/png")
                 b = r.read()
@@ -1303,7 +1342,7 @@ def carsxe_image():
     cached = _CARSXE_IMG_CACHE.get(key)
     if cached is not None and not nocache:
         for o in cached.get("options", []):           # keep proxy allow-list warm
-            _CARSXE_ALLOWED.add(o["url"])
+            _carsxe_remember(o["url"]); _carsxe_remember(o.get("thumb"))
         return jsonify({**cached, "cached": True})
 
     base = {"key": CARSXE_API_KEY, "make": make, "model": model,
@@ -1340,7 +1379,7 @@ def carsxe_image():
     if not imgs:
         return jsonify({"found": False, "message": body.get("error") or "No images returned by the catalog."})
     for im in imgs:
-        _CARSXE_ALLOWED.add(im["link"])
+        _carsxe_remember(im["link"]); _carsxe_remember(im.get("thumbnailLink"))
     options = [{"url": im["link"], "thumb": im.get("thumbnailLink") or im["link"],
                 "w": im.get("width"), "h": im.get("height"),
                 "transparent": str(im.get("mime", "")).endswith("png")}
@@ -1365,9 +1404,9 @@ def carsxe_image():
 
 @app.route("/carsxe-proxy", methods=["POST"])
 def carsxe_proxy():
-    """Proxy a specific catalog image (only URLs the catalog itself returned — no open SSRF)."""
+    """Proxy a specific catalog image (only catalog/vendor-CDN URLs — no open SSRF)."""
     url = (request.json or {}).get("url", "").strip()
-    if url not in _CARSXE_ALLOWED:
+    if not _carsxe_proxy_ok(url):
         return jsonify({"error": "URL not allowed."}), 400
     cached = _CARSXE_PROXY_CACHE.get(url)
     if cached is not None:
