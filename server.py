@@ -285,6 +285,15 @@ def _cache_put(cache, key, val):
     cache[key] = val
 
 
+def _carsxe_base_model(model):
+    """Drop the powertrain word the model now carries for display (e.g. "Sorento Hybrid"
+    -> "Sorento") so the image/colour catalog — which only knows the base model — still
+    matches. Whole-word only, so "Mach-E" / "EV6" / "bZ4X" survive untouched."""
+    q = re.sub(r"\b(?:plug[\s-]?in hybrid|plug[\s-]?in|hybrid|phev|electric|ev|bev)\b", " ", model or "", flags=re.I)
+    q = re.sub(r"\s+", " ", q).strip()
+    return q or (model or "")
+
+
 def _carsxe_host(url):
     try:
         return urllib.parse.urlparse(url).netloc.lower().split(":")[0]
@@ -1211,7 +1220,7 @@ def carsxe_meta():
         return jsonify({"error": "CARSXE_API_KEY is not set on the server."}), 500
     data = request.json or {}
     make = data.get("make", "").strip()
-    model = data.get("model", "").strip()
+    model = _carsxe_base_model(data.get("model", "").strip())   # "Sorento Hybrid" -> "Sorento" for the catalog
     year = str(data.get("year", "")).strip()
     trim = data.get("trim", "").strip()
     if not (make and model):
@@ -1347,14 +1356,19 @@ def carsxe_image():
     if not (make and model):
         return jsonify({"error": "Pick a make and model first."}), 400
 
-    key = "|".join([year, make.lower(), model.lower(), trim.lower(), color])
+    # The model now carries the powertrain for display (e.g. "Sorento Hybrid"), but the
+    # image catalog only knows the base model — strip it for the lookup so a hybrid still
+    # finds photos.
+    q_model = _carsxe_base_model(model)
+
+    key = "|".join([year, make.lower(), q_model.lower(), trim.lower(), color])
     cached = _CARSXE_IMG_CACHE.get(key)
     if cached is not None and not nocache:
         for o in cached.get("options", []):           # keep proxy allow-list warm
             _carsxe_remember(o["url"]); _carsxe_remember(o.get("thumb"))
         return jsonify({**cached, "cached": True})
 
-    base = {"key": CARSXE_API_KEY, "make": make, "model": model,
+    base = {"key": CARSXE_API_KEY, "make": make, "model": q_model,
             "transparent": "true", "size": "Large", "format": "json"}
     if year:
         base["year"] = year
@@ -1544,6 +1558,9 @@ def bulk_parse():
         "For each vehicle fill: year; make (FULL make, e.g. 'Mercedes-Benz', 'BMW'); model; trim; "
         "deal_type (lease | finance | onepay); monthly (monthly payment); das (due-at-signing, lease); "
         "down (down payment, finance); apr (finance APR percent); term (months); badge (promo label if any). "
+        "POWERTRAIN ('Hybrid', 'PHEV', 'Plug-in', 'Electric', 'EV') is part of the MODEL, not the trim — "
+        "append it to the model so it shows on the ad (e.g. 'Kia Sorento Hybrid LX' -> model 'Sorento Hybrid', "
+        "trim 'LX'; 'RAV4 Hybrid XLE' -> model 'RAV4 Hybrid', trim 'XLE'). Omit plain 'Gas' (it's the default). "
         "Use '' for anything not present. Numbers only — no $, no commas. If it says one-pay/single-pay, "
         "deal_type=onepay and put the up-front total in das. Default deal_type=lease when unclear."
     )
@@ -1729,11 +1746,12 @@ def deal_parse():
         "vehicle; trim is the variant/trim level (e.g. 'M Sport', 'xDrive', 'GT-Line', 'Luxury'). "
         "e.g. '2026 BMW 330i Convenience Package' -> make 'BMW', model '330i', trim '', package "
         "'Convenience Package'.\n"
-        "- POWERTRAIN words are NOT trim levels. Never put 'Gas', 'Hybrid', 'PHEV', 'Plug-in', "
-        "'Electric', 'EV' in 'trim'. Put Hybrid / PHEV / Electric in 'package' (so a hybrid stays a "
-        "distinct car); OMIT a plain 'Gas' entirely (it's the default). e.g. 'RX 350 Gas Premium' -> "
-        "model 'RX 350', trim 'Premium', package ''; 'RAV4 Hybrid XLE' -> model 'RAV4', trim 'XLE', "
-        "package 'Hybrid'.\n"
+        "- POWERTRAIN ('Hybrid', 'PHEV', 'Plug-in', 'Plug-in Hybrid', 'Electric', 'EV') is part of "
+        "the MODEL, not the trim or package — append it to the model so it shows on the ad (clients "
+        "must see it's a hybrid). e.g. 'Kia Sorento Hybrid LX' -> model 'Sorento Hybrid', trim 'LX'; "
+        "'RAV4 Hybrid XLE' -> model 'RAV4 Hybrid', trim 'XLE'; 'NX 450h+ Luxury' -> model 'NX 450h+', "
+        "trim 'Luxury'. OMIT a plain 'Gas' entirely (it's the default): 'RX 350 Gas Premium' -> model "
+        "'RX 350', trim 'Premium'. Never put a powertrain word in 'package'.\n"
         "- EXPAND abbreviated trim levels to the full standard name and stay CONSISTENT: 'PREM'->"
         "'Premium', 'Prem Plus'/'PREM+'->'Premium Plus', 'LUX'->'Luxury', 'Ult Lux'->'Ultra Luxury', "
         "'Ltd'->'Limited', 'Plat'->'Platinum', 'Pref'->'Preferred', 'F-Sport'->'F Sport'.\n"
