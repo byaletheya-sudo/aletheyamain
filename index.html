@@ -3953,13 +3953,15 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (await t_setAdCar(d.image_data, token)) { t_resetCrop(); $('t_dlBtn').disabled = false; setVdb('Color updated ✓', 'done'); }
     } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
   }
-  // html2canvas (1.4.1) sometimes renders a canvas a few px larger than requested,
-  // leaving a transparent strip on the right/bottom that reads as a white border on a
-  // dark ad. Crop the result to the exact pixel size so the edge is clean.
-  function cropCanvasExact(raw, w, h) {
-    if (raw.width === w && raw.height === h) return raw;
+  // html2canvas (1.4.1) leaves a 1–3px transparent strip on the right/bottom — which
+  // reads as a WHITE border on a dark ad. Crop to exact size AND (when bg is given) fill
+  // that base color first so any sub-pixel transparent edge inside the frame isn't white.
+  function cropCanvasExact(raw, w, h, bg) {
+    if (!bg && raw.width === w && raw.height === h) return raw;
     const out = document.createElement('canvas'); out.width = w; out.height = h;
-    out.getContext('2d').drawImage(raw, 0, 0);
+    const ctx = out.getContext('2d');
+    if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(raw, 0, 0);
     return out;
   }
   async function t_download() {
@@ -3974,7 +3976,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       stage.style.width = '1080px'; stage.style.height = '1920px';
       const raw = await html2canvas($('t_ad'), { width: 1080, height: 1920, scale: 2, backgroundColor: null, useCORS: true, logging: false });
       stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
-      const canvas = cropCanvasExact(raw, 1080 * 2, 1920 * 2);   // html2canvas can render 1–3px oversize -> white edge; crop to exact size
+      let adBg = getComputedStyle($('t_ad')).backgroundColor;    // fill the ad's dark base so a sub-pixel edge isn't white
+      if (!adBg || adBg === 'rgba(0, 0, 0, 0)' || adBg === 'transparent') adBg = '#050a12';
+      const canvas = cropCanvasExact(raw, 1080 * 2, 1920 * 2, adBg);
       const base = t_vehName().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'nova_ad';
       const a = document.createElement('a'); a.download = base + '_ad.png'; a.href = canvas.toDataURL('image/png'); a.click();
       setT('Ad downloaded ✓', 'done');
