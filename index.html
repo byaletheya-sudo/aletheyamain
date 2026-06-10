@@ -3603,6 +3603,16 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // ===================== TEST: lease ad from the catalog photos =====================
   let t_titleEdited = false;
   let t_subEdited = false;
+  // Bumped every time we kick off loading a photo into the preview. An async fetch only
+  // writes to #t_adCar if its token is still current — so a slow earlier fetch can't
+  // overwrite a newer pick (was showing the wrong car / making clicks not "stick").
+  let t_imgSeq = 0;
+  async function t_setAdCar(dataUrl, token) {
+    if (token !== t_imgSeq) return false;               // a newer request superseded this one
+    $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = dataUrl;
+    try { await waitForImage($('t_adCar')); } catch (e) { }
+    return token === t_imgSeq;
+  }
   // Make display shortenings (the catalog still gets the full value).
   const T_MAKE_SHORT = { 'Mercedes-Benz': 'Mercedes' };
   // Normalize an ugly trim into clean ad copy: "AMG C 43 4MATIC Sedan All Wheel
@@ -3833,19 +3843,17 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   async function t_pickPhoto(url, el) {
     if (!url) return;
+    const token = ++t_imgSeq;
     document.querySelectorAll('#t_photoThumbs .ph-thumb').forEach(x => x.classList.remove('active'));
     if (el) el.classList.add('active');
     setVdb('Loading that photo…', 'active');
     try {
       const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       const d = await r.json();
+      if (token !== t_imgSeq) return;
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      t_resetCrop();
-      $('t_dlBtn').disabled = false;
-      setVdb('Photo updated ✓', 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+      if (await t_setAdCar(d.image_data, token)) { t_resetCrop(); $('t_dlBtn').disabled = false; setVdb('Photo updated ✓', 'done'); }
+    } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
   }
   // ---- CarVector trial (isolated; doesn't touch the main flow) ----
   async function t_cvFetch() {
@@ -3853,9 +3861,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (!(make && model)) { setVdb('Pick a make and type a model first.', 'error'); return; }
     const btn = $('t_cvBtn'); btn.disabled = true; btn.textContent = 'Loading…';
     setVdb('Fetching CarVector illustration…', 'active');
+    const token = ++t_imgSeq;
     try {
       const r = await fetch('/carvector-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, make, model }) });
       const d = await r.json();
+      if (token !== t_imgSeq) return;
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
       if (d.found === false) {
         const diag = d.tried ? '  [' + d.tried.map(t => Object.values(t.q).join(' ') + '→' + t.count).join(', ') + ']' : '';
@@ -3871,10 +3881,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         wrap.appendChild(t);
       });
       $('t_cvWrap').style.display = '';
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      $('t_dlBtn').disabled = false;
-      setVdb(`CarVector: ${d.options.length} illustration(s) — tap to use`, 'done');
+      if (await t_setAdCar(d.image_data, token)) { $('t_dlBtn').disabled = false; setVdb(`CarVector: ${d.options.length} illustration(s) — tap to use`, 'done'); }
     } catch (e) { setVdb('✕ ' + e.message, 'error'); }
     finally { btn.disabled = false; btn.textContent = '🧪 Try CarVector (beta)'; }
   }
@@ -3882,14 +3889,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     document.querySelectorAll('#t_cvThumbs .ph-thumb').forEach(x => x.classList.remove('active'));
     if (el) el.classList.add('active');
     setVdb('Loading that illustration…', 'active');
+    const token = ++t_imgSeq;
     try {
       const r = await fetch('/carvector-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
       const d = await r.json();
+      if (token !== t_imgSeq) return;
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      setVdb('Illustration placed ✓', 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+      if (await t_setAdCar(d.image_data, token)) setVdb('Illustration placed ✓', 'done');
+    } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
   }
   // the catalog colours + trims for the picker (best-effort; failures are silent).
   async function t_loadMeta(year, make, model, trim) {
@@ -3916,16 +3923,18 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('vdbBtn').disabled = true; $('vdbBtn').classList.add('loading'); $('vdbBtn').textContent = 'Generating…';
     setVdb('Finding the best photo…', 'active');
     t_loadMeta(year, make, model, trim);                  // colours + trims populate the picker when ready
+    const token = ++t_imgSeq;
     try {
       const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor($('t_color').value) });
+      if (token !== t_imgSeq) return;
       if (d.error) { setVdb('✕ ' + d.error, 'error'); return; }
       if (d.found === false) { setVdb('✕ ' + (d.message || 'No photo found for that vehicle.'), 'error'); return; }
       t_setPhotoOptions(d.options);
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      $('t_dlBtn').disabled = false;
-      setVdb('Photo placed ✓ — tap another photo or pick a color below', 'done');
-      if ($('t_autoDl').checked) await t_download();
+      if (await t_setAdCar(d.image_data, token)) {
+        $('t_dlBtn').disabled = false;
+        setVdb('Photo placed ✓ — tap another photo or pick a color below', 'done');
+        if ($('t_autoDl').checked) await t_download();
+      }
     } catch (e) {
       setVdb('✕ ' + e.message, 'error');
     } finally {
@@ -3944,16 +3953,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     if (!(make && model)) return;
     const colorName = $('t_color').value;
     setVdb(colorName ? `Finding a ${colorName} one…` : 'Updating…', 'active');
+    const token = ++t_imgSeq;
     try {
       const d = await t_fetchPhoto({ year, make, model, trim, color: t_basicColor(colorName) });
+      if (token !== t_imgSeq) return;
       if (d.error || d.found === false) { setVdb('✕ ' + (d.error || d.message || 'No photo for that color.'), 'error'); return; }
       t_setPhotoOptions(d.options);
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      t_resetCrop();
-      $('t_dlBtn').disabled = false;
-      setVdb('Color updated ✓', 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+      if (await t_setAdCar(d.image_data, token)) { t_resetCrop(); $('t_dlBtn').disabled = false; setVdb('Color updated ✓', 'done'); }
+    } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
   }
   // html2canvas (1.4.1) sometimes renders a canvas a few px larger than requested,
   // leaving a transparent strip on the right/bottom that reads as a white border on a
@@ -3992,16 +3999,14 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     t_singleColorIdx = (t_singleColorIdx + 1) % T_REFRESH_COLORS.length;
     const color = T_REFRESH_COLORS[t_singleColorIdx];
     setVdb('Getting a new photo…', 'active');
+    const token = ++t_imgSeq;
     try {
       const d = await t_fetchPhoto({ year, make, model, trim, color, nocache: true });
+      if (token !== t_imgSeq) return;
       if (d.error || d.found === false) { setVdb('✕ ' + (d.error || d.message || 'No more photos for this vehicle.'), 'error'); return; }
       t_setPhotoOptions(d.options);
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data;
-      await waitForImage($('t_adCar'));
-      t_resetCrop();
-      $('t_dlBtn').disabled = false;
-      setVdb('New photo ✓' + (color ? ' (' + color + ')' : ''), 'done');
-    } catch (e) { setVdb('✕ ' + e.message, 'error'); }
+      if (await t_setAdCar(d.image_data, token)) { t_resetCrop(); $('t_dlBtn').disabled = false; setVdb('New photo ✓' + (color ? ' (' + color + ')' : ''), 'done'); }
+    } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
     finally { if (btn) btn.disabled = false; }
   }
 
@@ -4014,10 +4019,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     try {
       if (!window.__removeBg) throw new Error(window.__removeBgError ? 'Background remover failed to load — check your connection and refresh.' : 'Background remover still loading — wait a moment and try again.');
       setTUpload('Removing background… (first run downloads a one-time model, please wait)', 'active');
+      const token = ++t_imgSeq;
       const blob = await window.__removeBg(file);
       const dataUrl = await t_blobToDataURL(blob);
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = dataUrl;
-      await waitForImage($('t_adCar'));
+      if (!(await t_setAdCar(dataUrl, token))) return;
       t_resetCrop();
       $('t_dlBtn').disabled = false;
       const save = await fetch('/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_data: dataUrl, vehicle: t_vehName() }) });
@@ -4045,6 +4050,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     } catch (e) { /* gallery is best-effort */ }
   }
   async function t_selectCar(filename, card) {
+    ++t_imgSeq;                                          // claim the preview so an in-flight fetch can't overwrite this pick
     document.querySelectorAll('#t_gallery .gallery-item.selected').forEach(x => x.classList.remove('selected'));
     if (card) card.classList.add('selected');
     $('t_adCar').crossOrigin = 'anonymous';
@@ -4145,6 +4151,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   async function t_bulkPickPhoto(i, j) {
     const row = t_bulkRows[i], o = (row.photoOptions || [])[j]; if (!o) return;
+    const token = ++t_imgSeq;                            // this pick is now the current preview target
     row.photoUrl = o.url; row.photoData = null;
     t_renderBulkPhotos(i);
     t_bulkPreviewIdx = i; t_bulkNavSync();               // the row you're choosing for becomes the previewed ad
@@ -4153,11 +4160,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     try {
       const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: o.url }) });
       const d = await r.json();
+      if (token !== t_imgSeq) return;                    // superseded by a newer pick/nav — don't clobber
       if (d.error) { setTB('✕ ' + d.error, 'error'); return; }
       row.photoData = d.image_data;
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = d.image_data; await waitForImage($('t_adCar'));
-      setTB('Photo loaded onto the ad ✓', 'done');
-    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+      if (await t_setAdCar(d.image_data, token)) setTB('Photo loaded onto the ad ✓', 'done');
+    } catch (e) { if (token === t_imgSeq) setTB('✕ ' + e.message, 'error'); }
   }
   async function t_bulkLoadAllPhotos() {
     const btn = $('t_loadPhotosBtn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Loading…';
@@ -4176,20 +4183,22 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   async function t_bulkPreview(idx) {
     if (!t_bulkRows.length) return;
+    const token = ++t_imgSeq;                            // this preview is now the current target
     t_bulkPreviewIdx = ((idx % t_bulkRows.length) + t_bulkRows.length) % t_bulkRows.length;
     t_bulkNavSync();
     const row = t_bulkRows[t_bulkPreviewIdx];
     t_applyBulkRow(row); t_loadCrop(row);
-    if (row.photoData) { $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = row.photoData; try { await waitForImage($('t_adCar')); } catch (e) { } return; }
+    if (row.photoData) { await t_setAdCar(row.photoData, token); return; }
     if (!(row.make && row.model)) return;
     setTB('Loading ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length + '…', 'active');
     try {
       let imgData = null;
       if (row.photoUrl) { const r = await fetch('/carsxe-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: row.photoUrl }) }); const d = await r.json(); if (!d.error) imgData = d.image_data; }
-      if (!imgData) { for (const c of T_BULK_COLORS) { const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c }); if (d && !d.error && d.found !== false && d.image_data) { imgData = d.image_data; break; } } }
-      if (imgData) { row.photoData = imgData; $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = imgData; await waitForImage($('t_adCar')); setTB('Ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length, ''); }
-      else setTB('No photo found for this vehicle.', 'error');
-    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+      if (token !== t_imgSeq) return;                    // a newer preview/pick started while we waited
+      if (!imgData) { for (const c of T_BULK_COLORS) { const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color: c }); if (token !== t_imgSeq) return; if (d && !d.error && d.found !== false && d.image_data) { imgData = d.image_data; break; } } }
+      if (imgData) { row.photoData = imgData; if (await t_setAdCar(imgData, token)) setTB('Ad ' + (t_bulkPreviewIdx + 1) + ' of ' + t_bulkRows.length, ''); }
+      else if (token === t_imgSeq) setTB('No photo found for this vehicle.', 'error');
+    } catch (e) { if (token === t_imgSeq) setTB('✕ ' + e.message, 'error'); }
   }
   function t_bulkPrev() { t_bulkPreview(t_bulkPreviewIdx - 1); }
   function t_bulkNext() { t_bulkPreview(t_bulkPreviewIdx + 1); }
@@ -4201,17 +4210,19 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const color = T_REFRESH_COLORS[row.colorIdx];
     const strip = $('bphotos-' + i); if (strip) { strip.style.display = ''; strip.innerHTML = '<span class="bulk-ph-msg">Getting new photos…</span>'; }
     setTB('Getting a new batch of photos…', 'active');
+    const token = ++t_imgSeq;
     try {
       const d = await t_fetchPhoto({ year: row.year, make: row.make, model: row.model, trim: row.trim, color, nocache: true });
+      if (token !== t_imgSeq) return;
       if (d && d.options && d.options.length) {
         row.photoOptions = d.options; row.photoUrl = d.options[0].url; row.photoData = d.image_data || null;
         t_renderBulkPhotos(i);
         t_bulkPreviewIdx = i; t_bulkNavSync(); t_applyBulkRow(row);
-        if (row.photoData) { $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = row.photoData; await waitForImage($('t_adCar')); }
+        if (row.photoData) await t_setAdCar(row.photoData, token);
         t_loadCrop(row);
         setTB('New photos ✓' + (color ? ' (' + color + ')' : ''), 'done');
       } else { if (strip) strip.innerHTML = '<span class="bulk-ph-msg">No more photos for this vehicle.</span>'; setTB('No more photos found.', 'error'); }
-    } catch (e) { setTB('✕ ' + e.message, 'error'); }
+    } catch (e) { if (token === t_imgSeq) setTB('✕ ' + e.message, 'error'); }
   }
   // ---- crop / zoom / reframe the ad photo (per bulk row; single = session) ----
   let t_zoom = 1, t_px = 0, t_py = 0;
@@ -4258,6 +4269,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   async function t_bulkDownloadOne(i) {
     const row = t_bulkRows[i];
     if (!(row.make && row.model)) { t_bulkDot(i, 'error'); return false; }
+    const token = ++t_imgSeq;                            // own the preview image so an in-flight preview can't swap it mid-capture
     t_applyBulkRow(row); t_bulkDot(i, 'loading');
     try {
       let imgData = row.photoData;                       // a photo the user chose for this row
@@ -4274,7 +4286,8 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
         if (!d || d.error || d.found === false || !d.image_data) { t_bulkDot(i, 'error'); return false; }
         imgData = d.image_data;
       }
-      $('t_adCar').removeAttribute('crossorigin'); $('t_adCar').src = imgData; await waitForImage($('t_adCar'));
+      row.photoData = imgData;
+      if (!(await t_setAdCar(imgData, token))) { t_bulkDot(i, 'error'); return false; }   // a newer action took over
       t_loadCrop(row);                                   // apply THIS row's zoom/pan (defaults to none) so a previous row's crop never bleeds in
       await t_download();
       t_bulkDot(i, 'done'); return true;
