@@ -1281,6 +1281,10 @@ def _carsxe_canon(make, model, year, trim):
         return ""
 
     keys = list(best.keys())[:30] + (["attributes." + k for k in list(attrs.keys())[:25]] if attrs else [])
+    try:
+        raw = json.dumps(best, default=str)[:2000]
+    except Exception:
+        raw = str(best)[:2000]
     return {
         "found": bool(best),
         "make": pick("make", "make_name", "manufacturer", "brand"),
@@ -1288,6 +1292,8 @@ def _carsxe_canon(make, model, year, trim):
         "trim": pick("trim", "trim_name", "trim_level", "trim_description", "style", "style_name"),
         "name": pick("name", "full_name", "vehicle", "description", "vehicle_name"),
         "keys": keys,
+        "body_keys": list(body.keys())[:20],   # where the canonical fields actually live, for diagnosis
+        "raw": raw,                            # the full bestMatch object so we can see real field names/values
     }
 
 

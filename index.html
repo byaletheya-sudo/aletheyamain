@@ -1701,6 +1701,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
               <span id="dh_count" style="opacity:.5;font-size:.78rem;"></span>
               <button class="btn-ghost" onclick="dh_verifyOpen()" title="Check the live site against these deals">🔍 Verify site</button>
               <button class="btn-ghost" onclick="dh_canonOpen()" title="Snap make/model/trim to CarsXE's official names">✨ Clean names</button>
+              <button class="btn-ghost" onclick="dh_canonDebug()" title="Show CarsXE's raw response for the first car (diagnostics)">🔧 CarsXE raw</button>
               <button class="btn-ghost" onclick="dh_export()">Export CSV</button>
               <button class="btn-ghost" onclick="dh_clear()">Clear all</button>
             </div>
@@ -4816,6 +4817,31 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   // ---- CarsXE name cleanup: snap make/model/trim to the manufacturer's official spelling ----
   let dh_canonPlans = [];
+  // Diagnostic: show CarsXE's RAW response for a few cars so we can see the real field
+  // names/values (the canonicalization was extracting the wrong fields blind).
+  async function dh_canonDebug() {
+    const sel = dh_compare.size > 0;
+    const pool = sel ? dh_deals.filter(d => dh_compare.has(dh_carKey(d))) : dh_deals;
+    if (!pool.length) { dh_status('No cars to check.', ''); return; }
+    const cars = pool.slice(0, 4).map(d => ({ year: d.year || '', make: d.make || '', model: d.model || '', trim: d.trim || '' }));
+    $('dhCanonSummary').textContent = 'CarsXE raw — diagnostics';
+    $('dhCanonList').innerHTML = '<div class="dh-loading"><div class="dh-spinner"></div><div>Asking CarsXE about ' + cars.length + ' car(s)…</div></div>';
+    $('dhCanonModal').style.display = 'flex';
+    let res;
+    try { const r = await fetch('/carsxe-canon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cars }) }); res = await r.json(); }
+    catch (e) { $('dhCanonList').innerHTML = '<div class="dh-empty" style="padding:18px;">Request failed.</div>'; return; }
+    if (res.error) { $('dhCanonList').innerHTML = '<div class="dh-empty" style="padding:18px;">' + escapeHtml(res.error) + '</div>'; return; }
+    $('dhCanonList').innerHTML = (res.results || []).map(it => {
+      const inp = [it.in.year, it.in.make, it.in.model, it.in.trim].filter(Boolean).join(' ');
+      return `<div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.78rem;">
+        <div style="color:#cdd2da;font-weight:600;margin-bottom:4px;">${escapeHtml(inp)}</div>
+        <div style="color:#9aa0aa;">found: <b>${it.found}</b> · make:${escapeHtml(it.make || '∅')} model:${escapeHtml(it.model || '∅')} trim:${escapeHtml(it.trim || '∅')} name:${escapeHtml(it.name || '∅')}</div>
+        <div style="color:#767c86;margin-top:4px;">body_keys: ${escapeHtml((it.body_keys || []).join(', ') || '∅')}</div>
+        <div style="color:#767c86;margin-top:4px;">keys: ${escapeHtml((it.keys || []).join(', ') || '∅')}</div>
+        <div style="color:#5b6471;margin-top:4px;word-break:break-all;font-family:monospace;font-size:0.72rem;">raw: ${escapeHtml(it.raw || '∅')}</div>
+      </div>`;
+    }).join('') || '<div class="dh-empty" style="padding:18px;">No response.</div>';
+  }
   function dh_canonSame(a, b) { return (a || '').toString().trim().toLowerCase() === (b || '').toString().trim().toLowerCase(); }
   function dh_canonSameCar(d, c) { return ['year', 'make', 'model', 'trim'].every(f => dh_canonSame(d[f], c[f])); }
   async function dh_canonOpen() {
