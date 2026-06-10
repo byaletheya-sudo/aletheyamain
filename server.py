@@ -43,7 +43,10 @@ if not os.environ.get("APP_PASSWORD"):
 # Second-tier gate for the restricted tools (Lease Ad — TEST + Deal Hub). Override
 # with RESTRICTED_PASSWORD in Railway (recommended — this repo is public).
 RESTRICTED_PASSWORD = os.environ.get("RESTRICTED_PASSWORD") or "notforyou"
-RESTRICTED_API = ("/carsxe-", "/carvector-", "/bulk-parse", "/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs", "/copilot-kb")
+# Lease Ad Generator is no longer second-password-protected, so its shared photo/parse
+# endpoints (/carsxe-*, /carvector-*, /bulk-parse) are open past the primary login like
+# the Sold/Review tools. The Deal Hub / Invoice / Desking DATA endpoints stay gated.
+RESTRICTED_API = ("/deal-parse", "/deal-search", "/deals", "/contacts", "/published", "/verify-", "/invoices", "/desk-parse", "/desk-programs", "/copilot-kb")
 
 # Aletheya Toolbox — a separate, non-Nova workspace with its OWN password gate.
 # Override with TOOLBOX_PASSWORD in the host env (recommended — this repo is public).

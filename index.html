@@ -1047,17 +1047,13 @@
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></span>
       Home
     </div>
-    <div class="nav-item" id="nav-ads" onclick="showView('ads')">
-      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></span>
-      Lease Ad Generator
-    </div>
     <div class="nav-item" id="nav-sold" onclick="showView('sold')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg></span>
       Sold Posts
     </div>
     <div class="nav-item" id="nav-test" onclick="showView('test')">
-      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 3h8"/></svg></span>
-      Lease Ad — TEST
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></span>
+      Lease Ad Generator
     </div>
     <div class="nav-item" id="nav-deals" onclick="showView('deals')">
       <span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
@@ -1091,13 +1087,6 @@
         </div>
         <div class="nv-grid">
 
-          <button class="nv-tile" onclick="showView('ads')">
-            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></div>
-            <h3>Lease Ad Generator</h3>
-            <p>Type a vehicle + pricing → generates the car, drops it in the template, and downloads the finished lease ad.</p>
-            <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-          </button>
-
           <button class="nv-tile" onclick="showView('sold')">
             <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg></div>
             <h3>Sold Posts</h3>
@@ -1113,9 +1102,9 @@
           </button>
 
           <button class="nv-tile" onclick="showView('test')">
-            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 3h8"/></svg></div>
-            <h3>Lease Ad — TEST <span class="nv-tag">PW</span></h3>
-            <p>Bulk lease ads — pull the best deals, choose &amp; refresh photos, zoom/reframe each car, and download the whole batch.</p>
+            <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 5-5 4 4"/></svg></div>
+            <h3>Lease Ad Generator</h3>
+            <p>Single or bulk lease ads — type a vehicle (or paste a whole list), choose &amp; refresh photos, zoom/reframe each car, and download.</p>
             <span class="go">Open<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
           </button>
 
@@ -1483,7 +1472,7 @@
 
     <section class="view" id="view-test">
       <div class="view-inner">
-        <h1>Lease Ad — TEST</h1>
+        <h1>Lease Ad Generator</h1>
         <div class="seg" style="margin-bottom:18px;">
           <button type="button" class="seg-btn active" id="t_modeSingle" onclick="t_setMode('single')">Single</button>
           <button type="button" class="seg-btn" id="t_modeBulk" onclick="t_setMode('bulk')">Bulk</button>
@@ -2975,12 +2964,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     $('scrim').classList.remove('show');
   }
   // Each view has its own clean URL so tools are deep-linkable / bookmarkable.
-  const VIEW_PATH = { home: '/novauto', ads: '/lease', sold: '/sold', test: '/leasead-test', deals: '/deal-hub', review: '/review-generator', invoice: '/invoice', quote: '/quote', desk: '/desking' };
-  const PATH_VIEW = { '/novauto': 'home', '/lease': 'ads', '/sold': 'sold', '/leasead-test': 'test', '/deal-hub': 'deals', '/review-generator': 'review', '/invoice': 'invoice', '/quote': 'quote', '/desking': 'desk' };
-  const VIEW_TITLE = { home: 'Nova Tools', ads: 'Lease Ad Generator', sold: 'Sold Posts', test: 'Lease Ad — TEST', deals: 'Deal Hub', review: 'Review Generator', invoice: 'Invoice Generator', quote: 'Deal Proposal', desk: 'Desking' };
-  // ---- restricted second-tier password gate (Lease Ad — TEST + Deal Hub) ----
+  // Lease Ad — TEST is now the main Lease Ad Generator (the old one is retired); it owns /lease, /leasead-test stays as an alias.
+  const VIEW_PATH = { home: '/novauto', sold: '/sold', test: '/lease', deals: '/deal-hub', review: '/review-generator', invoice: '/invoice', quote: '/quote', desk: '/desking' };
+  const PATH_VIEW = { '/novauto': 'home', '/lease': 'test', '/leasead-test': 'test', '/sold': 'sold', '/deal-hub': 'deals', '/review-generator': 'review', '/invoice': 'invoice', '/quote': 'quote', '/desking': 'desk' };
+  const VIEW_TITLE = { home: 'Nova Tools', sold: 'Sold Posts', test: 'Lease Ad Generator', deals: 'Deal Hub', review: 'Review Generator', invoice: 'Invoice Generator', quote: 'Deal Proposal', desk: 'Desking' };
+  // ---- restricted second-tier password gate (Deal Hub, Invoice, Desking) ----
   let restrictedUnlocked = false, lockPendingView = null;
-  const RESTRICTED_VIEWS = new Set(['test', 'deals', 'invoice', 'desk']);
+  const RESTRICTED_VIEWS = new Set(['deals', 'invoice', 'desk']);
   async function checkUnlock() {
     try { const r = await fetch('/unlock'); const d = await r.json(); restrictedUnlocked = !!d.unlocked; } catch (e) { }
     if (restrictedUnlocked) { dh_load(); dh_loadContacts(); dh_loadPublished(); inv_loadAll(); dk_loadPrograms(); }   // restricted endpoints are reachable now
@@ -3004,7 +2994,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   }
   function showView(name, opts) {
     opts = opts || {};
-    if (!$('view-' + name)) name = 'ads';
+    if (!$('view-' + name)) name = 'test';
     if (RESTRICTED_VIEWS.has(name) && !restrictedUnlocked) { showLock(name); return; }   // gate
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -3028,7 +3018,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     }
   }
   window.addEventListener('popstate', e => {                 // back/forward
-    showView((e.state && e.state.view) || PATH_VIEW[location.pathname] || 'ads', { noPush: true });
+    showView((e.state && e.state.view) || PATH_VIEW[location.pathname] || 'test', { noPush: true });
   });
 
   // ===================== BACKGROUND GENERATOR (ad + sold) =====================
@@ -6831,7 +6821,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // open the view that matches the URL the page was loaded at (deep-link support).
   // check the restricted-unlock state first so an already-unlocked deep link doesn't prompt.
   checkUnlock().then(() => {
-    const name = PATH_VIEW[location.pathname] || 'ads';
+    const name = PATH_VIEW[location.pathname] || 'test';
     history.replaceState({ view: name }, '', location.pathname);
     showView(name, { noPush: true });
   });
