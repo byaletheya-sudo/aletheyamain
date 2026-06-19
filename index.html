@@ -4474,11 +4474,24 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     .replace(/\b(?:all[\s-]*wheel[\s-]*drive|awd|4matic\+?|x[\s-]?drive\d*|4motion|quattro)\b/g, ' awd ')
     .replace(/\b(?:four[\s-]*wheel[\s-]*drive|4wd|4x4|4wheel)\b/g, ' fourwd ')
     .replace(/\b(?:rear[\s-]*wheel[\s-]*drive|rwd|2wd)\b/g, ' twowd ')
-    .replace(/\b(?:front[\s-]*wheel[\s-]*drive|fwd)\b/g, ' fwd ');
+    .replace(/\b(?:front[\s-]*wheel[\s-]*drive|fwd)\b/g, ' fwd ')
+    // Body-style synonyms collapse to ONE token so the same body reads identically on
+    // both sides (hub "Cabriolet"/"Cabrio"/"Vert" vs site "Convertible"; "Sport Utility"
+    // vs "SUV"). Body style is a real identity signal — it's what tells the GLE 450 SUV
+    // from the GLE 450 Coupe, or the CLE 300 Coupe from the Cabriolet — so it must
+    // survive into the token bag (see DH_TOK_NOISE below) instead of being stripped.
+    .replace(/\b(?:cabriolet|cabrio|vert)\b/g, ' convertible ')
+    .replace(/\bsport[\s-]*utility\b/g, ' suv ');
   // Glue a short letter+number into one token so "CX 90"→"cx90" and "Mazda 3"→
   // "mazda3", but DON'T glue a drivetrain suffix — "Tacoma 4WD" must stay two words.
   const dh_glue = s => dh_canon(s).replace(/([a-z])[ \-]+(\d+)(?!\s*(?:wd|x\d|x\b))/g, '$1$2');
-  const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'plus', 'sedan', 'hatchback', 'hatch', 'coupe', 'suv', 'wagon', 'convertible', 'cab', 'crew', 'double', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'bed', 'at']);
+  // Engine / transmission / marketing filler that is NOT part of a car's identity.
+  // Body styles (sedan, coupe, suv, wagon, convertible, hatch, cab/crew/bed…) are
+  // deliberately NOT noise: they distinguish real same-name variants — GLE 450 SUV vs
+  // GLE 450 Coupe, CLE 300 Coupe vs Cabriolet — so they must reach the matcher. Strip
+  // them and those variants become token-identical and cross-match by price (one gets
+  // flagged "not on the site" while the other shows a bogus stale/mismatch delta).
+  const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'plus', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'at']);
   function dh_vtoks(s) {
     const out = new Set();
     dh_glue(s).split(/[^a-z0-9]+/).forEach(t => {
