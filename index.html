@@ -4491,7 +4491,9 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // GLE 450 Coupe, CLE 300 Coupe vs Cabriolet — so they must reach the matcher. Strip
   // them and those variants become token-identical and cross-match by price (one gets
   // flagged "not on the site" while the other shows a bogus stale/mismatch delta).
-  const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'plus', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'at']);
+  // "plus" is NOT noise either — it's the only thing telling "Premium" from "Premium
+  // Plus" (a big price gap on Audi/Lexus), so dropping it cross-matched the two trims.
+  const DH_TOK_NOISE = new Set(['all', 'wheel', 'drive', 'front', 'rear', 'four', 'automatic', 'auto', 'manual', 'cvt', 'natl', 'national', 'edition', 'pkg', 'package', 'with', 'wd', 'turbo', 'at']);
   function dh_vtoks(s) {
     const out = new Set();
     dh_glue(s).split(/[^a-z0-9]+/).forEach(t => {
@@ -4500,22 +4502,38 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     });
     return out;
   }
+  // Generic grade / trim / body / powertrain / drivetrain words. They still COUNT toward
+  // the match score, but they can't be the SOLE anchor — otherwise a shared trim word like
+  // "SEL" or "Premium" bridges two unrelated models (site "Sonata SEL" wrongly binding to a
+  // hub "Palisade … SEL"). An anchor must be a real model identifier: a number-bearing token
+  // (gle350, 330i, k5, cx90) or a model word that isn't one of these generic grades.
+  const DH_GENERIC = new Set(['premium', 'premiumplus', 'plus', 'luxury', 'sport', 'touring', 'limited', 'preferred', 'select', 'platinum', 'calligraphy', 'prestige', 'convenience', 'performance', 'base', 'standard', 'blue', 'nav', 'line', 'design', 'premier', 'signature', 'reserve', 'sline', 'hybrid', 'phev', 'ev', 'bev', 'electric', 'plugin', 'plug', 'gas', 'diesel', 'tfsi', 'tdi', 'awd', 'fwd', 'rwd', 'fourwd', 'twowd', 'sedan', 'coupe', 'suv', 'wagon', 'hatchback', 'hatch', 'convertible', 'cab', 'crew', 'double', 'sportback', 'passenger', 'natl', 'national', 'f']);
+  const dh_anchorable = t => /\d/.test(t) ? true : (t.length >= 2 && !DH_GENERIC.has(t));
+  // Gas / Hybrid / PHEV / Electric are different vehicles. If BOTH sides name a powertrain
+  // and they disagree it's not the same car — don't match a site Hybrid to a hub PHEV
+  // (that was flagging a $176 "mismatch" on the RAV4 while the real Hybrid sat "missing").
+  const dh_pwOf = bag => (bag.has('phev') || bag.has('plugin') || bag.has('plug')) ? 'phev' : bag.has('hybrid') ? 'hybrid' : (bag.has('electric') || bag.has('bev') || bag.has('ev')) ? 'ev' : '';
   function dh_matchHubCar(row, hubCars) {
     const smk = dh_makeKey(row.make);
     const sf = dh_vtoks([row.model, row.trim].join(' '));   // site's full word bag
     const sm = dh_vtoks(row.model);                          // site's model-field words (the anchor)
     const sp = dh_num(row.monthly);
+    const spw = dh_pwOf(sf);                                 // the site listing's powertrain, if it names one
     let best = null, bInter = -1, bSym = Infinity, bPd = Infinity;
     for (const c of hubCars) {
       if (c.mkt !== smk) continue;
       // never match across model years — a 2026 site listing must not bind to a 2027
       // hub car (that was matching e.g. site "2026 QX60 LUXE $546" to a 2027 QX60 $617)
       if (row.year && c.year && dh_norm(row.year) !== dh_norm(c.year)) continue;
-      // anchor: a model-field word must be shared (so "Crosstrek" reaches "Crosstrek
-      // Sport" but "CX5" never reaches "CX50" — different number tokens, no overlap)
+      // never match across an explicit powertrain conflict (site Hybrid vs hub PHEV/EV)
+      const cpw = dh_pwOf(c.ftoks);
+      if (spw && cpw && spw !== cpw) continue;
+      // anchor: a shared MODEL identifier (a model word or a number token) — never a bare
+      // grade word, so "SEL"/"Premium" alone can't bridge two different models. ("Crosstrek"
+      // still reaches "Crosstrek Sport"; "CX5" never reaches "CX50" — distinct number tokens.)
       let anchor = false;
-      for (const t of sm) { if (c.ftoks.has(t)) { anchor = true; break; } }
-      if (!anchor) { for (const t of c.mtoks) { if (sf.has(t)) { anchor = true; break; } } }
+      for (const t of sm) { if (dh_anchorable(t) && c.ftoks.has(t)) { anchor = true; break; } }
+      if (!anchor) { for (const t of c.mtoks) { if (dh_anchorable(t) && sf.has(t)) { anchor = true; break; } } }
       // also anchor on a shared model-NUMBER token ("ix45", "cx90", "330i") — a strong
       // identity signal that survives when the model/trim split differs across sources
       // (site "iX" + "xDrive45" vs hub "iX 45" both reduce to the "ix45" token).
