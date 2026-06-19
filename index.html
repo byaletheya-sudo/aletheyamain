@@ -4509,6 +4509,11 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
   // (gle350, 330i, k5, cx90) or a model word that isn't one of these generic grades.
   const DH_GENERIC = new Set(['premium', 'premiumplus', 'plus', 'luxury', 'sport', 'touring', 'limited', 'preferred', 'select', 'platinum', 'calligraphy', 'prestige', 'convenience', 'performance', 'base', 'standard', 'blue', 'nav', 'line', 'design', 'premier', 'signature', 'reserve', 'sline', 'hybrid', 'phev', 'ev', 'bev', 'electric', 'plugin', 'plug', 'gas', 'diesel', 'tfsi', 'tdi', 'awd', 'fwd', 'rwd', 'fourwd', 'twowd', 'sedan', 'coupe', 'suv', 'wagon', 'hatchback', 'hatch', 'convertible', 'cab', 'crew', 'double', 'sportback', 'passenger', 'natl', 'national', 'f']);
   const dh_anchorable = t => /\d/.test(t) ? true : (t.length >= 2 && !DH_GENERIC.has(t));
+  // Two model-number tokens name the same model when a BARE number ("330", site "X3 30")
+  // matches a letter-suffixed one ("330i", "30i") — the dealer often drops the trailing
+  // engine letter. Strip a trailing letter run only after the last digit, and require one
+  // side to be bare: so "330"~"330i" but "330i"≠"330d", and "CX5" never reaches "CX50".
+  const dh_numEq = (a, b) => { if (a === b) return true; const ca = a.replace(/(\d)[a-z]+$/, '$1'), cb = b.replace(/(\d)[a-z]+$/, '$1'); return ca === cb && (a === ca || b === cb); };
   // Gas / Hybrid / PHEV / Electric are different vehicles. If BOTH sides name a powertrain
   // and they disagree it's not the same car — don't match a site Hybrid to a hub PHEV
   // (that was flagging a $176 "mismatch" on the RAV4 while the real Hybrid sat "missing").
@@ -4536,10 +4541,13 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (!anchor) { for (const t of c.mtoks) { if (dh_anchorable(t) && sf.has(t)) { anchor = true; break; } } }
       // also anchor on a shared model-NUMBER token ("ix45", "cx90", "330i") — a strong
       // identity signal that survives when the model/trim split differs across sources
-      // (site "iX" + "xDrive45" vs hub "iX 45" both reduce to the "ix45" token).
-      if (!anchor) { for (const t of sf) { if (/\d/.test(t) && t.length > 1 && c.ftoks.has(t)) { anchor = true; break; } } }
+      // (site "iX" + "xDrive45" vs hub "iX 45" both reduce to the "ix45" token). Use a
+      // bare/letter-suffix equivalence so hub "330" still reaches site "330i".
+      if (!anchor) { for (const t of sf) { if (/\d/.test(t) && t.length > 1) { for (const u of c.ftoks) { if (/\d/.test(u) && dh_numEq(t, u)) { anchor = true; break; } } if (anchor) break; } } }
       if (!anchor) continue;
-      let inter = 0; sf.forEach(t => { if (c.ftoks.has(t)) inter++; });
+      // count a shared model number even across the bare/suffix split ("330"~"330i") so the
+      // right variant outscores a sibling ("330i" prefers hub "330" over hub "M340").
+      let inter = 0; sf.forEach(t => { if (c.ftoks.has(t)) inter++; else if (/\d/.test(t)) { for (const u of c.ftoks) { if (/\d/.test(u) && dh_numEq(t, u)) { inter++; break; } } } });
       const sym = (sf.size - inter) + (c.ftoks.size - inter);
       // tiebreak on the CLOSEST of the car's variant prices, not just its best — so a
       // site AWD listing lands on the car whose AWD deal it actually matches, not a
