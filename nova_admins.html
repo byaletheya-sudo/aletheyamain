@@ -207,6 +207,22 @@
   .feebox.hero{border-color:rgba(52,211,153,.28);background:rgba(52,211,153,.06);}
   .feebox .fb-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
   .feebox .fb-v{font-family:var(--na-mono);font-size:18px;font-weight:600;margin-top:5px;}
+  /* chat add-deal modal */
+  .na-chat-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .na-chat{width:100%;max-width:640px;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:18px;display:flex;flex-direction:column;max-height:82vh;box-shadow:0 30px 80px rgba(0,0,0,.6);}
+  .nc-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--na-line);font-weight:650;font-size:14px;}
+  .nc-x{all:unset;cursor:pointer;color:var(--na-muted);font-size:15px;line-height:1;}
+  .nc-x:hover{color:var(--na-fg);}
+  .nc-log{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-height:130px;}
+  .nc-msg{max-width:86%;padding:9px 13px;border-radius:13px;font-size:13px;line-height:1.5;}
+  .nc-msg.me{align-self:flex-end;background:var(--na-blue);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap;}
+  .nc-msg.bot{align-self:flex-start;background:var(--na-panel-2);border:1px solid var(--na-line);border-bottom-left-radius:4px;}
+  .nc-msg.bot.ok{border-color:rgba(52,211,153,.32);}
+  .nc-msg.bot .nm-link{color:#76b4ff;cursor:pointer;font-weight:650;}
+  .nc-input{display:flex;gap:9px;padding:13px 16px;border-top:1px solid var(--na-line);align-items:flex-end;}
+  .nc-input textarea{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:11px;padding:10px 12px;font-family:inherit;font-size:13px;resize:none;outline:none;max-height:120px;}
+  .nc-input textarea:focus{border-color:var(--na-blue);}
+  .nc-input .na-btn{padding:10px 18px;}
   .hide{display:none;}
   .mini{font-size:10.5px;color:var(--na-muted-2);}
   .ov-flag{font-size:9.5px;font-weight:700;color:var(--na-purple);background:rgba(138,92,240,.14);padding:1px 5px;border-radius:5px;margin-left:5px;}
@@ -290,6 +306,7 @@
       <input class="na-search" id="fSearch" placeholder="Search client, VIN, vehicle…">
       <div class="na-spacer"></div>
       <button class="na-btn ghost">⌁ Sync from Garage</button>
+      <button class="na-btn" style="background:var(--na-purple)" onclick="openChat()">✨ Add by chat</button>
       <button class="na-btn" onclick="newDeal()">+ New Deal</button>
     </div>
     <div class="na-tablewrap">
@@ -349,6 +366,17 @@
     </div>
   </div>
 
+</div>
+
+<div class="na-chat-scrim hide" id="chatScrim" onclick="closeChat(event)">
+  <div class="na-chat" onclick="event.stopPropagation()">
+    <div class="nc-head"><span>✨ Add a deal — just describe it</span><button class="nc-x" onclick="closeChat()">✕</button></div>
+    <div class="nc-log" id="chatLog"></div>
+    <div class="nc-input">
+      <textarea id="chatText" rows="2" placeholder="e.g. Hannah leased a 2026 BMW X5 to Darius O. at Beverly Hills BMW — Nova lead, front 1500, back 800, paid Stripe, VIN 5UXCR6C0XN9A41882"></textarea>
+      <button class="na-btn" id="chatSend" onclick="sendChat()">Add</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -609,6 +637,46 @@ function newDeal(){
   openRow=id; renderAll();
   setTimeout(()=>{ const el=document.querySelector("#det-"+id+" input"); if(el){ el.focus(); el.scrollIntoView({block:"center"}); } }, 30);
 }
+// ---- Add-by-chat ----
+function openChat(){ document.getElementById("chatScrim").classList.remove("hide");
+  if(!document.getElementById("chatLog").children.length)
+    chatBot("Describe a deal in your own words — agent, car, client, front/back, lead source, payment — or paste the Garage note. I'll log it.", false);
+  setTimeout(()=>document.getElementById("chatText").focus(),30); }
+function closeChat(){ document.getElementById("chatScrim").classList.add("hide"); }
+function chatMe(t){ const l=document.getElementById("chatLog"),d=document.createElement("div"); d.className="nc-msg me"; d.textContent=t; l.appendChild(d); l.scrollTop=l.scrollHeight; }
+function chatBot(html,ok){ const l=document.getElementById("chatLog"),d=document.createElement("div"); d.className="nc-msg bot"+(ok?" ok":""); d.innerHTML=html; l.appendChild(d); l.scrollTop=l.scrollHeight; return d; }
+async function sendChat(){
+  const ta=document.getElementById("chatText"), text=ta.value.trim(); if(!text) return;
+  chatMe(text); ta.value=""; const btn=document.getElementById("chatSend"); btn.disabled=true;
+  const thinking=chatBot("<span class='mini'>reading the deal…</span>", false);
+  try{
+    const res=await fetch("/nova-admins/parse",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text, today:TODAY, agents:AGENTS.map(a=>({id:a.id,name:a.name}))})});
+    const out=await res.json(); thinking.remove();
+    if(!res.ok||out.error){ chatBot("⚠️ "+(out.error||"Couldn't reach the parser."),false); btn.disabled=false; return; }
+    if(!out.ok){ chatBot("That didn't read like a deal — try including the client, the car, and the agent.",false); btn.disabled=false; return; }
+    const id=addParsedDeal(out), d=DEALS.find(x=>x.id===id), c=calc(d);
+    chatBot(`✓ Logged <b>${d.client||'—'}</b> · ${[d.year,d.make,d.model].filter(Boolean).join(' ')||'vehicle'}<br>`
+      +`${out.summary||''}<br><span class="mini">${(A(d.agentId)||{}).name||'no agent'} · ${leadLabel[d.lead]||d.lead} · net pool ${fmt(c.netPool)} · agent ${fmt(c.agentCut)} · Nova ${fmt(c.novaCut)}</span><br>`
+      +`<span class="nm-link" onclick="reviewDeal(${id})">Open &amp; review →</span>`, true);
+  }catch(err){ thinking.remove(); chatBot("⚠️ "+err.message,false); }
+  btn.disabled=false;
+}
+function reviewDeal(id){ closeChat(); setTab("ledger"); openRow=id; renderLedger();
+  setTimeout(()=>{ const el=document.getElementById("det-"+id); if(el) el.scrollIntoView({block:"center"}); },30); }
+function addParsedDeal(o){
+  const id=DEALS.reduce((m,d)=>Math.max(m,d.id),0)+1, num=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
+  const agentId=(AGENTS.find(a=>a.id===o.agentId)?o.agentId:(AGENTS[0]&&AGENTS[0].id))||"";
+  DEALS.unshift({id, date:o.date||TODAY, client:o.client||"", year:o.year||2026, make:o.make||"", model:o.model||"",
+    vin:o.vin||"", dealer:o.dealer||"", type:o.type||"Lease", term:o.term||"", agentId, lead:o.lead||"own",
+    wOffered:!!o.wOffered, wSold:!!o.wSold, front:num(o.front), back:num(o.back),
+    feeJason:num(o.feeJason), feeReferral:num(o.feeReferral), override:null, pay:o.pay||"Stripe",
+    fColl:!!o.fColl, bColl:!!o.bColl, aPaidF:!!o.aPaidF, aPaidFd:o.aPaidFd||"", aPaidB:!!o.aPaidB, aPaidBd:o.aPaidBd||"",
+    notes:o.notes||""});
+  range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
+  ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all"); document.getElementById("fSearch").value="";
+  renderAll(); return id;
+}
 function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}
 function agentOpts(sel){return AGENTS.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${a.name}</option>`).join("");}
 function leadOpts(sel){return Object.entries(leadLabel).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v}</option>`).join("");}
@@ -771,6 +839,7 @@ function togglePP(e){ e.stopPropagation(); document.getElementById("periodMenu")
 function closePP(){ document.getElementById("periodMenu").classList.add("hide"); }
 document.addEventListener("click",e=>{ if(!e.target.closest(".pp-wrap")) closePP(); });
 document.getElementById("periodMenu").addEventListener("click",e=>{const b=e.target.closest(".pp-opt"); if(b) setRange(b.dataset.k);});
+document.getElementById("chatText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); }});
 ["fAgent","fLead","fStatus","fSearch"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
 // populate agent filter
 document.getElementById("dashScope").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
@@ -783,6 +852,7 @@ if(location.hash.indexOf("open")>=0){ setTab("ledger"); openRow=1; renderLedger(
 if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("periodMenu").classList.remove("hide"); }
 if(location.hash.indexOf("new")>=0){ newDeal(); }
 if(location.hash.indexOf("exp")>=0){ setTab("expenses"); }
+if(location.hash.indexOf("chat")>=0){ openChat(); }
 </script>
 </body>
 </html>

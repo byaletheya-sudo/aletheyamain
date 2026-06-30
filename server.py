@@ -580,6 +580,70 @@ def nova_admins_page():
     return html
 
 
+@app.route("/nova-admins/parse", methods=["POST"])
+def nova_admins_parse():
+    """Turn a natural-language / pasted deal into one structured Nova Admins deal."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Type a deal to add."}), 400
+    agents = [a for a in (body.get("agents") or []) if isinstance(a, dict) and a.get("id")][:60]
+    today = (body.get("today") or "").strip()
+    agent_list = "; ".join(f'{a.get("id")}={a.get("name")}' for a in agents) or "(none provided)"
+    schema = {
+        "type": "object", "additionalProperties": False,
+        "required": ["client", "year", "make", "model", "vin", "dealer", "type", "term", "agentId",
+                     "lead", "front", "back", "feeJason", "feeReferral", "pay", "wOffered", "wSold",
+                     "fColl", "bColl", "aPaidF", "aPaidFd", "aPaidB", "aPaidBd", "date", "notes", "ok", "summary"],
+        "properties": {
+            "client": {"type": "string"}, "year": {"type": "string"}, "make": {"type": "string"},
+            "model": {"type": "string"}, "vin": {"type": "string"}, "dealer": {"type": "string"},
+            "type": {"type": "string", "enum": ["Lease", "Buy", ""]}, "term": {"type": "string"},
+            "agentId": {"type": "string"}, "lead": {"type": "string", "enum": ["own", "nova", "referral", ""]},
+            "front": {"type": "number"}, "back": {"type": "number"},
+            "feeJason": {"type": "number"}, "feeReferral": {"type": "number"},
+            "pay": {"type": "string", "enum": ["Stripe", "Zelle", "Cash", "Check", ""]},
+            "wOffered": {"type": "boolean"}, "wSold": {"type": "boolean"},
+            "fColl": {"type": "boolean"}, "bColl": {"type": "boolean"},
+            "aPaidF": {"type": "boolean"}, "aPaidFd": {"type": "string"},
+            "aPaidB": {"type": "boolean"}, "aPaidBd": {"type": "string"},
+            "date": {"type": "string"}, "notes": {"type": "string"},
+            "ok": {"type": "boolean"}, "summary": {"type": "string"},
+        },
+    }
+    sys = (
+        "You convert ONE natural-language or pasted car lease/finance deal into a structured deal for "
+        "Nova's back-office ledger. Output STRICT JSON for the schema. Rules:\n"
+        f"- Today is {today or 'unknown'}; dates are YYYY-MM-DD. If no deal date is given, use today.\n"
+        "- client: customer name as 'First L.' (first name + last initial).\n"
+        f"- agentId: match the salesperson to ONE of these agents and output its id (or '' if unknown): {agent_list}\n"
+        "- lead: 'own' = agent's own lead/Agent-sourced; 'nova' = Nova Lead (FB/IG ads); 'referral' = referral.\n"
+        "- type: Lease or Buy. term = months (string).\n"
+        "- front = front gross (client/broker fee), back = back gross (dealer reserve). Numbers only — no $ or commas.\n"
+        "- feeJason = fee shared with Jason if stated; feeReferral = a referral/shared fee OR a generic 'fees shared' "
+        "lump. Do NOT include Stripe processing (its 3% is auto-computed from the payment method).\n"
+        "- pay: Stripe / Zelle / Cash / Check.\n"
+        "- wOffered/wSold = was warranty offered / sold.\n"
+        "- fColl/bColl = was the front (client) / back (dealer) money collected by Nova. aPaidF/aPaidB = was the agent "
+        "paid their front/back share (aPaidFd/aPaidBd = those pay dates if stated).\n"
+        "- Unknown strings => '', unknown numbers => 0, unknown booleans => false.\n"
+        "- ok=true if you found at least a client or a vehicle; false if this isn't a deal. "
+        "summary = one short sentence describing what you logged."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": sys}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "deal", "strict": True, "schema": schema}},
+        )
+        return jsonify(json.loads(resp.choices[0].message.content))
+    except Exception as e:
+        return jsonify({"error": "Couldn't parse that — " + str(e)[:160]}), 500
+
+
 @app.route("/toolbox")
 def toolbox():
     return send_file(os.path.join(BASE_DIR, "toolbox.html"))
