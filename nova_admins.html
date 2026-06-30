@@ -396,21 +396,27 @@ const EXPENSES = SEED.expenses || [
   {id:14, date:"2026-05-02", cat:"Software", desc:"Tools & subscriptions", amt:240},
 ];
 
+// Fees shared = 3 buckets: Jason (manual) + Stripe (auto, 3% of front, Stripe only) + Referral (manual).
+DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; });
+
 // ---- ENGINE ----
+function feeStripe(d){ return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }  // 3% of front, Stripe only
+function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0); }
 function calc(d){
-  const combined = d.front + d.back;
-  const netPool = combined - d.fees;
+  const combined = (+d.front||0) + (+d.back||0);
+  const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
+  const netPool = combined - fees;
   const pct = A(d.agentId).pct[d.lead];
   // pro-rata fee allocation so front/back can be paid as cash lands
-  const frontNet = combined ? d.front - d.fees*(d.front/combined) : 0;
-  const backNet  = combined ? d.back  - d.fees*(d.back/combined)  : 0;
+  const frontNet = combined ? d.front - fees*(d.front/combined) : 0;
+  const backNet  = combined ? d.back  - fees*(d.back/combined)  : 0;
   let agentCut = netPool * pct/100;
   let overridden = false;
   if(d.override!=null){ agentCut = d.override; overridden = true; }
   const ratio = (agentCut) / (netPool||1);             // effective share (after override)
   const agentFront = frontNet * ratio, agentBack = backNet * ratio;
   const novaCut = netPool - agentCut;
-  return {combined, netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
+  return {combined, fees, feeStripe:feeStripe(d), netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
           splitPct: netPool? Math.round(agentCut/netPool*100):0};
 }
 function collStatus(d){ // money IN
@@ -515,7 +521,10 @@ function detailRow(d){
       <div class="ledger-line head"><span>Side</span><span>Gross</span><span>Net (− fees)</span><span>Agent ${c.pct}%${c.overridden?' · OVR':''}</span></div>
       <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
       <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
-      <div class="ledger-line"><span class="lab">Fees shared</span><span><input class="na-in num" value="${d.fees}" onchange="${E}'fees',this.value,1)"></span><span></span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Jason</span><span><input class="na-in num" value="${+d.feeJason||0}" onchange="${E}'feeJason',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span class="money" style="text-align:right;color:var(--na-muted)">${fmt(c.feeStripe)}</span><span class="ovr-note">${d.pay==='Stripe'?'auto · 3% of front':'— Stripe only'}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral</span><span></span></div>
       <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
       <div class="ledger-line" style="border-bottom:none"><span class="lab">Override agent&nbsp;$</span><span><input class="na-in num" placeholder="auto" value="${d.override??''}" onchange="${E}'override',this.value)"></span><span class="ovr-note">${d.override!=null?'manual — overrides '+c.pct+'%':'blank = '+c.pct+'% auto'}</span><span></span></div>
       <div style="margin-top:8px"><span class="lab" style="font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700">Notes</span>
@@ -563,7 +572,7 @@ function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
-    wOffered:false, wSold:false, front:0, fees:0, back:0, override:null, pay:"Stripe",
+    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, override:null, pay:"Stripe",
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
   // make the new row visible no matter the current view/filters
   setTab("ledger");
@@ -623,7 +632,7 @@ function renderExpenses(){
 function renderPnl(){
   const ds=DEALS.filter(inPeriod);
   let frontG=0,backG=0,fees=0,payout=0,nova=0, oweFront=0,oweBack=0,oweAgent=0;
-  ds.forEach(d=>{const c=calc(d); frontG+=d.front; backG+=d.back; fees+=d.fees; payout+=c.agentCut; nova+=c.novaCut;
+  ds.forEach(d=>{const c=calc(d); frontG+=d.front; backG+=d.back; fees+=c.fees; payout+=c.agentCut; nova+=c.novaCut;
     if(!d.fColl)oweFront+=d.front; if(d.back>0&&!d.bColl)oweBack+=d.back;
     if(c.agentFront>1&&!d.aPaidF)oweAgent+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)oweAgent+=c.agentBack;});
   const exp=EXPENSES.filter(inPeriod).reduce((s,e)=>s+e.amt,0);
