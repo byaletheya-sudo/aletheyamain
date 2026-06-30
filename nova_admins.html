@@ -192,6 +192,21 @@
   .tog{cursor:pointer;user-select:none;}
   .del-btn{margin-left:auto;background:rgba(248,113,113,.12);color:var(--na-red);border:none;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:650;cursor:pointer;}
   .ovr-note{font-family:inherit !important;color:var(--na-muted-2);font-size:10.5px;}
+  /* open-row emphasis + detail banner */
+  .na-tbl tr.drow.open{background:var(--na-panel-2);box-shadow:inset 3px 0 0 var(--na-blue);}
+  tr.detail td{box-shadow:inset 3px 0 0 var(--na-blue);}
+  .det-banner{display:flex;align-items:center;gap:11px;padding:13px 20px;background:linear-gradient(90deg,rgba(58,142,239,.12),transparent 72%);border-bottom:1px solid var(--na-line);}
+  .det-banner .db-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .det-banner .db-name{font-size:15px;font-weight:750;letter-spacing:-.01em;}
+  .det-banner .db-veh{color:var(--na-muted);font-size:13px;}
+  .det-banner .db-spacer{flex:1;}
+  .det-banner .db-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#76b4ff;background:rgba(58,142,239,.14);padding:3px 10px;border-radius:20px;}
+  /* fees rollup */
+  .fees-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  .feebox{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:12px;padding:11px 13px;}
+  .feebox.hero{border-color:rgba(52,211,153,.28);background:rgba(52,211,153,.06);}
+  .feebox .fb-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .feebox .fb-v{font-family:var(--na-mono);font-size:18px;font-weight:600;margin-top:5px;}
   .hide{display:none;}
   .mini{font-size:10.5px;color:var(--na-muted-2);}
   .ov-flag{font-size:9.5px;font-weight:700;color:var(--na-purple);background:rgba(138,92,240,.14);padding:1px 5px;border-radius:5px;margin-left:5px;}
@@ -310,6 +325,11 @@
         <div id="expCats"></div>
       </div>
     </div>
+    <div class="panel" style="margin-top:16px;">
+      <h3>Fees shared <span class="mini" id="feesPeriod"></span></h3>
+      <div class="fees-strip" id="feesStrip"></div>
+      <div id="feesList"></div>
+    </div>
   </div>
 
   <!-- P&L -->
@@ -355,11 +375,11 @@ function settled(o){ return Object.assign({override:null, fees:0, wOffered:true,
 // Deals — front/back gross from the Garage note; client/VIN/agent from the Garage record.
 const DEALS = SEED.deals || [
   {id:1, date:"2026-06-04", client:"Darius O.", year:2026, make:"BMW", model:"X5", vin:"5UXCR6C0XN9A41882", dealer:"Beverly Hills BMW", type:"Lease", term:36, agentId:"a1", lead:"nova", wOffered:true, wSold:true, front:1500, fees:200, back:800, override:null, pay:"Stripe", fColl:true, bColl:false, aPaidF:true, aPaidFd:"2026-06-12", aPaidB:false, aPaidBd:"", notes:""},
-  {id:2, date:"2026-06-07", client:"Luca M.", year:2026, make:"Mercedes-Benz", model:"GLC 300", vin:"W1N0G8EB4PV123455", dealer:"MB of Encino", type:"Lease", term:39, agentId:"a2", lead:"own", wOffered:true, wSold:false, front:1995, fees:0, back:1200, override:null, pay:"Zelle", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-15", aPaidB:true, aPaidBd:"2026-06-20", notes:"Client added second key fob — Marcus comped from his cut."},
+  {id:2, date:"2026-06-07", client:"Luca M.", year:2026, make:"Mercedes-Benz", model:"GLC 300", vin:"W1N0G8EB4PV123455", dealer:"MB of Encino", type:"Lease", term:39, agentId:"a2", lead:"own", wOffered:true, wSold:false, front:1995, fees:0, back:1200, feeJason:150, override:null, pay:"Zelle", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-15", aPaidB:true, aPaidBd:"2026-06-20", notes:"Client added second key fob — Marcus comped from his cut."},
   {id:3, date:"2026-06-11", client:"Rohan P.", year:2026, make:"Audi", model:"Q5", vin:"WA1BNAFY3P2098771", dealer:"Audi Calabasas", type:"Lease", term:36, agentId:"a3", lead:"referral", wOffered:false, wSold:false, front:1200, fees:150, back:600, override:null, pay:"Stripe", fColl:true, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""},
   {id:4, date:"2026-06-18", client:"Sophie K.", year:2026, make:"Lexus", model:"RX 350", vin:"2T2BZMCA9NC201144", dealer:"Lexus Woodland Hills", type:"Lease", term:36, agentId:"a1", lead:"own", wOffered:true, wSold:true, front:2200, fees:300, back:900, override:null, pay:"Zelle", fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"Fresh delivery 6/18 — invoice sent, awaiting client payment."},
   {id:5, date:"2026-06-21", client:"Tony N.", year:2026, make:"Genesis", model:"GV70", vin:"KMUHBDSB0PU077231", dealer:"Genesis of Beverly Hills", type:"Lease", term:36, agentId:"a2", lead:"nova", wOffered:true, wSold:false, front:1400, fees:100, back:700, override:null, pay:"Stripe", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-25", aPaidB:false, aPaidBd:"", notes:""},
-  {id:6, date:"2026-06-24", client:"Gianna R.", year:2026, make:"Land Rover", model:"Range Rover Velar", vin:"SALYB2EX0PA334419", dealer:"Land Rover Encino", type:"Lease", term:36, agentId:"a1", lead:"referral", wOffered:true, wSold:true, front:2500, fees:400, back:1500, override:1200, pay:"Zelle", fColl:true, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"Custom: bumped Hannah to $1,200 flat — she sourced a hard-to-find spec."},
+  {id:6, date:"2026-06-24", client:"Gianna R.", year:2026, make:"Land Rover", model:"Range Rover Velar", vin:"SALYB2EX0PA334419", dealer:"Land Rover Encino", type:"Lease", term:36, agentId:"a1", lead:"referral", wOffered:true, wSold:true, front:2500, fees:400, back:1500, feeReferral:300, override:1200, pay:"Zelle", fColl:true, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"Custom: bumped Hannah to $1,200 flat — she sourced a hard-to-find spec."},
   {id:7, date:"2026-06-27", client:"Marco A.", year:2026, make:"Honda", model:"CR-V", vin:"7FARS4H93PE012998", dealer:"Honda of Hollywood", type:"Lease", term:36, agentId:"a3", lead:"nova", wOffered:false, wSold:false, front:900, fees:0, back:400, override:null, pay:"Stripe", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-29", aPaidB:true, aPaidBd:"2026-06-29", notes:""},
   {id:8, date:"2026-05-22", client:"Jordan B.", year:2026, make:"BMW", model:"330i", vin:"3MW69FF06P8C55120", dealer:"Pacific BMW", type:"Lease", term:36, agentId:"a2", lead:"own", wOffered:true, wSold:true, front:1600, fees:200, back:800, override:null, pay:"Zelle", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-05-28", aPaidB:true, aPaidBd:"2026-06-02", notes:""},
   // ---- earlier 2026 (settled) — gives YTD + the leaderboards real signal ----
@@ -488,7 +508,7 @@ function renderLedger(){
   if(!ds.length){ body.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--na-muted)">No deals match.</td></tr>`; return; }
   body.innerHTML = ds.map(d=>{
     const c=calc(d), ag=A(d.agentId), cs=collStatus(d), ps=paidStatus(d);
-    return `<tr class="drow" onclick="toggleRow(${d.id})">
+    return `<tr class="drow${openRow===d.id?' open':''}" onclick="toggleRow(${d.id})">
       <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
       <td><div class="veh">${d.client}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
       <td><span class="agentchip"><span class="dot" style="background:${agentColor[ag.id]}"></span>${ag.name.split(" ")[0]}</span></td>
@@ -507,6 +527,13 @@ function renderLedger(){
 function detailRow(d){
   const c=calc(d), E=`edit(${d.id},`, T=`toggleField(${d.id},`;
   return `<tr class="detail hide" id="det-${d.id}"><td colspan="11">
+    <div class="det-banner">
+      <span class="db-dot" style="background:${agentColor[d.agentId]||'#888'}"></span>
+      <span class="db-name">${d.client||'New deal'}</span>
+      <span class="db-veh">${[d.year,d.make,d.model].filter(Boolean).join(' ')||'—'}</span>
+      <span class="db-spacer"></span>
+      <span class="db-tag">Editing this deal</span>
+    </div>
     <div class="det-edit-head">
       <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${d.client}" onchange="${E}'client',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Year</span><input class="na-in" style="width:62px" value="${d.year}" onchange="${E}'year',this.value,1)"></div>
@@ -713,7 +740,23 @@ function renderDashboard(){
 }
 
 // ---- WIRING ----
-function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderPnl(); }
+function renderFees(){
+  const ds=DEALS.filter(inPeriod);
+  let jason=0, stripe=0, ref=0; const rows=[];
+  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, tot=j+s+r;
+    jason+=j; stripe+=s; ref+=r; if(tot>0) rows.push({d,j,s,r,tot}); });
+  const total=jason+stripe+ref;
+  document.getElementById("feesPeriod").textContent="· "+range.label;
+  document.getElementById("feesStrip").innerHTML=[
+    {l:"Jason",v:jason,c:"#b79bff"},{l:"Stripe · 3%",v:stripe,c:"#76b4ff"},
+    {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
+  ].map(x=>`<div class="feebox ${x.hero?'hero':''}"><div class="fb-l">${x.l}</div><div class="fb-v" style="color:${x.c}">${fmt(x.v)}</div></div>`).join("");
+  document.getElementById("feesList").innerHTML = rows.length ? rows.sort((a,b)=>a.d.date<b.d.date?1:-1).map(r=>`
+    <div class="exp-line"><span>${r.d.date.slice(5)} · ${r.d.client||'—'} <span class="mini">${[r.d.year,r.d.make,r.d.model].filter(Boolean).join(' ')}</span></span>
+      <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',r.r?'Ref '+fmt(r.r):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
+    : '<p class="mini">No fees shared in this period.</p>';
+}
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
 function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
@@ -739,6 +782,7 @@ setTab("dashboard");
 if(location.hash.indexOf("open")>=0){ setTab("ledger"); openRow=1; renderLedger(); }
 if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("periodMenu").classList.remove("hide"); }
 if(location.hash.indexOf("new")>=0){ newDeal(); }
+if(location.hash.indexOf("exp")>=0){ setTab("expenses"); }
 </script>
 </body>
 </html>
