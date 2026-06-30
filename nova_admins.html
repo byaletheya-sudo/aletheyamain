@@ -207,6 +207,14 @@
   .feebox.hero{border-color:rgba(52,211,153,.28);background:rgba(52,211,153,.06);}
   .feebox .fb-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
   .feebox .fb-v{font-family:var(--na-mono);font-size:18px;font-weight:600;margin-top:5px;}
+  /* save indicator + data tools */
+  .na-right{display:flex;align-items:center;gap:9px;}
+  .na-btn.xs{padding:6px 11px;font-size:11.5px;}
+  .save-tag{font-size:11px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid var(--na-line);background:var(--na-panel);white-space:nowrap;}
+  .save-tag.ok{color:var(--na-green);border-color:rgba(52,211,153,.3);}
+  .save-tag.saving{color:var(--na-amber);border-color:rgba(251,191,36,.3);}
+  .save-tag.err{color:var(--na-red);border-color:rgba(248,113,113,.3);}
+  .save-tag.hide{display:none;}
   /* chat add-deal modal */
   .na-chat-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
   .na-chat{width:100%;max-width:640px;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:18px;display:flex;flex-direction:column;max-height:82vh;box-shadow:0 30px 80px rgba(0,0,0,.6);}
@@ -236,7 +244,12 @@
     <div>
       <h1 class="na-title">Deal Ledger</h1>
     </div>
-    <div class="na-period" id="periodWrap">
+    <div class="na-right">
+      <span id="saveTag" class="save-tag hide"></span>
+      <button class="na-btn ghost xs" onclick="exportData()" title="Download a JSON backup of all data">Export</button>
+      <button class="na-btn ghost xs" onclick="document.getElementById('importFile').click()" title="Replace all data from a JSON file (saves to server)">Import</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(this)">
+      <div class="na-period" id="periodWrap">
       <span class="mini">Period</span>
       <div class="pp-wrap">
         <button class="pp-btn" id="periodBtn" onclick="togglePP(event)"><span id="periodLabel">This month</span>
@@ -257,6 +270,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -393,7 +407,7 @@ const AGENTS = SEED.agents || [
   {id:"a3", name:"Sofia Reyes",   pct:{own:60, nova:30, referral:60}},
 ];
 const PALETTE=["#3a8eef","#34d399","#8a5cf0","#fbbf24","#f472b6","#22d3ee","#fb923c","#a3e635","#f87171","#60a5fa","#c084fc","#2dd4bf","#facc15"];
-const agentColor = Object.fromEntries(AGENTS.map((a,i)=>[a.id, PALETTE[i%PALETTE.length]]));
+function aColor(id){ const i=AGENTS.findIndex(a=>a.id===id); return PALETTE[(i<0?0:i)%PALETTE.length]; }
 const A = id => AGENTS.find(a=>a.id===id);
 
 // Older settled deals: defaults to collected + paid so historical rows read clean.
@@ -539,7 +553,7 @@ function renderLedger(){
     return `<tr class="drow${openRow===d.id?' open':''}" onclick="toggleRow(${d.id})">
       <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
       <td><div class="veh">${d.client}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
-      <td><span class="agentchip"><span class="dot" style="background:${agentColor[ag.id]}"></span>${ag.name.split(" ")[0]}</span></td>
+      <td><span class="agentchip"><span class="dot" style="background:${aColor(ag.id)}"></span>${ag.name.split(" ")[0]}</span></td>
       <td><span class="lead ${d.lead}">${leadLabel[d.lead]}</span></td>
       <td class="num money">${fmt(c.netPool)}</td>
       <td class="num money">${fmt(c.agentCut)}${c.overridden?'<span class="ov-flag">OVR</span>':''}</td>
@@ -556,7 +570,7 @@ function detailRow(d){
   const c=calc(d), E=`edit(${d.id},`, T=`toggleField(${d.id},`;
   return `<tr class="detail hide" id="det-${d.id}"><td colspan="11">
     <div class="det-banner">
-      <span class="db-dot" style="background:${agentColor[d.agentId]||'#888'}"></span>
+      <span class="db-dot" style="background:${aColor(d.agentId)}"></span>
       <span class="db-name">${d.client||'New deal'}</span>
       <span class="db-veh">${[d.year,d.make,d.model].filter(Boolean).join(' ')||'—'}</span>
       <span class="db-spacer"></span>
@@ -612,7 +626,7 @@ function edit(id, field, val, numeric){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
   if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
   else { if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; } d[field]=val; }
-  renderAll();
+  renderAll(); saveData();
 }
 function toggleField(id, field){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
@@ -620,9 +634,9 @@ function toggleField(id, field){
   if(field==='wSold' && d.wSold) d.wOffered=true;
   if(field==='aPaidF') d.aPaidFd=d.aPaidF?TODAY:'';
   if(field==='aPaidB') d.aPaidBd=d.aPaidB?TODAY:'';
-  renderAll();
+  renderAll(); saveData();
 }
-function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); }
+function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); saveData(); }
 function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
@@ -634,7 +648,7 @@ function newDeal(){
   range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
   ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all");
   document.getElementById("fSearch").value="";
-  openRow=id; renderAll();
+  openRow=id; renderAll(); saveData();
   setTimeout(()=>{ const el=document.querySelector("#det-"+id+" input"); if(el){ el.focus(); el.scrollIntoView({block:"center"}); } }, 30);
 }
 // ---- Add-by-chat ----
@@ -675,7 +689,35 @@ function addParsedDeal(o){
     notes:o.notes||""});
   range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
   ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all"); document.getElementById("fSearch").value="";
-  renderAll(); return id;
+  renderAll(); saveData(); return id;
+}
+// ---- Persistence: shared server store ----
+let _saveT=null;
+function markSaved(s,cls){ const el=document.getElementById("saveTag"); if(!el)return; el.textContent=s; el.className="save-tag "+cls; }
+function saveData(){ if(location.protocol==="file:")return; clearTimeout(_saveT); _saveT=setTimeout(saveDataNow,700); }
+async function saveDataNow(){
+  if(location.protocol==="file:")return;
+  markSaved("Saving…","saving");
+  try{
+    const r=await fetch("/nova-admins/save",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES})});
+    markSaved(r.ok?"✓ Saved":"Save failed","" + (r.ok?"ok":"err"));
+  }catch(e){ markSaved("Save failed — offline","err"); }
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES},null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="nova_admins_backup.json"; a.click();
+}
+async function importData(input){
+  const f=input.files[0]; if(!f)return; input.value="";
+  let data; try{ data=JSON.parse(await f.text()); }catch(e){ alert("Couldn't read that file: "+e.message); return; }
+  if(!Array.isArray(data.deals)){ alert("That doesn't look like Nova Admins data (no deals array)."); return; }
+  if(!confirm(`Replace current data with ${data.deals.length} deals · ${(data.expenses||[]).length} expenses · ${(data.agents||[]).length} agents?\nThis saves to the server for everyone.`)) return;
+  DEALS.length=0; DEALS.push(...data.deals);
+  if(Array.isArray(data.agents)&&data.agents.length){ AGENTS.length=0; AGENTS.push(...data.agents); }
+  EXPENSES.length=0; EXPENSES.push(...(data.expenses||[]));
+  DEALS.forEach(d=>{ d.feeJason=+d.feeJason||0; d.feeReferral=+d.feeReferral||0; });
+  openRow=null; renderAll(); saveDataNow();
 }
 function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}
 function agentOpts(sel){return AGENTS.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${a.name}</option>`).join("");}
@@ -691,7 +733,7 @@ function renderAgents(){
     let prod=0, oweF=0, oweB=0;
     ds.forEach(d=>{const c=calc(d); prod+=c.agentCut; if(c.agentFront>1&&!d.aPaidF)oweF+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)oweB+=c.agentBack;});
     return `<div class="acard">
-      <div class="ah"><div><div class="aname"><span class="dot" style="background:${agentColor[ag.id]}"></span> ${ag.name}</div>
+      <div class="ah"><div><div class="aname"><span class="dot" style="background:${aColor(ag.id)}"></span> ${ag.name}</div>
         <div class="ameta">${ds.length} deals · ${fmt(prod)} earned this period</div></div>
         <button class="na-btn ghost" style="font-size:11px;padding:6px 10px;">Edit</button></div>
       <div class="pctrow">
@@ -749,7 +791,7 @@ function renderPnl(){
   document.getElementById("oweBody").innerHTML = AGENTS.map(ag=>{
     const a=ds.filter(d=>d.agentId===ag.id); let owe=0;
     a.forEach(d=>{const c=calc(d); if(c.agentFront>1&&!d.aPaidF)owe+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)owe+=c.agentBack;});
-    return `<div class="exp-line"><span><span class="dot" style="background:${agentColor[ag.id]}"></span> ${ag.name}</span><span class="money ${owe>0?'':'pos'}">${owe>0?fmt(owe):'settled ✓'}</span></div>`;
+    return `<div class="exp-line"><span><span class="dot" style="background:${aColor(ag.id)}"></span> ${ag.name}</span><span class="money ${owe>0?'':'pos'}">${owe>0?fmt(owe):'settled ✓'}</span></div>`;
   }).join("");
 }
 

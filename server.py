@@ -60,6 +60,11 @@ NOVA_ADMIN_PASSWORD = os.environ.get("NOVA_ADMIN_PASSWORD") or "ADMIN"
 if not os.environ.get("NOVA_ADMIN_PASSWORD"):
     print("[security] NOVA_ADMIN_PASSWORD is not set — using 'ADMIN'. Set it in Railway (financial data).")
 
+# Optional shared-secret token for headless writes to Nova Admins (seeding the live
+# volume, the nightly Garage sync). When set, an X-Nova-Token header that matches is
+# accepted in place of an admin browser session. No default — token auth is off unless set.
+NOVA_ADMIN_TOKEN = os.environ.get("NOVA_ADMIN_TOKEN", "").strip()
+
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
 _LOGIN_MAX = 8
@@ -278,6 +283,9 @@ def require_login():
         if p == "/nova-admins-login":
             return None
         if session.get("admin_ok"):
+            return None
+        tok = request.headers.get("X-Nova-Token", "")
+        if NOVA_ADMIN_TOKEN and tok and hmac.compare_digest(tok, NOVA_ADMIN_TOKEN):
             return None
         if request.method == "GET":
             return redirect("/nova-admins-login")
@@ -642,6 +650,49 @@ def nova_admins_parse():
         return jsonify(json.loads(resp.choices[0].message.content))
     except Exception as e:
         return jsonify({"error": "Couldn't parse that — " + str(e)[:160]}), 500
+
+
+NOVA_ADMIN_DB = lambda: os.path.join(GENERATED_DIR, "nova_admins.json")
+
+
+@app.route("/nova-admins/data", methods=["GET"])
+def nova_admins_data():
+    """Serve the current shared dataset (agents/deals/expenses) for the live tool."""
+    path = NOVA_ADMIN_DB()
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return app.response_class(f.read(), mimetype="application/json")
+        except Exception:
+            pass
+    return jsonify({"agents": [], "deals": [], "expenses": []})
+
+
+@app.route("/nova-admins/save", methods=["POST"])
+def nova_admins_save():
+    """Persist the full dataset to the server volume so everyone loads the same data.
+    Last-write-wins (small team). Keeps a .bak and writes atomically."""
+    data = request.get_json(silent=True) or {}
+    if not all(isinstance(data.get(k), list) for k in ("agents", "deals", "expenses")):
+        return jsonify({"error": "Expected agents, deals and expenses arrays."}), 400
+    payload = json.dumps({"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"]}, indent=1)
+    if len(payload) > 12_000_000:
+        return jsonify({"error": "Payload too large."}), 413
+    path = NOVA_ADMIN_DB()
+    try:
+        if os.path.exists(path):
+            try:
+                import shutil
+                shutil.copy2(path, path + ".bak")
+            except Exception:
+                pass
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(payload)
+        os.replace(tmp, path)
+        return jsonify({"ok": True, "deals": len(data["deals"]), "expenses": len(data["expenses"])})
+    except Exception as e:
+        return jsonify({"error": str(e)[:160]}), 500
 
 
 @app.route("/toolbox")
