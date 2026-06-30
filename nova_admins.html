@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Admins — Deal Ledger</title>
+<style>
+  :root{
+    --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
+    --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
+    --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-green-bg:rgba(52,211,153,.13);
+    --na-red:#f87171; --na-red-bg:rgba(248,113,113,.13); --na-amber:#fbbf24; --na-amber-bg:rgba(251,191,36,.13);
+    --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--na-bg);color:var(--na-fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;font-size:13.5px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;}
+  .na-app{max-width:1320px;margin:0 auto;padding:26px 26px 80px;}
+
+  /* masthead */
+  .na-eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-eyebrow b{color:var(--na-blue);}
+  .na-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:4px 0 18px;flex-wrap:wrap;}
+  .na-title{font-size:30px;font-weight:760;letter-spacing:-.02em;margin:2px 0 0;}
+  .na-period{display:flex;align-items:center;gap:8px;}
+  .na-seg{display:inline-flex;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:3px;}
+  .na-seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:8px;font-size:12.5px;color:var(--na-muted);font-weight:600;}
+  .na-seg button.on{background:var(--na-panel-2);color:var(--na-fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}
+
+  /* kpi strip */
+  .na-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
+  .na-kpi{background:linear-gradient(180deg,var(--na-panel),var(--na-panel) 60%,#13151c);border:1px solid var(--na-line);
+    border-radius:15px;padding:14px 15px;}
+  .na-kpi .k-lab{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-kpi .k-val{font-family:var(--na-mono);font-size:22px;font-weight:600;letter-spacing:-.02em;margin-top:7px;}
+  .na-kpi .k-sub{font-size:11.5px;color:var(--na-muted);margin-top:3px;}
+  .na-kpi.hero{background:linear-gradient(180deg,rgba(52,211,153,.10),rgba(52,211,153,.02));border-color:rgba(52,211,153,.28);}
+  .na-kpi.hero .k-val{color:var(--na-green);}
+
+  /* tabs */
+  .na-tabs{display:flex;gap:4px;border-bottom:1px solid var(--na-line);margin-bottom:16px;}
+  .na-tab{all:unset;cursor:pointer;padding:9px 14px;font-size:13px;font-weight:600;color:var(--na-muted);
+    border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px;}
+  .na-tab .pill{font-family:var(--na-mono);font-size:10.5px;background:var(--na-panel-2);color:var(--na-muted);
+    padding:1px 6px;border-radius:20px;}
+  .na-tab.on{color:var(--na-fg);border-bottom-color:var(--na-blue);}
+  .na-tab.on .pill{color:var(--na-blue);}
+
+  /* filter bar */
+  .na-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .na-sel,.na-search{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);
+    border-radius:10px;padding:8px 11px;font-size:12.5px;font-family:inherit;outline:none;}
+  .na-sel:focus,.na-search:focus{border-color:var(--na-line-2);}
+  .na-search{min-width:180px;}
+  .na-spacer{flex:1;}
+  .na-btn{all:unset;cursor:pointer;background:var(--na-blue);color:#fff;border-radius:10px;padding:9px 14px;
+    font-size:12.5px;font-weight:650;display:inline-flex;align-items:center;gap:6px;}
+  .na-btn.ghost{background:var(--na-panel);color:var(--na-fg);border:1px solid var(--na-line);}
+
+  /* table */
+  .na-tablewrap{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;overflow:hidden;}
+  table.na-tbl{width:100%;border-collapse:collapse;}
+  .na-tbl th{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;
+    text-align:left;padding:11px 13px;border-bottom:1px solid var(--na-line);background:#13151c;white-space:nowrap;}
+  .na-tbl th.num,.na-tbl td.num{text-align:right;font-family:var(--na-mono);}
+  .na-tbl td{padding:12px 13px;border-bottom:1px solid var(--na-line);vertical-align:middle;}
+  .na-tbl tr.drow{cursor:pointer;transition:background .12s;}
+  .na-tbl tr.drow:hover{background:var(--na-panel-2);}
+  .na-tbl tr:last-child td{border-bottom:none;}
+  .veh{font-weight:600;}
+  .sub{color:var(--na-muted);font-size:11.5px;}
+  .agentchip{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .money{font-family:var(--na-mono);}
+  .pos{color:var(--na-green);} .neg{color:var(--na-muted);}
+  .split{font-family:var(--na-mono);font-size:11px;color:var(--na-muted);}
+
+  .stat{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+  .stat.g{background:var(--na-green-bg);color:var(--na-green);}
+  .stat.r{background:var(--na-red-bg);color:var(--na-red);}
+  .stat.a{background:var(--na-amber-bg);color:var(--na-amber);}
+  .lead{font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;}
+  .lead.own{background:rgba(138,92,240,.14);color:#b79bff;}
+  .lead.nova{background:rgba(58,142,239,.14);color:#76b4ff;}
+  .lead.referral{background:rgba(251,191,36,.13);color:var(--na-amber);}
+  .wbadge{font-size:10px;font-weight:700;padding:1px 5px;border-radius:5px;border:1px solid var(--na-line-2);color:var(--na-muted);}
+  .wbadge.sold{background:var(--na-green-bg);color:var(--na-green);border-color:transparent;}
+
+  /* drawer detail row */
+  tr.detail td{padding:0;border-bottom:1px solid var(--na-line);background:#10121a;}
+  .det{padding:18px 20px;display:grid;grid-template-columns:1.2fr 1fr;gap:22px;}
+  .det h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--na-muted-2);}
+  .ledger-line{display:grid;grid-template-columns:120px 1fr 1fr 1fr;gap:8px;padding:7px 0;border-bottom:1px dashed var(--na-line);font-family:var(--na-mono);font-size:12px;}
+  .ledger-line .lab{font-family:inherit;color:var(--na-muted);}
+  .ledger-line.head{color:var(--na-muted-2);font-size:10px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--na-line);}
+  .ledger-line.total{border-bottom:none;border-top:1px solid var(--na-line-2);margin-top:3px;font-weight:600;}
+  .det-meta{display:flex;flex-direction:column;gap:9px;}
+  .mrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;}
+  .mrow .ml{color:var(--na-muted);}
+  .pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
+  .pay-card{background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:9px 11px;}
+  .pay-card .pc-t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;margin-bottom:6px;}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:4px 0;}
+  .notes-box{background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--na-fg);grid-column:1/-1;white-space:pre-wrap;}
+  .notes-box .nl{color:var(--na-muted-2);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:5px;}
+
+  /* agents */
+  .na-agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;}
+  .acard{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;padding:16px 17px;}
+  .acard .ah{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;}
+  .acard .aname{font-size:15.5px;font-weight:680;}
+  .acard .ameta{font-size:11.5px;color:var(--na-muted);}
+  .pctrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .pctcell{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:10px;padding:9px 10px;text-align:center;}
+  .pctcell .pl{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .pctcell .pv{font-family:var(--na-mono);font-size:18px;font-weight:600;margin-top:3px;}
+  .owe{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .owebox{border:1px solid var(--na-line);border-radius:10px;padding:9px 11px;}
+  .owebox .ol{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .owebox .ov{font-family:var(--na-mono);font-size:16px;font-weight:600;margin-top:3px;}
+  .owebox.red .ov{color:var(--na-red);} .owebox.green .ov{color:var(--na-green);}
+
+  /* expenses + pnl */
+  .na-two{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start;}
+  .panel{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;padding:18px 19px;}
+  .panel h3{margin:0 0 14px;font-size:14px;font-weight:680;display:flex;justify-content:space-between;align-items:center;}
+  .pnl-line{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--na-line);font-size:13.5px;}
+  .pnl-line .pv{font-family:var(--na-mono);}
+  .pnl-line.minus .pl{color:var(--na-muted);} .pnl-line.minus .pv{color:var(--na-red);}
+  .pnl-line.sub{padding:7px 0;color:var(--na-muted);font-size:12.5px;}
+  .pnl-line.grand{border-bottom:none;border-top:2px solid var(--na-line-2);margin-top:4px;padding-top:14px;font-size:16px;font-weight:700;}
+  .pnl-line.grand .pv{color:var(--na-green);font-size:20px;}
+  .exp-line{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--na-line);font-size:13px;}
+  .exp-line .cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--na-muted);background:var(--na-panel-2);padding:2px 7px;border-radius:5px;margin-right:8px;}
+  .exp-line .ev{font-family:var(--na-mono);color:var(--na-red);}
+  .out-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+  .outbox{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:11px;padding:11px 12px;}
+  .outbox .obl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .outbox .obv{font-family:var(--na-mono);font-size:17px;font-weight:600;margin-top:4px;color:var(--na-amber);}
+  /* dashboard */
+  .dash-heroes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  .dhero{background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(52,211,153,.015));border:1px solid rgba(52,211,153,.25);border-radius:18px;padding:20px 22px;}
+  .dhero.ytd{background:linear-gradient(135deg,rgba(58,142,239,.10),rgba(58,142,239,.015));border-color:rgba(58,142,239,.28);}
+  .dhero .dh-lab{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .dhero .dh-net{font-family:var(--na-mono);font-size:38px;font-weight:680;letter-spacing:-.02em;margin:9px 0 3px;color:var(--na-green);}
+  .dhero.ytd .dh-net{color:#76b4ff;}
+  .dhero .dh-sub{font-size:12px;color:var(--na-muted);}
+  .dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .dstat{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:13px 15px;}
+  .dstat .ds-l{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .dstat .ds-v{font-family:var(--na-mono);font-size:21px;font-weight:600;margin-top:6px;}
+  .dstat .ds-s{font-size:11px;color:var(--na-muted);margin-top:2px;}
+  .lb-row{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:8px 0;}
+  .lb-row .lb-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lb-bar{height:9px;background:var(--na-panel-2);border-radius:6px;overflow:hidden;}
+  .lb-bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--na-blue),var(--na-purple));}
+  .lb-row .lb-val{font-family:var(--na-mono);font-size:12px;color:var(--na-muted);white-space:nowrap;}
+  .lb-row .lb-val b{color:var(--na-fg);}
+  .mchart{display:flex;align-items:flex-end;gap:12px;height:150px;padding-top:8px;}
+  .mcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;}
+  .mcol .mc-bar{width:100%;max-width:48px;background:linear-gradient(180deg,var(--na-green),rgba(52,211,153,.30));border-radius:7px 7px 0 0;min-height:3px;}
+  .mcol .mc-lab{font-size:10.5px;color:var(--na-muted);}
+  .mcol .mc-val{font-family:var(--na-mono);font-size:10px;color:var(--na-muted-2);}
+  .dash-scope{display:inline-flex;background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:9px;padding:3px;}
+  .dash-scope button{all:unset;cursor:pointer;padding:3px 11px;border-radius:6px;font-size:11px;color:var(--na-muted);font-weight:650;}
+  .dash-scope button.on{background:var(--na-panel);color:var(--na-fg);}
+  /* period picker */
+  .pp-wrap{position:relative;}
+  .pp-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--na-fg);}
+  .pp-btn svg{opacity:.55;}
+  .pp-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:212px;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:13px;padding:6px;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+  .pp-opt{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box;padding:8px 11px;border-radius:8px;font-size:12.5px;color:var(--na-fg);}
+  .pp-opt:hover{background:var(--na-panel-2);}
+  .pp-custom{border-top:1px solid var(--na-line);margin-top:6px;padding:9px 8px 4px;}
+  .pp-custom .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .pp-range{display:flex;align-items:center;gap:6px;margin-top:7px;}
+  .pp-range input{flex:1;min-width:0;}
+  .pp-range span{color:var(--na-muted);}
+  /* inline editing */
+  .na-in{background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:8px;padding:5px 8px;font-family:inherit;font-size:12.5px;outline:none;}
+  .na-in:focus{border-color:var(--na-blue);}
+  .na-in.num{font-family:var(--na-mono);text-align:right;width:92px;}
+  select.na-in{cursor:pointer;}
+  input.na-in[type=date]{font-family:var(--na-mono);font-size:11px;color-scheme:dark;padding:4px 6px;}
+  textarea.na-ed{width:100%;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:12.5px;outline:none;resize:vertical;margin-top:5px;}
+  textarea.na-ed:focus{border-color:var(--na-blue);}
+  .det-edit-head{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;padding:16px 20px 4px;border-bottom:1px dashed var(--na-line);}
+  .fieldgrp{display:flex;flex-direction:column;gap:4px;}
+  .fieldgrp .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .tog{cursor:pointer;user-select:none;}
+  .del-btn{margin-left:auto;background:rgba(248,113,113,.12);color:var(--na-red);border:none;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:650;cursor:pointer;}
+  .ovr-note{font-family:inherit !important;color:var(--na-muted-2);font-size:10.5px;}
+  .hide{display:none;}
+  .mini{font-size:10.5px;color:var(--na-muted-2);}
+  .ov-flag{font-size:9.5px;font-weight:700;color:var(--na-purple);background:rgba(138,92,240,.14);padding:1px 5px;border-radius:5px;margin-left:5px;}
+</style>
+</head>
+<body>
+<div class="na-app">
+
+  <div class="na-eyebrow">NOVA ADMINS · <b>byAletheya</b></div>
+  <div class="na-title-row">
+    <div>
+      <h1 class="na-title">Deal Ledger</h1>
+    </div>
+    <div class="na-period" id="periodWrap">
+      <span class="mini">Period</span>
+      <div class="pp-wrap">
+        <button class="pp-btn" id="periodBtn" onclick="togglePP(event)"><span id="periodLabel">This month</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="pp-menu hide" id="periodMenu">
+          <button class="pp-opt" data-k="today">Today</button>
+          <button class="pp-opt" data-k="week">This week</button>
+          <button class="pp-opt" data-k="month">This month</button>
+          <button class="pp-opt" data-k="30">Last 30 days</button>
+          <button class="pp-opt" data-k="90">Last 90 days</button>
+          <button class="pp-opt" data-k="quarter">This quarter</button>
+          <button class="pp-opt" data-k="ytd">Year to date</button>
+          <button class="pp-opt" data-k="all">All time</button>
+          <div class="pp-custom">
+            <span class="lab">Custom range</span>
+            <div class="pp-range"><input type="date" id="ppFrom" class="na-in"><span>→</span><input type="date" id="ppTo" class="na-in"></div>
+            <button class="na-btn" style="width:100%;box-sizing:border-box;justify-content:center;margin-top:7px" onclick="applyCustom()">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="na-kpis" id="kpis"></div>
+
+  <!-- Tabs -->
+  <div class="na-tabs" id="tabs">
+    <button class="na-tab on" data-t="dashboard">Dashboard</button>
+    <button class="na-tab" data-t="ledger">Ledger <span class="pill" id="cnt-ledger">0</span></button>
+    <button class="na-tab" data-t="agents">Agents <span class="pill" id="cnt-agents">0</span></button>
+    <button class="na-tab" data-t="expenses">Expenses <span class="pill" id="cnt-exp">0</span></button>
+    <button class="na-tab" data-t="pnl">P&amp;L</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard">
+    <div class="dash-heroes" id="dashHeroes"></div>
+    <div class="dash-stats" id="dashStats"></div>
+    <div class="panel" style="margin-bottom:16px;"><h3>Profit by month · 2026 <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
+    <div class="na-two">
+      <div class="panel"><h3>Top models <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></h3><div id="dashModels"></div></div>
+      <div class="panel"><h3>Top brands</h3><div id="dashBrands"></div></div>
+    </div>
+    <div class="na-two" style="margin-top:16px;">
+      <div class="panel"><h3>Lead source mix</h3><div id="dashLeads"></div></div>
+      <div class="panel"><h3>Most profitable / car</h3><div id="dashProfit"></div></div>
+    </div>
+  </div>
+
+  <!-- LEDGER -->
+  <div id="view-ledger" class="hide">
+    <div class="na-filters">
+      <select class="na-sel" id="fAgent"><option value="all">All agents</option></select>
+      <select class="na-sel" id="fLead">
+        <option value="all">All lead sources</option>
+        <option value="own">Agent (own lead)</option>
+        <option value="nova">Nova Lead (FB/IG)</option>
+        <option value="referral">Referral</option>
+      </select>
+      <select class="na-sel" id="fStatus">
+        <option value="all">All statuses</option>
+        <option value="owed">Owed to Nova</option>
+        <option value="unpaid">Agent unpaid</option>
+        <option value="done">Fully settled</option>
+      </select>
+      <input class="na-search" id="fSearch" placeholder="Search client, VIN, vehicle…">
+      <div class="na-spacer"></div>
+      <button class="na-btn ghost">⌁ Sync from Garage</button>
+      <button class="na-btn">+ New Deal</button>
+    </div>
+    <div class="na-tablewrap">
+      <table class="na-tbl">
+        <thead><tr>
+          <th>Date</th><th>Client / Vehicle</th><th>Agent</th><th>Lead</th>
+          <th class="num">Net pool</th><th class="num">Agent</th><th class="num">Nova</th>
+          <th>Split</th><th>Wty</th><th>Collected</th><th>Agent paid</th>
+        </tr></thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div id="view-agents" class="hide">
+    <div class="na-filters">
+      <div class="na-spacer"></div>
+      <button class="na-btn">+ Add Agent</button>
+    </div>
+    <div class="na-agents" id="agentsBody"></div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div id="view-expenses" class="hide">
+    <div class="na-two">
+      <div class="panel">
+        <h3>Expenses <button class="na-btn" style="font-size:11px;padding:6px 11px;">+ Add</button></h3>
+        <div id="expBody"></div>
+      </div>
+      <div class="panel">
+        <h3>By category</h3>
+        <div id="expCats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P&L -->
+  <div id="view-pnl" class="hide">
+    <div class="na-two">
+      <div class="panel">
+        <h3>Profit &amp; Loss <span class="mini" id="pnlPeriod"></span></h3>
+        <div id="pnlBody"></div>
+      </div>
+      <div class="panel">
+        <h3>Outstanding</h3>
+        <p class="mini" style="margin-top:-6px;">Cash booked but not yet settled.</p>
+        <div class="out-strip" id="outBody"></div>
+        <h3 style="margin-top:22px;">Per-agent owed</h3>
+        <div id="oweBody"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/*NOVA_SEED*/
+const fmt = n => (n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString();
+const fmt2 = n => "$"+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:0});
+
+// Server injects window.NOVA_SEED (real agents/deals from generated/nova_admins.json).
+// Falls back to demo data when absent (e.g. a fresh public checkout).
+const SEED = (typeof window!=="undefined" && window.NOVA_SEED) || {};
+const AGENTS = SEED.agents || [
+  {id:"a1", name:"Hannah Nehdar", pct:{own:60, nova:50, referral:60}},
+  {id:"a2", name:"Marcus Lee",    pct:{own:70, nova:40, referral:70}},
+  {id:"a3", name:"Sofia Reyes",   pct:{own:60, nova:30, referral:60}},
+];
+const PALETTE=["#3a8eef","#34d399","#8a5cf0","#fbbf24","#f472b6","#22d3ee","#fb923c","#a3e635","#f87171","#60a5fa","#c084fc","#2dd4bf","#facc15"];
+const agentColor = Object.fromEntries(AGENTS.map((a,i)=>[a.id, PALETTE[i%PALETTE.length]]));
+const A = id => AGENTS.find(a=>a.id===id);
+
+// Older settled deals: defaults to collected + paid so historical rows read clean.
+function settled(o){ return Object.assign({override:null, fees:0, wOffered:true, wSold:false, pay:"Zelle",
+  fColl:true, bColl:true, aPaidF:true, aPaidB:true, notes:""}, o, {aPaidFd:o.date, aPaidBd:o.date}); }
+
+// Deals — front/back gross from the Garage note; client/VIN/agent from the Garage record.
+const DEALS = SEED.deals || [
+  {id:1, date:"2026-06-04", client:"Darius O.", year:2026, make:"BMW", model:"X5", vin:"5UXCR6C0XN9A41882", dealer:"Beverly Hills BMW", type:"Lease", term:36, agentId:"a1", lead:"nova", wOffered:true, wSold:true, front:1500, fees:200, back:800, override:null, pay:"Stripe", fColl:true, bColl:false, aPaidF:true, aPaidFd:"2026-06-12", aPaidB:false, aPaidBd:"", notes:""},
+  {id:2, date:"2026-06-07", client:"Luca M.", year:2026, make:"Mercedes-Benz", model:"GLC 300", vin:"W1N0G8EB4PV123455", dealer:"MB of Encino", type:"Lease", term:39, agentId:"a2", lead:"own", wOffered:true, wSold:false, front:1995, fees:0, back:1200, override:null, pay:"Zelle", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-15", aPaidB:true, aPaidBd:"2026-06-20", notes:"Client added second key fob — Marcus comped from his cut."},
+  {id:3, date:"2026-06-11", client:"Rohan P.", year:2026, make:"Audi", model:"Q5", vin:"WA1BNAFY3P2098771", dealer:"Audi Calabasas", type:"Lease", term:36, agentId:"a3", lead:"referral", wOffered:false, wSold:false, front:1200, fees:150, back:600, override:null, pay:"Stripe", fColl:true, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""},
+  {id:4, date:"2026-06-18", client:"Sophie K.", year:2026, make:"Lexus", model:"RX 350", vin:"2T2BZMCA9NC201144", dealer:"Lexus Woodland Hills", type:"Lease", term:36, agentId:"a1", lead:"own", wOffered:true, wSold:true, front:2200, fees:300, back:900, override:null, pay:"Zelle", fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"Fresh delivery 6/18 — invoice sent, awaiting client payment."},
+  {id:5, date:"2026-06-21", client:"Tony N.", year:2026, make:"Genesis", model:"GV70", vin:"KMUHBDSB0PU077231", dealer:"Genesis of Beverly Hills", type:"Lease", term:36, agentId:"a2", lead:"nova", wOffered:true, wSold:false, front:1400, fees:100, back:700, override:null, pay:"Stripe", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-25", aPaidB:false, aPaidBd:"", notes:""},
+  {id:6, date:"2026-06-24", client:"Gianna R.", year:2026, make:"Land Rover", model:"Range Rover Velar", vin:"SALYB2EX0PA334419", dealer:"Land Rover Encino", type:"Lease", term:36, agentId:"a1", lead:"referral", wOffered:true, wSold:true, front:2500, fees:400, back:1500, override:1200, pay:"Zelle", fColl:true, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"Custom: bumped Hannah to $1,200 flat — she sourced a hard-to-find spec."},
+  {id:7, date:"2026-06-27", client:"Marco A.", year:2026, make:"Honda", model:"CR-V", vin:"7FARS4H93PE012998", dealer:"Honda of Hollywood", type:"Lease", term:36, agentId:"a3", lead:"nova", wOffered:false, wSold:false, front:900, fees:0, back:400, override:null, pay:"Stripe", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-06-29", aPaidB:true, aPaidBd:"2026-06-29", notes:""},
+  {id:8, date:"2026-05-22", client:"Jordan B.", year:2026, make:"BMW", model:"330i", vin:"3MW69FF06P8C55120", dealer:"Pacific BMW", type:"Lease", term:36, agentId:"a2", lead:"own", wOffered:true, wSold:true, front:1600, fees:200, back:800, override:null, pay:"Zelle", fColl:true, bColl:true, aPaidF:true, aPaidFd:"2026-05-28", aPaidB:true, aPaidBd:"2026-06-02", notes:""},
+  // ---- earlier 2026 (settled) — gives YTD + the leaderboards real signal ----
+  settled({id:9,  date:"2026-01-10", client:"Andrew C.",  year:2026, make:"BMW", model:"X3", vin:"5UXTR9C5XKLX12233", dealer:"Long Beach BMW", type:"Lease", term:36, agentId:"a1", lead:"own", front:1700, back:900, wSold:true}),
+  settled({id:10, date:"2026-01-22", client:"Bianca D.",  year:2026, make:"Mercedes-Benz", model:"C 300", vin:"55SWF8DB0LU334120", dealer:"MB of Beverly Hills", type:"Lease", term:36, agentId:"a2", lead:"nova", front:1500, back:700}),
+  settled({id:11, date:"2026-01-28", client:"Chris W.",  year:2026, make:"Lexus", model:"RX 350", vin:"2T2BZMCA0LC205541", dealer:"Lexus Santa Monica", type:"Lease", term:36, agentId:"a3", lead:"referral", front:1900, back:800, wSold:true}),
+  settled({id:12, date:"2026-02-08", client:"Ethan M.", year:2026, make:"BMW", model:"X5", vin:"5UXCR6C09M9B22014", dealer:"Pacific BMW", type:"Lease", term:36, agentId:"a1", lead:"nova", front:1600, back:850}),
+  settled({id:13, date:"2026-02-15", client:"Fiona T.",  year:2026, make:"Honda", model:"CR-V", vin:"7FARW2H53NE114220", dealer:"Honda of Pasadena", type:"Lease", term:36, agentId:"a3", lead:"own", front:1000, back:450}),
+  settled({id:14, date:"2026-02-20", client:"Hana P.",  year:2026, make:"Toyota", model:"RAV4", vin:"2T3W1RFV5NW221033", dealer:"Toyota of Glendale", type:"Lease", term:36, agentId:"a2", lead:"own", front:1200, back:500, wSold:true}),
+  settled({id:15, date:"2026-03-05", client:"Iris C.", year:2026, make:"Mercedes-Benz", model:"GLC 300", vin:"W1N0G8EB4NV445120", dealer:"MB of Encino", type:"Lease", term:36, agentId:"a1", lead:"own", front:2000, back:1100, wSold:true}),
+  settled({id:16, date:"2026-03-14", client:"Jaspreet S.", year:2026, make:"Audi", model:"A4", vin:"WAUEAAF40NA009912", dealer:"Audi Calabasas", type:"Lease", term:36, agentId:"a3", lead:"nova", front:1300, back:600}),
+  settled({id:17, date:"2026-03-25", client:"Kurt B.", year:2026, make:"BMW", model:"330i", vin:"3MW5R1J04M8B71220", dealer:"Century West BMW", type:"Lease", term:36, agentId:"a2", lead:"own", front:1650, back:850}),
+  settled({id:18, date:"2026-04-09", client:"Lena F.", year:2026, make:"Lexus", model:"NX", vin:"JTJGARBZ5N5012044", dealer:"Lexus Woodland Hills", type:"Lease", term:36, agentId:"a1", lead:"referral", front:1750, back:800, wSold:true}),
+  settled({id:19, date:"2026-04-18", client:"Mia R.", year:2026, make:"Toyota", model:"Camry", vin:"4T1G11AK0NU667120", dealer:"Toyota of Hollywood", type:"Lease", term:36, agentId:"a3", lead:"own", front:1100, back:450}),
+  settled({id:20, date:"2026-04-27", client:"Nina B.", year:2026, make:"Mercedes-Benz", model:"GLE 350", vin:"4JGFB4KB0NA612033", dealer:"MB of Calabasas", type:"Lease", term:36, agentId:"a2", lead:"nova", front:2200, back:1300, wSold:true}),
+  settled({id:21, date:"2026-05-06", client:"Owen H.", year:2026, make:"BMW", model:"X5", vin:"5UXCR6C00N9C33120", dealer:"Beverly Hills BMW", type:"Lease", term:36, agentId:"a1", lead:"own", front:1850, back:950, wSold:true}),
+  settled({id:22, date:"2026-05-19", client:"Priya L.",   year:2026, make:"Lexus", model:"RX 350", vin:"2T2BZMCA7NC301220", dealer:"Lexus Santa Monica", type:"Lease", term:36, agentId:"a3", lead:"nova", front:1950, back:850}),
+];
+
+const EXPENSES = SEED.expenses || [
+  {id:1, date:"2026-06-01", cat:"Ad Spend", desc:"Meta Ads — Nova lead campaigns", amt:1800},
+  {id:2, date:"2026-06-01", cat:"Software", desc:"Tools & subscriptions", amt:240},
+  {id:3, date:"2026-06-15", cat:"Ad Spend", desc:"Meta Ads — retargeting boost", amt:600},
+  {id:4, date:"2026-06-20", cat:"Misc", desc:"Stripe processing fees", amt:120},
+  {id:5, date:"2026-05-01", cat:"Ad Spend", desc:"Meta Ads — May", amt:1500},
+  {id:6,  date:"2026-01-05", cat:"Ad Spend", desc:"Meta Ads — January", amt:1400},
+  {id:7,  date:"2026-01-05", cat:"Software", desc:"Tools & subscriptions", amt:240},
+  {id:8,  date:"2026-02-03", cat:"Ad Spend", desc:"Meta Ads — February", amt:1500},
+  {id:9,  date:"2026-02-03", cat:"Software", desc:"Tools & subscriptions", amt:240},
+  {id:10, date:"2026-03-04", cat:"Ad Spend", desc:"Meta Ads — March", amt:1600},
+  {id:11, date:"2026-03-04", cat:"Software", desc:"Tools & subscriptions", amt:240},
+  {id:12, date:"2026-04-02", cat:"Ad Spend", desc:"Meta Ads — April", amt:1700},
+  {id:13, date:"2026-04-02", cat:"Software", desc:"Tools & subscriptions", amt:240},
+  {id:14, date:"2026-05-02", cat:"Software", desc:"Tools & subscriptions", amt:240},
+];
+
+// ---- ENGINE ----
+function calc(d){
+  const combined = d.front + d.back;
+  const netPool = combined - d.fees;
+  const pct = A(d.agentId).pct[d.lead];
+  // pro-rata fee allocation so front/back can be paid as cash lands
+  const frontNet = combined ? d.front - d.fees*(d.front/combined) : 0;
+  const backNet  = combined ? d.back  - d.fees*(d.back/combined)  : 0;
+  let agentCut = netPool * pct/100;
+  let overridden = false;
+  if(d.override!=null){ agentCut = d.override; overridden = true; }
+  const ratio = (agentCut) / (netPool||1);             // effective share (after override)
+  const agentFront = frontNet * ratio, agentBack = backNet * ratio;
+  const novaCut = netPool - agentCut;
+  return {combined, netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
+          splitPct: netPool? Math.round(agentCut/netPool*100):0};
+}
+function collStatus(d){ // money IN
+  const sides=[]; if(d.front>0) sides.push(d.fColl); if(d.back>0) sides.push(d.bColl);
+  if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
+}
+function paidStatus(d){ // money OUT to agent
+  const c=calc(d); const sides=[];
+  if(c.agentFront>1) sides.push(d.aPaidF); if(c.agentBack>1) sides.push(d.aPaidB);
+  if(!sides.length) return "g"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
+}
+const leadLabel = {own:"Own", nova:"Nova", referral:"Referral"};
+const statText = {g:"Paid", a:"Partial", r:"Owed"};
+
+// ---- STATE ----
+const CUR_MONTH="2026-06", CUR_YEAR="2026", NOW=new Date("2026-06-30T12:00:00");
+let tab="dashboard", dashScope="ytd";
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function presetRange(k){
+  const t=new Date(NOW); let from, to=ymd(t), label="";
+  if(k==="today"){from=ymd(t);label="Today";}
+  else if(k==="week"){const x=new Date(t);x.setDate(x.getDate()-((x.getDay()+6)%7));from=ymd(x);label="This week";}
+  else if(k==="month"){from=ymd(new Date(t.getFullYear(),t.getMonth(),1));label="This month";}
+  else if(k==="30"){const x=new Date(t);x.setDate(x.getDate()-29);from=ymd(x);label="Last 30 days";}
+  else if(k==="90"){const x=new Date(t);x.setDate(x.getDate()-89);from=ymd(x);label="Last 90 days";}
+  else if(k==="quarter"){const q=Math.floor(t.getMonth()/3)*3;from=ymd(new Date(t.getFullYear(),q,1));label="This quarter";}
+  else if(k==="ytd"){from=t.getFullYear()+"-01-01";label="Year to date";}
+  else {from="2000-01-01";to="2999-12-31";label="All time";}
+  return {from,to,label};
+}
+let range=presetRange("month");
+const inPeriod = d => d.date>=range.from && d.date<=range.to;
+
+function filteredDeals(){
+  let ds = DEALS.filter(inPeriod);
+  const fa=document.getElementById("fAgent").value, fl=document.getElementById("fLead").value,
+        fs=document.getElementById("fStatus").value, q=document.getElementById("fSearch").value.toLowerCase().trim();
+  if(fa!=="all") ds=ds.filter(d=>d.agentId===fa);
+  if(fl!=="all") ds=ds.filter(d=>d.lead===fl);
+  if(fs==="owed") ds=ds.filter(d=>collStatus(d)!=="g");
+  if(fs==="unpaid") ds=ds.filter(d=>paidStatus(d)!=="g");
+  if(fs==="done") ds=ds.filter(d=>collStatus(d)==="g" && paidStatus(d)==="g");
+  if(q) ds=ds.filter(d=>(`${d.client} ${d.vin} ${d.year} ${d.make} ${d.model} ${d.dealer}`).toLowerCase().includes(q));
+  return ds;
+}
+
+// ---- RENDER: KPIs ----
+function renderKpis(){
+  const ds=DEALS.filter(inPeriod);
+  let rev=0, payout=0, nova=0;
+  ds.forEach(d=>{const c=calc(d); rev+=c.netPool; payout+=c.agentCut; nova+=c.novaCut;});
+  const exp=EXPENSES.filter(inPeriod).reduce((s,e)=>s+e.amt,0);
+  const net=nova-exp;
+  document.getElementById("kpis").innerHTML = [
+    {l:"Net Revenue", v:fmt(rev), s:`${ds.length} deals · after fees shared`},
+    {l:"Agent Payouts", v:fmt(payout), s:"commissions earned"},
+    {l:"Nova Gross", v:fmt(nova), s:"before expenses"},
+    {l:"Expenses", v:fmt(exp), s:"ad spend, tools, fees"},
+    {l:"Nova True Net", v:fmt(net), s:"complete profit", hero:true},
+  ].map(k=>`<div class="na-kpi ${k.hero?'hero':''}"><div class="k-lab">${k.l}</div><div class="k-val">${k.v}</div><div class="k-sub">${k.s}</div></div>`).join("");
+}
+
+// ---- RENDER: Ledger ----
+let openRow=null;
+function renderLedger(){
+  const ds=filteredDeals();
+  document.getElementById("cnt-ledger").textContent=DEALS.filter(inPeriod).length;
+  const body=document.getElementById("ledgerBody");
+  if(!ds.length){ body.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--na-muted)">No deals match.</td></tr>`; return; }
+  body.innerHTML = ds.map(d=>{
+    const c=calc(d), ag=A(d.agentId), cs=collStatus(d), ps=paidStatus(d);
+    return `<tr class="drow" onclick="toggleRow(${d.id})">
+      <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
+      <td><div class="veh">${d.client}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
+      <td><span class="agentchip"><span class="dot" style="background:${agentColor[ag.id]}"></span>${ag.name.split(" ")[0]}</span></td>
+      <td><span class="lead ${d.lead}">${leadLabel[d.lead]}</span></td>
+      <td class="num money">${fmt(c.netPool)}</td>
+      <td class="num money">${fmt(c.agentCut)}${c.overridden?'<span class="ov-flag">OVR</span>':''}</td>
+      <td class="num money pos">${fmt(c.novaCut)}</td>
+      <td><span class="split">${c.splitPct}% / ${100-c.splitPct}%</span></td>
+      <td>${d.wSold?'<span class="wbadge sold">SOLD</span>':(d.wOffered?'<span class="wbadge">offered</span>':'<span class="mini">—</span>')}</td>
+      <td><span class="stat ${cs}">${cs==='g'?'● Collected':cs==='a'?'◐ Partial':'○ Owed'}</span></td>
+      <td><span class="stat ${ps}">${ps==='g'?'● Paid':ps==='a'?'◐ Partial':'○ Unpaid'}</span></td>
+    </tr>${detailRow(d)}`;
+  }).join("");
+  if(openRow) { const el=document.getElementById("det-"+openRow); if(el) el.classList.remove("hide"); }
+}
+function detailRow(d){
+  const c=calc(d), E=`edit(${d.id},`, T=`toggleField(${d.id},`;
+  return `<tr class="detail hide" id="det-${d.id}"><td colspan="11">
+    <div class="det-edit-head">
+      <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${d.client}" onchange="${E}'client',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Year</span><input class="na-in" style="width:62px" value="${d.year}" onchange="${E}'year',this.value,1)"></div>
+      <div class="fieldgrp"><span class="lab">Make</span><input class="na-in" style="width:128px" value="${d.make}" onchange="${E}'make',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Model</span><input class="na-in" style="width:128px" value="${d.model}" onchange="${E}'model',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Agent</span><select class="na-in" onchange="${E}'agentId',this.value)">${agentOpts(d.agentId)}</select></div>
+      <button class="del-btn" onclick="delDeal(${d.id})">Delete</button>
+    </div>
+    <div class="det">
+    <div>
+      <h4>Deal economics</h4>
+      <div class="ledger-line head"><span>Side</span><span>Gross</span><span>Net (− fees)</span><span>Agent ${c.pct}%${c.overridden?' · OVR':''}</span></div>
+      <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
+      <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
+      <div class="ledger-line"><span class="lab">Fees shared</span><span><input class="na-in num" value="${d.fees}" onchange="${E}'fees',this.value,1)"></span><span></span><span></span></div>
+      <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
+      <div class="ledger-line" style="border-bottom:none"><span class="lab">Override agent&nbsp;$</span><span><input class="na-in num" placeholder="auto" value="${d.override??''}" onchange="${E}'override',this.value)"></span><span class="ovr-note">${d.override!=null?'manual — overrides '+c.pct+'%':'blank = '+c.pct+'% auto'}</span><span></span></div>
+      <div style="margin-top:8px"><span class="lab" style="font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700">Notes</span>
+        <textarea class="na-ed" rows="2" placeholder="Anything extra from Garage…" onchange="${E}'notes',this.value)">${d.notes}</textarea></div>
+    </div>
+    <div class="det-meta">
+      <div class="mrow"><span class="ml">VIN</span><input class="na-in" style="width:200px;font-family:var(--na-mono)" value="${d.vin}" onchange="${E}'vin',this.value)"></div>
+      <div class="mrow"><span class="ml">Dealership</span><input class="na-in" style="width:210px" value="${d.dealer}" onchange="${E}'dealer',this.value)"></div>
+      <div class="mrow"><span class="ml">Type / Term</span><span><select class="na-in" onchange="${E}'type',this.value)">${opt(['Lease','Buy'],d.type)}</select> <input class="na-in num" style="width:54px" value="${d.term}" onchange="${E}'term',this.value,1)"> mo</span></div>
+      <div class="mrow"><span class="ml">Lead source</span><select class="na-in" onchange="${E}'lead',this.value)">${leadOpts(d.lead)}</select></div>
+      <div class="mrow"><span class="ml">Warranty</span><span><span class="stat tog ${d.wOffered?'g':'r'}" onclick="${T}'wOffered')">${d.wOffered?'● Offered':'○ Offered'}</span> <span class="stat tog ${d.wSold?'g':'r'}" onclick="${T}'wSold')">${d.wSold?'● Sold':'○ Sold'}</span></span></div>
+      <div class="mrow"><span class="ml">Payment</span><select class="na-in" onchange="${E}'pay',this.value)">${opt(['Stripe','Zelle','Cash','Check'],d.pay)}</select></div>
+      <div class="pay-grid">
+        <div class="pay-card"><div class="pc-t">Money in — Nova</div>
+          <div class="toggle"><span>Front collected</span><span class="stat tog ${d.fColl?'g':'r'}" onclick="${T}'fColl')">${d.fColl?'● Yes':'○ No'}</span></div>
+          <div class="toggle"><span>Back collected</span><span class="stat tog ${d.bColl?'g':'r'}" onclick="${T}'bColl')">${d.bColl?'● Yes':'○ No'}</span></div>
+        </div>
+        <div class="pay-card"><div class="pc-t">Money out — Agent</div>
+          <div class="toggle"><span>Front paid</span><span class="stat tog ${d.aPaidF?'g':'r'}" onclick="${T}'aPaidF')">${d.aPaidF?'● Yes':'○ No'}</span></div>
+          ${d.aPaidF?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.aPaidFd}" onchange="${E}'aPaidFd',this.value)"></div>`:''}
+          <div class="toggle"><span>Back paid</span><span class="stat tog ${d.aPaidB?'g':'r'}" onclick="${T}'aPaidB')">${d.aPaidB?'● Yes':'○ No'}</span></div>
+          ${d.aPaidB?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.aPaidBd}" onchange="${E}'aPaidBd',this.value)"></div>`:''}
+        </div>
+      </div>
+    </div>
+    </div></td></tr>`;
+}
+const TODAY="2026-06-30";
+function edit(id, field, val, numeric){
+  const d=DEALS.find(x=>x.id===id); if(!d)return;
+  if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
+  else { if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; } d[field]=val; }
+  renderAll();
+}
+function toggleField(id, field){
+  const d=DEALS.find(x=>x.id===id); if(!d)return;
+  d[field]=!d[field];
+  if(field==='wSold' && d.wSold) d.wOffered=true;
+  if(field==='aPaidF') d.aPaidFd=d.aPaidF?TODAY:'';
+  if(field==='aPaidB') d.aPaidBd=d.aPaidB?TODAY:'';
+  renderAll();
+}
+function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); }
+function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}
+function agentOpts(sel){return AGENTS.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${a.name}</option>`).join("");}
+function leadOpts(sel){return Object.entries(leadLabel).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v}</option>`).join("");}
+function toggleRow(id){ openRow = (openRow===id)?null:id; renderLedger(); }
+
+// ---- RENDER: Agents ----
+function renderAgents(){
+  document.getElementById("cnt-agents").textContent=AGENTS.length;
+  const body=document.getElementById("agentsBody");
+  body.innerHTML = AGENTS.map(ag=>{
+    const ds=DEALS.filter(d=>d.agentId===ag.id && inPeriod(d));
+    let prod=0, oweF=0, oweB=0;
+    ds.forEach(d=>{const c=calc(d); prod+=c.agentCut; if(c.agentFront>1&&!d.aPaidF)oweF+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)oweB+=c.agentBack;});
+    return `<div class="acard">
+      <div class="ah"><div><div class="aname"><span class="dot" style="background:${agentColor[ag.id]}"></span> ${ag.name}</div>
+        <div class="ameta">${ds.length} deals · ${fmt(prod)} earned this period</div></div>
+        <button class="na-btn ghost" style="font-size:11px;padding:6px 10px;">Edit</button></div>
+      <div class="pctrow">
+        <div class="pctcell"><div class="pl">Own lead</div><div class="pv">${ag.pct.own}%</div></div>
+        <div class="pctcell"><div class="pl">Nova lead</div><div class="pv" style="color:var(--na-blue)">${ag.pct.nova}%</div></div>
+        <div class="pctcell"><div class="pl">Referral</div><div class="pv">${ag.pct.referral}%</div></div>
+      </div>
+      <div class="owe">
+        <div class="owebox ${oweF>0?'red':'green'}"><div class="ol">Front owed to agent</div><div class="ov">${fmt(oweF)}</div></div>
+        <div class="owebox ${oweB>0?'red':'green'}"><div class="ol">Back owed to agent</div><div class="ov">${fmt(oweB)}</div></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ---- RENDER: Expenses ----
+function renderExpenses(){
+  const es=EXPENSES.filter(inPeriod);
+  document.getElementById("cnt-exp").textContent=es.length;
+  const total=es.reduce((s,e)=>s+e.amt,0);
+  document.getElementById("expBody").innerHTML = es.map(e=>`
+    <div class="exp-line"><span><span class="cat">${e.cat}</span>${e.desc}<div class="mini">${e.date}</div></span><span class="ev">−${fmt(e.amt).slice(1)}</span></div>`).join("")
+    + `<div class="exp-line" style="border-bottom:none;font-weight:700;"><span>Total expenses</span><span class="ev">−${fmt(total).slice(1)}</span></div>`;
+  const cats={}; es.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+e.amt);
+  document.getElementById("expCats").innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
+    const pct=Math.round(v/total*100);
+    return `<div style="margin-bottom:13px;"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;"><span>${c}</span><span class="money">${fmt(v)} · ${pct}%</span></div>
+    <div style="height:7px;background:var(--na-panel-2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:var(--na-blue);"></div></div></div>`;
+  }).join("");
+}
+
+// ---- RENDER: P&L ----
+function renderPnl(){
+  const ds=DEALS.filter(inPeriod);
+  let frontG=0,backG=0,fees=0,payout=0,nova=0, oweFront=0,oweBack=0,oweAgent=0;
+  ds.forEach(d=>{const c=calc(d); frontG+=d.front; backG+=d.back; fees+=d.fees; payout+=c.agentCut; nova+=c.novaCut;
+    if(!d.fColl)oweFront+=d.front; if(d.back>0&&!d.bColl)oweBack+=d.back;
+    if(c.agentFront>1&&!d.aPaidF)oweAgent+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)oweAgent+=c.agentBack;});
+  const exp=EXPENSES.filter(inPeriod).reduce((s,e)=>s+e.amt,0);
+  const netPool=frontG+backG-fees, net=nova-exp;
+  document.getElementById("pnlPeriod").textContent = "· "+range.label;
+  document.getElementById("pnlBody").innerHTML = `
+    <div class="pnl-line"><span class="pl">Front gross (client)</span><span class="pv">${fmt(frontG)}</span></div>
+    <div class="pnl-line"><span class="pl">Back gross (dealer)</span><span class="pv">${fmt(backG)}</span></div>
+    <div class="pnl-line minus"><span class="pl">Less: fees shared</span><span class="pv">−${fmt(fees).slice(1)}</span></div>
+    <div class="pnl-line sub"><span class="pl">Net revenue pool</span><span class="pv">${fmt(netPool)}</span></div>
+    <div class="pnl-line minus"><span class="pl">Less: agent payouts</span><span class="pv">−${fmt(payout).slice(1)}</span></div>
+    <div class="pnl-line"><span class="pl"><b>Nova gross profit</b></span><span class="pv">${fmt(nova)}</span></div>
+    <div class="pnl-line minus"><span class="pl">Less: operating expenses</span><span class="pv">−${fmt(exp).slice(1)}</span></div>
+    <div class="pnl-line grand"><span class="pl">Nova true net</span><span class="pv">${fmt(net)}</span></div>`;
+  document.getElementById("outBody").innerHTML = `
+    <div class="outbox"><div class="obl">Front owed to Nova</div><div class="obv">${fmt(oweFront)}</div></div>
+    <div class="outbox"><div class="obl">Back owed to Nova</div><div class="obv">${fmt(oweBack)}</div></div>
+    <div class="outbox"><div class="obl">Owed to agents</div><div class="obv">${fmt(oweAgent)}</div></div>`;
+  document.getElementById("oweBody").innerHTML = AGENTS.map(ag=>{
+    const a=ds.filter(d=>d.agentId===ag.id); let owe=0;
+    a.forEach(d=>{const c=calc(d); if(c.agentFront>1&&!d.aPaidF)owe+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)owe+=c.agentBack;});
+    return `<div class="exp-line"><span><span class="dot" style="background:${agentColor[ag.id]}"></span> ${ag.name}</span><span class="money ${owe>0?'':'pos'}">${owe>0?fmt(owe):'settled ✓'}</span></div>`;
+  }).join("");
+}
+
+// ---- RENDER: Dashboard ----
+function profitFor(key){
+  const pre = key==="mtd"?CUR_MONTH:CUR_YEAR;
+  const ds=DEALS.filter(d=>d.date.startsWith(pre));
+  let gross=0,payout=0,rev=0; ds.forEach(d=>{const c=calc(d);gross+=c.novaCut;payout+=c.agentCut;rev+=c.netPool;});
+  const exp=EXPENSES.filter(e=>e.date.startsWith(pre)).reduce((s,e)=>s+e.amt,0);
+  return {ds,gross,payout,rev,exp,trueNet:gross-exp,count:ds.length};
+}
+function monthNet(m){
+  let g=0; DEALS.filter(d=>d.date.startsWith(m)).forEach(d=>g+=calc(d).novaCut);
+  const e=EXPENSES.filter(x=>x.date.startsWith(m)).reduce((s,x)=>s+x.amt,0);
+  return g-e;
+}
+function leaderboard(ds, keyFn){
+  const m={}; ds.forEach(d=>{const k=keyFn(d); if(!m[k])m[k]={units:0,profit:0}; m[k].units++; m[k].profit+=calc(d).novaCut;});
+  return Object.entries(m).sort((a,b)=>b[1].units-a[1].units || b[1].profit-a[1].profit);
+}
+function lbHtml(rows, max, fmtVal){
+  return rows.slice(0,6).map(([name,v])=>`<div class="lb-row"><div class="lb-name">${name}</div>
+    <div class="lb-bar"><i style="width:${Math.max(Math.round(v.units/max*100),4)}%"></i></div>
+    <div class="lb-val">${fmtVal(v)}</div></div>`).join("");
+}
+function renderDashboard(){
+  const mtd=profitFor("mtd"), ytd=profitFor("ytd");
+  document.getElementById("dashHeroes").innerHTML=`
+    <div class="dhero"><div class="dh-lab">Profit · Month to Date</div><div class="dh-net">${fmt(mtd.trueNet)}</div>
+      <div class="dh-sub">${mtd.count} deals · ${fmt(mtd.gross)} gross − ${fmt(mtd.exp)} expenses · June 2026</div></div>
+    <div class="dhero ytd"><div class="dh-lab">Profit · Year to Date</div><div class="dh-net">${fmt(ytd.trueNet)}</div>
+      <div class="dh-sub">${ytd.count} deals · ${fmt(ytd.gross)} gross − ${fmt(ytd.exp)} expenses · 2026</div></div>`;
+  const attach=ytd.ds.filter(d=>d.wSold).length;
+  document.getElementById("dashStats").innerHTML=`
+    <div class="dstat"><div class="ds-l">Deals · MTD</div><div class="ds-v">${mtd.count}</div><div class="ds-s">this month</div></div>
+    <div class="dstat"><div class="ds-l">Deals · YTD</div><div class="ds-v">${ytd.count}</div><div class="ds-s">2026 to date</div></div>
+    <div class="dstat"><div class="ds-l">Avg profit / car</div><div class="ds-v">${fmt(ytd.gross/ytd.count)}</div><div class="ds-s">Nova gross ÷ cars · YTD</div></div>
+    <div class="dstat"><div class="ds-l">Warranty attach</div><div class="ds-v">${Math.round(attach/ytd.count*100)}%</div><div class="ds-s">${attach}/${ytd.count} sold · YTD</div></div>`;
+  const months=["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06"];
+  const nets=months.map(monthNet); const mx=Math.max(...nets,1);
+  document.getElementById("dashChart").innerHTML=months.map((m,i)=>`<div class="mcol">
+    <div class="mc-val">${fmt(nets[i])}</div><div class="mc-bar" style="height:${Math.max(nets[i]/mx*100,2)}%"></div>
+    <div class="mc-lab">${new Date(m+"-02").toLocaleDateString("en-US",{month:"short"})}</div></div>`).join("");
+  const scope=profitFor(dashScope).ds;
+  const models=leaderboard(scope,d=>`${d.make} ${d.model}`), brands=leaderboard(scope,d=>d.make), leads=leaderboard(scope,d=>leadLabel[d.lead]);
+  const mM=models[0]?models[0][1].units:1, bM=brands[0]?brands[0][1].units:1, lM=leads[0]?leads[0][1].units:1;
+  const none='<p class="mini">No deals in range.</p>';
+  document.getElementById("dashModels").innerHTML = models.length? lbHtml(models,mM,v=>`<b>${v.units}</b> car${v.units>1?'s':''} · ${fmt(v.profit)}`):none;
+  document.getElementById("dashBrands").innerHTML = brands.length? lbHtml(brands,bM,v=>`<b>${v.units}</b> · ${fmt(v.profit)}`):none;
+  document.getElementById("dashLeads").innerHTML  = leads.length?  lbHtml(leads,lM,v=>`<b>${v.units}</b> · ${fmt(v.profit)} profit`):none;
+  const prof=models.map(([n,v])=>[n,{units:v.units,avg:v.profit/v.units}]).sort((a,b)=>b[1].avg-a[1].avg);
+  const pM=prof[0]?prof[0][1].avg:1;
+  document.getElementById("dashProfit").innerHTML = prof.length? prof.slice(0,6).map(([n,v])=>`<div class="lb-row"><div class="lb-name">${n}</div>
+    <div class="lb-bar"><i style="width:${Math.max(Math.round(v.avg/pM*100),4)}%;background:linear-gradient(90deg,#34d399,#3a8eef)"></i></div>
+    <div class="lb-val"><b>${fmt(v.avg)}</b>/car</div></div>`).join(""):none;
+}
+
+// ---- WIRING ----
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderPnl(); }
+function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forEach(x=>
+    document.getElementById("view-"+x).classList.toggle("hide", x!==t));
+  document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+  document.getElementById("periodWrap").style.display = (t==="dashboard")?"none":"flex";
+  document.getElementById("kpis").style.display = (t==="dashboard")?"none":"grid";
+}
+document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
+function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; closePP(); openRow=null; renderAll(); }
+function applyCustom(){ const f=document.getElementById("ppFrom").value, t=document.getElementById("ppTo").value; if(!f||!t)return;
+  range={from:f,to:t,label:f+" → "+t}; document.getElementById("periodLabel").textContent=range.label; closePP(); openRow=null; renderAll(); }
+function togglePP(e){ e.stopPropagation(); document.getElementById("periodMenu").classList.toggle("hide"); }
+function closePP(){ document.getElementById("periodMenu").classList.add("hide"); }
+document.addEventListener("click",e=>{ if(!e.target.closest(".pp-wrap")) closePP(); });
+document.getElementById("periodMenu").addEventListener("click",e=>{const b=e.target.closest(".pp-opt"); if(b) setRange(b.dataset.k);});
+["fAgent","fLead","fStatus","fSearch"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
+// populate agent filter
+document.getElementById("dashScope").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
+  dashScope=b.dataset.s; document.querySelectorAll("#dashScope button").forEach(x=>x.classList.toggle("on",x===b)); renderDashboard();});
+// populate agent filter
+document.getElementById("fAgent").innerHTML += AGENTS.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+renderAll();
+setTab("dashboard");
+if(location.hash.indexOf("open")>=0){ setTab("ledger"); openRow=1; renderLedger(); }
+if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("periodMenu").classList.remove("hide"); }
+</script>
+</body>
+</html>

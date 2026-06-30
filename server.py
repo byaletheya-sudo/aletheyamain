@@ -52,6 +52,14 @@ RESTRICTED_API = ("/deal-parse", "/deal-search", "/deals", "/contacts", "/publis
 # Override with TOOLBOX_PASSWORD in the host env (recommended — this repo is public).
 TOOLBOX_PASSWORD = os.environ.get("TOOLBOX_PASSWORD") or "arvin"
 
+# Nova Admins — the back-office deal ledger / agent-payroll tool. Its OWN gate
+# (session["admin_ok"]), separate from the Nova workspace login. Override with
+# NOVA_ADMIN_PASSWORD in the host env — DO set it: this repo is public, so the
+# default below is readable, and this tool holds financial / commission data.
+NOVA_ADMIN_PASSWORD = os.environ.get("NOVA_ADMIN_PASSWORD") or "ADMIN"
+if not os.environ.get("NOVA_ADMIN_PASSWORD"):
+    print("[security] NOVA_ADMIN_PASSWORD is not set — using 'ADMIN'. Set it in Railway (financial data).")
+
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
 _LOGIN_MAX = 8
@@ -152,6 +160,59 @@ def toolbox_login():
     return toolbox_login_page()
 
 
+def nova_admin_login_page(message=""):
+    msg = f'<p class="err">{message}</p>' if message else ""
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nova Admins</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#05080d; color:#fff;
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background-image: radial-gradient(70% 50% at 50% 35%, rgba(52,211,153,.22), rgba(8,16,30,0) 70%); }}
+  .card {{ width:340px; max-width:90vw; background:#101319; border:1px solid #232733; border-radius:16px; padding:34px 28px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.5); }}
+  .brand {{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; margin-bottom:4px; }}
+  .brand span {{ color:#34d399; }}
+  .sub {{ color:#6b7280; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; margin-bottom:24px; }}
+  input {{ width:100%; background:#0a0d12; border:1px solid #2a2f3a; border-radius:9px; padding:13px 15px; color:#fff; font-size:.95rem; outline:none; }}
+  input:focus {{ border-color:#34d399; }}
+  button {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#1f9d6b; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
+  button:hover {{ background:#1b8a5e; }}
+  .err {{ color:#ff6b6b; font-size:.82rem; margin-bottom:12px; }}
+  .legal {{ margin-top:20px; padding-top:16px; border-top:1px solid #1c2029; font-size:.66rem; line-height:1.5; color:#5a6472; text-align:left; }}
+  .legal b {{ color:#8a94a3; font-weight:700; }}
+</style></head>
+<body>
+  <form class="card" method="POST" action="/nova-admins-login">
+    <div class="brand">Nova <span>Admins</span></div>
+    <div class="sub">Back office · Restricted</div>
+    {msg}
+    <input type="password" name="password" placeholder="Admin password" autofocus autocomplete="current-password">
+    <button type="submit">Enter</button>
+    <p class="legal"><b>Confidential &amp; Proprietary.</b> Financial, commission, and client records belonging to <b>NovAuto</b>, for authorized administrators only. Unauthorized access, use, or disclosure is strictly prohibited and may result in legal action.</p>
+  </form>
+</body></html>"""
+
+
+@app.route("/nova-admins-login", methods=["GET", "POST"])
+def nova_admins_login():
+    if request.method == "POST":
+        ip = _client_ip() + ":na"
+        cnt, t0 = _LOGIN_FAILS.get(ip, (0, time.time()))
+        if time.time() - t0 > _LOGIN_WINDOW:
+            cnt, t0 = 0, time.time()
+        if cnt >= _LOGIN_MAX:
+            return nova_admin_login_page("Too many attempts — wait a few minutes and try again."), 429
+        if hmac.compare_digest(request.form.get("password", ""), NOVA_ADMIN_PASSWORD):
+            session["admin_ok"] = True
+            _LOGIN_FAILS.pop(ip, None)
+            return redirect("/nova-admins")
+        _LOGIN_FAILS[ip] = (cnt + 1, t0)
+        return nova_admin_login_page("Incorrect password — try again."), 401
+    if session.get("admin_ok"):
+        return redirect("/nova-admins")
+    return nova_admin_login_page()
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -211,6 +272,15 @@ def require_login():
             return None
         if request.method == "GET":
             return redirect("/toolbox-login")
+        return jsonify({"error": "This area is locked.", "locked": True}), 403
+    # Nova Admins is its own workspace gated by its own password (session["admin_ok"]).
+    if p.startswith("/nova-admins"):
+        if p == "/nova-admins-login":
+            return None
+        if session.get("admin_ok"):
+            return None
+        if request.method == "GET":
+            return redirect("/nova-admins-login")
         return jsonify({"error": "This area is locked.", "locked": True}), 403
     # Everything else is the Nova workspace, gated by APP_PASSWORD.
     if session.get("ok"):
@@ -492,6 +562,22 @@ def bg_economy():
 @app.route("/nova-plate.png")
 def nova_plate():
     return send_file(os.path.join(BASE_DIR, "nova-plate.png"))
+
+
+@app.route("/nova-admins")
+def nova_admins_page():
+    """Back-office deal ledger / agent payroll. Real agents+deals are injected from the
+    gitignored generated/nova_admins.json (kept out of this public repo); the committed
+    HTML ships with placeholder demo data as a fallback."""
+    html = open(os.path.join(BASE_DIR, "nova_admins.html"), encoding="utf-8").read()
+    seed_path = os.path.join(GENERATED_DIR, "nova_admins.json")
+    if os.path.exists(seed_path):
+        try:
+            with open(seed_path, encoding="utf-8") as f:
+                html = html.replace("/*NOVA_SEED*/", "window.NOVA_SEED=" + f.read() + ";", 1)
+        except Exception:
+            pass
+    return html
 
 
 @app.route("/toolbox")
