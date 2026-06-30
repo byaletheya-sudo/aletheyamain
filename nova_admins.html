@@ -80,6 +80,7 @@
   .stat.g{background:var(--na-green-bg);color:var(--na-green);}
   .stat.r{background:var(--na-red-bg);color:var(--na-red);}
   .stat.a{background:var(--na-amber-bg);color:var(--na-amber);}
+  .stat.n{background:var(--na-panel-2);color:var(--na-muted);}
   .lead{font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;}
   .lead.own{background:rgba(138,92,240,.14);color:#b79bff;}
   .lead.nova{background:rgba(58,142,239,.14);color:#76b4ff;}
@@ -274,7 +275,7 @@
       <input class="na-search" id="fSearch" placeholder="Search client, VIN, vehicle…">
       <div class="na-spacer"></div>
       <button class="na-btn ghost">⌁ Sync from Garage</button>
-      <button class="na-btn">+ New Deal</button>
+      <button class="na-btn" onclick="newDeal()">+ New Deal</button>
     </div>
     <div class="na-tablewrap">
       <table class="na-tbl">
@@ -414,12 +415,12 @@ function calc(d){
 }
 function collStatus(d){ // money IN
   const sides=[]; if(d.front>0) sides.push(d.fColl); if(d.back>0) sides.push(d.bColl);
-  if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
+  if(!sides.length) return "n"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
 }
 function paidStatus(d){ // money OUT to agent
   const c=calc(d); const sides=[];
   if(c.agentFront>1) sides.push(d.aPaidF); if(c.agentBack>1) sides.push(d.aPaidB);
-  if(!sides.length) return "g"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
+  if(!sides.length) return "n"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
 }
 const leadLabel = {own:"Own", nova:"Nova", referral:"Referral"};
 const statText = {g:"Paid", a:"Partial", r:"Owed"};
@@ -491,8 +492,8 @@ function renderLedger(){
       <td class="num money pos">${fmt(c.novaCut)}</td>
       <td><span class="split">${c.splitPct}% / ${100-c.splitPct}%</span></td>
       <td>${d.wSold?'<span class="wbadge sold">SOLD</span>':(d.wOffered?'<span class="wbadge">offered</span>':'<span class="mini">—</span>')}</td>
-      <td><span class="stat ${cs}">${cs==='g'?'● Collected':cs==='a'?'◐ Partial':'○ Owed'}</span></td>
-      <td><span class="stat ${ps}">${ps==='g'?'● Paid':ps==='a'?'◐ Partial':'○ Unpaid'}</span></td>
+      <td><span class="stat ${cs}">${cs==='g'?'● Collected':cs==='a'?'◐ Partial':cs==='n'?'— Draft':'○ Owed'}</span></td>
+      <td><span class="stat ${ps}">${ps==='g'?'● Paid':ps==='a'?'◐ Partial':ps==='n'?'— Draft':'○ Unpaid'}</span></td>
     </tr>${detailRow(d)}`;
   }).join("");
   if(openRow) { const el=document.getElementById("det-"+openRow); if(el) el.classList.remove("hide"); }
@@ -558,6 +559,20 @@ function toggleField(id, field){
   renderAll();
 }
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); }
+function newDeal(){
+  const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
+  DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
+    type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
+    wOffered:false, wSold:false, front:0, fees:0, back:0, override:null, pay:"Stripe",
+    fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
+  // make the new row visible no matter the current view/filters
+  setTab("ledger");
+  range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
+  ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all");
+  document.getElementById("fSearch").value="";
+  openRow=id; renderAll();
+  setTimeout(()=>{ const el=document.querySelector("#det-"+id+" input"); if(el){ el.focus(); el.scrollIntoView({block:"center"}); } }, 30);
+}
 function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}
 function agentOpts(sel){return AGENTS.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${a.name}</option>`).join("");}
 function leadOpts(sel){return Object.entries(leadLabel).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v}</option>`).join("");}
@@ -714,6 +729,7 @@ renderAll();
 setTab("dashboard");
 if(location.hash.indexOf("open")>=0){ setTab("ledger"); openRow=1; renderLedger(); }
 if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("periodMenu").classList.remove("hide"); }
+if(location.hash.indexOf("new")>=0){ newDeal(); }
 </script>
 </body>
 </html>
