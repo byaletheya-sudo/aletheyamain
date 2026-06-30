@@ -794,7 +794,8 @@ function renderDashboard(){
     <div class="mc-val">${fmt(nets[i])}</div><div class="mc-bar" style="height:${Math.max(nets[i]/mx*100,2)}%"></div>
     <div class="mc-lab">${new Date(m+"-02").toLocaleDateString("en-US",{month:"short"})}</div></div>`).join("");
   const scope=profitFor(dashScope).ds;
-  const models=leaderboard(scope,d=>`${d.make} ${d.model}`), brands=leaderboard(scope,d=>d.make), leads=leaderboard(scope,d=>leadLabel[d.lead]);
+  const models=leaderboard(scope.filter(d=>(`${d.make||''}${d.model||''}`).trim()),d=>`${d.make} ${d.model}`.trim()),
+        brands=leaderboard(scope.filter(d=>(d.make||'').trim()),d=>d.make), leads=leaderboard(scope,d=>leadLabel[d.lead]);
   const mM=models[0]?models[0][1].units:1, bM=brands[0]?brands[0][1].units:1, lM=leads[0]?leads[0][1].units:1;
   const none='<p class="mini">No deals in range.</p>';
   document.getElementById("dashModels").innerHTML = models.length? lbHtml(models,mM,v=>`<b>${v.units}</b> car${v.units>1?'s':''} · ${fmt(v.profit)}`):none;
