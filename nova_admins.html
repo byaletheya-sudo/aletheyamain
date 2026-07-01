@@ -241,6 +241,19 @@
   .ast b{font-family:var(--na-mono);font-size:15px;font-weight:600;margin-top:3px;display:block;}
   .a-foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--na-line);font-size:11.5px;color:var(--na-muted);display:flex;justify-content:space-between;align-items:center;}
   .a-foot b{font-family:var(--na-mono);}
+  /* smart layer: projection, chips, insight cards */
+  .dh-proj{margin-top:9px;padding-top:9px;border-top:1px solid var(--na-line);font-size:12px;color:var(--na-muted);}
+  .dh-proj b{color:var(--na-fg);font-family:var(--na-mono);}
+  .dash-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .chip{font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);}
+  .dash-insights{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .ins{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:14px 15px;position:relative;overflow:hidden;}
+  .ins::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;}
+  .ins.green::after{background:var(--na-green);} .ins.amber::after{background:var(--na-amber);} .ins.blue::after{background:var(--na-blue);} .ins.purple::after{background:var(--na-purple);}
+  .ins-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .ins-v{font-family:var(--na-mono);font-size:22px;font-weight:600;margin-top:6px;}
+  .ins.green .ins-v{color:var(--na-green);} .ins.amber .ins-v{color:var(--na-amber);}
+  .ins-s{font-size:11px;color:var(--na-muted);margin-top:3px;}
   .hide{display:none;}
   .mini{font-size:10.5px;color:var(--na-muted-2);}
   .ov-flag{font-size:9.5px;font-weight:700;color:var(--na-purple);background:rgba(138,92,240,.14);padding:1px 5px;border-radius:5px;margin-left:5px;}
@@ -300,7 +313,9 @@
   <div id="view-dashboard">
     <div class="dash-heroes" id="dashHeroes"></div>
     <div class="dash-stats" id="dashStats"></div>
-    <div class="panel" style="margin-bottom:16px;"><h3>Profit by month · 2026 <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
+    <div class="dash-chips" id="dashChips"></div>
+    <div class="dash-insights" id="dashInsights"></div>
+    <div class="panel" style="margin-bottom:16px;"><h3>Profit by month <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
     <div class="na-two">
       <div class="panel"><h3>Top models <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></h3><div id="dashModels"></div></div>
       <div class="panel"><h3>Top brands</h3><div id="dashBrands"></div></div>
@@ -463,7 +478,9 @@ const leadLabel = {own:"Own", nova:"Nova", referral:"Referral"};
 const statText = {g:"Paid", a:"Partial", r:"Owed"};
 
 // ---- STATE ----
-const CUR_MONTH="2026-06", CUR_YEAR="2026", NOW=new Date("2026-06-30T12:00:00");
+const NOW=new Date();
+const _pad=n=>String(n).padStart(2,"0");
+const CUR_MONTH=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1), CUR_YEAR=String(NOW.getFullYear());
 let tab="dashboard", dashScope="ytd";
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function presetRange(k){
@@ -593,7 +610,7 @@ function detailRow(d){
     </div>
     </div></td></tr>`;
 }
-const TODAY="2026-06-30";
+const TODAY=CUR_MONTH+"-"+_pad(NOW.getDate());
 function edit(id, field, val, numeric){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
   if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
@@ -828,18 +845,59 @@ function lbHtml(rows, max, fmtVal){
 }
 function renderDashboard(){
   const mtd=profitFor("mtd"), ytd=profitFor("ytd");
+  // ---- month-end projection (pace) ----
+  const monName=NOW.toLocaleDateString("en-US",{month:"long"});
+  const dim=new Date(NOW.getFullYear(),NOW.getMonth()+1,0).getDate(), dom=NOW.getDate(), monthDone=dom>=dim;
+  const proj=monthDone?mtd.trueNet:Math.round(mtd.trueNet*dim/dom);
+  const lmD=new Date(NOW.getFullYear(),NOW.getMonth()-1,1);
+  const lmKey=lmD.getFullYear()+"-"+_pad(lmD.getMonth()+1), lmName=lmD.toLocaleDateString("en-US",{month:"long"});
+  const lmNet=monthNet(lmKey), vs=lmNet?Math.round((proj-lmNet)/Math.abs(lmNet)*100):0;
+  const vsTxt=lmNet?`${vs>=0?'▲':'▼'} ${Math.abs(vs)}% vs ${lmName}`:'';
+  const projLine=monthDone
+    ? `${monName} closed · <b>${fmt(mtd.trueNet)}</b> net${lmNet?' · '+vsTxt:''}`
+    : `On pace for <b>${fmt(proj)}</b> by ${monName} ${dim} · day ${dom}/${dim}${lmNet?' · '+vsTxt:''}`;
+  const runRate=fmt(Math.round(ytd.trueNet/Math.max(NOW.getMonth()+1,1)*12));
   document.getElementById("dashHeroes").innerHTML=`
     <div class="dhero"><div class="dh-lab">Profit · Month to Date</div><div class="dh-net">${fmt(mtd.trueNet)}</div>
-      <div class="dh-sub">${mtd.count} deals · ${fmt(mtd.gross)} gross − ${fmt(mtd.exp)} expenses · June 2026</div></div>
+      <div class="dh-sub">${mtd.count} deals · ${fmt(mtd.gross)} gross − ${fmt(mtd.exp)} expenses</div>
+      <div class="dh-proj">${projLine}</div></div>
     <div class="dhero ytd"><div class="dh-lab">Profit · Year to Date</div><div class="dh-net">${fmt(ytd.trueNet)}</div>
-      <div class="dh-sub">${ytd.count} deals · ${fmt(ytd.gross)} gross − ${fmt(ytd.exp)} expenses · 2026</div></div>`;
+      <div class="dh-sub">${ytd.count} deals · ${fmt(ytd.gross)} gross − ${fmt(ytd.exp)} expenses · ${CUR_YEAR}</div>
+      <div class="dh-proj">Run-rate ~<b>${runRate}</b> / year at this pace</div></div>`;
   const attach=ytd.ds.filter(d=>d.wSold).length;
   document.getElementById("dashStats").innerHTML=`
     <div class="dstat"><div class="ds-l">Deals · MTD</div><div class="ds-v">${mtd.count}</div><div class="ds-s">this month</div></div>
-    <div class="dstat"><div class="ds-l">Deals · YTD</div><div class="ds-v">${ytd.count}</div><div class="ds-s">2026 to date</div></div>
+    <div class="dstat"><div class="ds-l">Deals · YTD</div><div class="ds-v">${ytd.count}</div><div class="ds-s">${CUR_YEAR} to date</div></div>
     <div class="dstat"><div class="ds-l">Avg profit / car</div><div class="ds-v">${fmt(ytd.count?ytd.gross/ytd.count:0)}</div><div class="ds-s">Nova gross ÷ cars · YTD</div></div>
     <div class="dstat"><div class="ds-l">Warranty attach</div><div class="ds-v">${ytd.count?Math.round(attach/ytd.count*100):0}%</div><div class="ds-s">${attach}/${ytd.count} sold · YTD</div></div>`;
-  const months=["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06"];
+  // ---- outstanding cash (all-time, actionable) ----
+  let toCollect=0,collN=0,oweAg=0,oweN=0;
+  DEALS.forEach(d=>{const c=calc(d); let f=false,p=false;
+    if(d.front>0&&!d.fColl){toCollect+=d.front;f=true;} if(d.back>0&&!d.bColl){toCollect+=d.back;f=true;} if(f)collN++;
+    if(c.agentFront>1&&!d.aPaidF){oweAg+=c.agentFront;p=true;} if(c.agentBack>1&&!d.aPaidB){oweAg+=c.agentBack;p=true;} if(p)oweN++;});
+  // ---- Nova-lead ROAS (YTD): ad spend vs nova-lead nova profit ----
+  const adSpend=EXPENSES.filter(e=>e.date.startsWith(CUR_YEAR)&&/ad ?spend|meta|yelp|ads/i.test((e.cat||'')+' '+(e.desc||''))).reduce((s,e)=>s+e.amt,0);
+  let novaLeadProfit=0; ytd.ds.filter(d=>d.lead==="nova").forEach(d=>novaLeadProfit+=calc(d).novaCut);
+  const roas=adSpend?novaLeadProfit/adSpend:0;
+  document.getElementById("dashInsights").innerHTML=[
+    {l:monthDone?monName+' · final':'On pace · '+monName, v:fmt(proj), s:vsTxt||'projected net', a:'green'},
+    {l:'To collect', v:fmt(toCollect), s:collN+' deals · owed to Nova', a:'amber'},
+    {l:'Owed to agents', v:fmt(oweAg), s:oweN+' deals to pay out', a:'blue'},
+    {l:'Nova-lead ROAS · YTD', v:(roas?roas.toFixed(1):'0')+'×', s:fmt(adSpend)+' ads → '+fmt(novaLeadProfit)+' profit', a:'purple'},
+  ].map(x=>`<div class="ins ${x.a}"><div class="ins-l">${x.l}</div><div class="ins-v">${x.v}</div><div class="ins-s">${x.s}</div></div>`).join("");
+  // ---- momentum chips ----
+  const topAg=AGENTS.map(a=>{let e=0;DEALS.filter(d=>d.agentId===a.id&&d.date.startsWith(CUR_MONTH)).forEach(d=>e+=calc(d).agentCut);return{a,e};}).sort((x,y)=>y.e-x.e)[0];
+  const attachPct=ytd.count?Math.round(attach/ytd.count*100):0, chips=[];
+  if(!monthDone) chips.push(`📈 On pace for ${fmt(proj)} this month${vsTxt?' — '+vsTxt:''}`);
+  else if(lmNet) chips.push(`${proj>=lmNet?'🔥':'📉'} ${monName} ${proj>=lmNet?'beat':'trailed'} ${lmName} by ${fmt(Math.abs(proj-lmNet))}`);
+  if(topAg&&topAg.e>0) chips.push(`🏆 ${topAg.a.name.split(' ')[0]} leads ${monName} — ${fmt(topAg.e)}`);
+  if(toCollect>500) chips.push(`💰 ${fmt(toCollect)} still to collect · ${collN} deals`);
+  if(oweAg>500) chips.push(`💸 ${fmt(oweAg)} owed out to agents`);
+  if(roas>0) chips.push(`📊 Nova-lead ads returning ${roas.toFixed(1)}× YTD`);
+  if(attachPct<15) chips.push(`⚠️ Warranty attach ${attachPct}% — pitch it more`);
+  document.getElementById("dashChips").innerHTML=chips.slice(0,5).map(c=>`<span class="chip">${c}</span>`).join("");
+  // ---- rolling last-6-months chart ----
+  const months=[]; for(let i=5;i>=0;i--){const d=new Date(NOW.getFullYear(),NOW.getMonth()-i,1);months.push(d.getFullYear()+"-"+_pad(d.getMonth()+1));}
   const nets=months.map(monthNet); const mx=Math.max(...nets,1);
   document.getElementById("dashChart").innerHTML=months.map((m,i)=>`<div class="mcol">
     <div class="mc-val">${fmt(nets[i])}</div><div class="mc-bar" style="height:${Math.max(nets[i]/mx*100,2)}%"></div>
