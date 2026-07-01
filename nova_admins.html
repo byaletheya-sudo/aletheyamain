@@ -430,7 +430,8 @@ const EXPENSES = SEED.expenses || [];
 DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; });
 
 // ---- ENGINE ----
-function feeStripe(d){ return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }  // 3% of front, Stripe only
+function feeStripe(d){ if(d.feeStripe!==undefined && d.feeStripe!==null && d.feeStripe!=="") return +d.feeStripe||0;  // stored (imported/manual)
+  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }  // else auto 3% of front for new Stripe deals
 function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0); }
 function calc(d){
   const combined = (+d.front||0) + (+d.back||0);
@@ -562,7 +563,7 @@ function detailRow(d){
       <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
       <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
       <div class="ledger-line"><span class="lab">Fees · Jason</span><span><input class="na-in num" value="${+d.feeJason||0}" onchange="${E}'feeJason',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span class="money" style="text-align:right;color:var(--na-muted)">${fmt(c.feeStripe)}</span><span class="ovr-note">${d.pay==='Stripe'?'auto · 3% of front':'— Stripe only'}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!=='')?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral</span><span></span></div>
       <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
