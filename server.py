@@ -10,6 +10,7 @@ import hmac
 import time
 import zipfile
 import secrets
+import threading
 import rx_form
 import urllib.request
 import urllib.parse
@@ -679,10 +680,38 @@ def _nova_nightly_backup():
 
 
 try:
-    import threading
     threading.Thread(target=_nova_nightly_backup, daemon=True).start()
 except Exception:
     pass
+
+
+# Serialize all writes to the shared store so concurrent edits can't interleave.
+_NOVA_LOCK = threading.Lock()
+
+
+def _nova_load():
+    path = NOVA_ADMIN_DB()
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"agents": [], "deals": [], "expenses": []}
+
+
+def _nova_write(data):
+    path = NOVA_ADMIN_DB()
+    if os.path.exists(path):
+        try:
+            import shutil
+            shutil.copy2(path, path + ".bak")
+        except Exception:
+            pass
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
 
 
 @app.route("/nova-admins/data", methods=["GET"])
@@ -700,27 +729,44 @@ def nova_admins_data():
 
 @app.route("/nova-admins/save", methods=["POST"])
 def nova_admins_save():
-    """Persist the full dataset to the server volume so everyone loads the same data.
-    Last-write-wins (small team). Keeps a .bak and writes atomically."""
+    """Replace the WHOLE dataset (used by Import / seeding). Full overwrite by design."""
     data = request.get_json(silent=True) or {}
     if not all(isinstance(data.get(k), list) for k in ("agents", "deals", "expenses")):
         return jsonify({"error": "Expected agents, deals and expenses arrays."}), 400
-    payload = json.dumps({"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"]}, indent=1)
-    if len(payload) > 12_000_000:
+    clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"]}
+    if len(json.dumps(clean)) > 12_000_000:
         return jsonify({"error": "Payload too large."}), 413
-    path = NOVA_ADMIN_DB()
     try:
-        if os.path.exists(path):
-            try:
-                import shutil
-                shutil.copy2(path, path + ".bak")
-            except Exception:
-                pass
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(payload)
-        os.replace(tmp, path)
-        return jsonify({"ok": True, "deals": len(data["deals"]), "expenses": len(data["expenses"])})
+        with _NOVA_LOCK:
+            _nova_write(clean)
+        return jsonify({"ok": True, "deals": len(clean["deals"]), "expenses": len(clean["expenses"])})
+    except Exception as e:
+        return jsonify({"error": str(e)[:160]}), 500
+
+
+@app.route("/nova-admins/mutate", methods=["POST"])
+def nova_admins_mutate():
+    """Row-level write: upsert or delete ONE deal/agent/expense by id, merged into the
+    shared store under a lock. Concurrent edits to different rows never clobber."""
+    body = request.get_json(silent=True) or {}
+    try:
+        with _NOVA_LOCK:
+            data = _nova_load()
+            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense")):
+                item = body.get(key)
+                if isinstance(item, dict):
+                    arr = data.setdefault(coll, [])
+                    for i, x in enumerate(arr):
+                        if x.get("id") == item.get("id"):
+                            arr[i] = item
+                            break
+                    else:
+                        arr.append(item)
+                delk = "delete" + key[0].upper() + key[1:]
+                if delk in body:
+                    data[coll] = [x for x in data.get(coll, []) if x.get("id") != body[delk]]
+            _nova_write(data)
+            return jsonify({"ok": True, "deals": len(data.get("deals", []))})
     except Exception as e:
         return jsonify({"error": str(e)[:160]}), 500
 
