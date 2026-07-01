@@ -655,6 +655,36 @@ def nova_admins_parse():
 NOVA_ADMIN_DB = lambda: os.path.join(GENERATED_DIR, "nova_admins.json")
 
 
+def _nova_nightly_backup():
+    """Daily dated snapshot of the Nova Admins data → generated/nova_admins_backups/,
+    keeping the last 30 days. Runs one snapshot per calendar day, survives restarts."""
+    import shutil
+    while True:
+        try:
+            src = NOVA_ADMIN_DB()
+            if os.path.exists(src):
+                bdir = os.path.join(GENERATED_DIR, "nova_admins_backups")
+                os.makedirs(bdir, exist_ok=True)
+                dest = os.path.join(bdir, "nova_admins_" + time.strftime("%Y-%m-%d") + ".json")
+                if not os.path.exists(dest):
+                    shutil.copy2(src, dest)
+                for old in sorted(f for f in os.listdir(bdir) if f.endswith(".json"))[:-30]:
+                    try:
+                        os.remove(os.path.join(bdir, old))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        time.sleep(6 * 3600)   # re-check every 6h → at most one snapshot per day
+
+
+try:
+    import threading
+    threading.Thread(target=_nova_nightly_backup, daemon=True).start()
+except Exception:
+    pass
+
+
 @app.route("/nova-admins/data", methods=["GET"])
 def nova_admins_data():
     """Serve the current shared dataset (agents/deals/expenses) for the live tool."""
