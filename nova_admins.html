@@ -241,6 +241,46 @@
   .ast b{font-family:var(--na-mono);font-size:15px;font-weight:600;margin-top:3px;display:block;}
   .a-foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--na-line);font-size:11.5px;color:var(--na-muted);display:flex;justify-content:space-between;align-items:center;}
   .a-foot b{font-family:var(--na-mono);}
+  /* tasks board (Linear-style) */
+  .tboard{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start;}
+  .tcol{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:10px;min-height:130px;}
+  .tcol.drag{border-color:var(--na-blue);background:var(--na-panel-2);}
+  .tcol-h{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;padding:4px 6px 10px;}
+  .tcol-dot{width:8px;height:8px;border-radius:50%;}
+  .tcol-dot.backlog{background:#646a78;}.tcol-dot.todo{background:#8b909e;}.tcol-dot.inprogress{background:#fbbf24;}.tcol-dot.done{background:#34d399;}
+  .tcol-n{color:var(--na-muted-2);font-family:var(--na-mono);font-size:11px;}
+  .tcol-add{margin-left:auto;all:unset;cursor:pointer;color:var(--na-muted);font-size:16px;width:22px;height:22px;text-align:center;border-radius:6px;line-height:22px;}
+  .tcol-add:hover{background:var(--na-panel-2);color:var(--na-fg);}
+  .tcol-body{display:flex;flex-direction:column;gap:8px;min-height:40px;}
+  .tcol-empty{color:var(--na-muted-2);font-size:11px;text-align:center;padding:14px 0;}
+  .tcard{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:11px;padding:11px 12px;cursor:pointer;transition:border-color .12s;}
+  .tcard:hover{border-color:var(--na-line-2);}
+  .tcard-top{display:flex;align-items:center;gap:6px;margin-bottom:6px;min-height:9px;}
+  .prio{width:9px;height:9px;border-radius:3px;flex:none;}
+  .tlabel{font-size:9.5px;font-weight:650;padding:1px 6px;border-radius:5px;background:rgba(138,92,240,.14);color:#b79bff;}
+  .tcard-title{font-size:13px;font-weight:550;line-height:1.35;margin-bottom:9px;}
+  .tcard-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--na-muted);}
+  .tdue{font-family:var(--na-mono);} .tdue.over{color:var(--na-red);font-weight:650;}
+  .tsub{font-family:var(--na-mono);} .tlink{color:#76b4ff;} .tsp{flex:1;}
+  .tavatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex:none;}
+  .tavatar.none{background:var(--na-panel);border:1px dashed var(--na-line-2);color:var(--na-muted-2);}
+  .tmodal-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .tmodal{width:100%;max-width:600px;max-height:86vh;overflow:auto;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);}
+  .tm-head{display:flex;gap:10px;align-items:flex-start;padding:16px 18px 8px;}
+  .tm-title{flex:1;background:transparent;border:none;color:var(--na-fg);font-size:18px;font-weight:680;outline:none;}
+  .tm-body{padding:6px 18px 14px;display:flex;flex-direction:column;gap:11px;}
+  .tm-row{display:flex;align-items:center;gap:12px;font-size:12.5px;}
+  .tm-l{width:82px;color:var(--na-muted-2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;flex:none;}
+  .tm-sub{border-top:1px solid var(--na-line);padding-top:11px;}
+  .tm-sub .tm-l{width:auto;margin-bottom:8px;}
+  .subrow{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+  .subrow input[type=checkbox]{accent-color:var(--na-green);width:15px;height:15px;flex:none;}
+  .subtext{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--na-fg);font-size:12.5px;outline:none;padding:3px 0;}
+  .subtext:focus{border-bottom-color:var(--na-line-2);}
+  .subtext.done{text-decoration:line-through;color:var(--na-muted-2);}
+  .subx{all:unset;cursor:pointer;color:var(--na-muted-2);font-size:11px;} .subx:hover{color:var(--na-red);}
+  .tm-notes{border-top:1px solid var(--na-line);padding-top:11px;} .tm-notes .tm-l{margin-bottom:6px;}
+  .tm-foot{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid var(--na-line);}
   /* smart layer: projection, chips, insight cards */
   .dh-proj{margin-top:9px;padding-top:9px;border-top:1px solid var(--na-line);font-size:12px;color:var(--na-muted);}
   .dh-proj b{color:var(--na-fg);font-family:var(--na-mono);}
@@ -306,6 +346,7 @@
     <button class="na-tab" data-t="ledger">Ledger <span class="pill" id="cnt-ledger">0</span></button>
     <button class="na-tab" data-t="agents">Agents <span class="pill" id="cnt-agents">0</span></button>
     <button class="na-tab" data-t="expenses">Expenses <span class="pill" id="cnt-exp">0</span></button>
+    <button class="na-tab" data-t="tasks">Tasks <span class="pill" id="cnt-tasks">0</span></button>
     <button class="na-tab" data-t="pnl">P&amp;L</button>
   </div>
 
@@ -405,6 +446,16 @@
     </div>
   </div>
 
+  <!-- TASKS -->
+  <div id="view-tasks" class="hide">
+    <div class="na-filters">
+      <select class="na-sel" id="tfAssignee" onchange="renderTasks()"><option value="all">All assignees</option></select>
+      <div class="na-spacer"></div>
+      <button class="na-btn" onclick="newTask('todo')">+ New task</button>
+    </div>
+    <div class="tboard" id="tasksBoard"></div>
+  </div>
+
 </div>
 
 <div class="na-chat-scrim hide" id="chatScrim" onclick="closeChat(event)">
@@ -417,6 +468,10 @@
       <button class="na-btn" id="chatSend" onclick="sendChat()">Add</button>
     </div>
   </div>
+</div>
+
+<div class="tmodal-scrim hide" id="taskScrim" onclick="closeTask(event)">
+  <div class="tmodal" onclick="event.stopPropagation()" id="taskModal"></div>
 </div>
 
 <script>
@@ -440,6 +495,12 @@ function settled(o){ return Object.assign({override:null, fees:0, wOffered:true,
 const DEALS = SEED.deals || [];
 
 const EXPENSES = SEED.expenses || [];
+const TASKS = SEED.tasks || [];
+const ASSIGNEES = [{id:"nema",name:"Nema",color:"#f472b6"},{id:"arvin",name:"Arvin",color:"#8a5cf0"},{id:"edgar",name:"Edgar",color:"#3a8eef"}];
+const T_STATUS = [{id:"backlog",name:"Backlog"},{id:"todo",name:"Todo"},{id:"inprogress",name:"In Progress"},{id:"done",name:"Done"}];
+const T_PRIO = {urgent:{l:"Urgent",c:"#f87171"},high:{l:"High",c:"#fb923c"},medium:{l:"Medium",c:"#fbbf24"},low:{l:"Low",c:"#60a5fa"},none:{l:"No priority",c:"#646a78"}};
+function asg(id){ return ASSIGNEES.find(a=>a.id===id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 
 // Fees shared = 3 buckets: Jason (manual) + Stripe (auto, 3% of front, Stripe only) + Referral (manual).
 DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; });
@@ -934,12 +995,88 @@ function renderFees(){
       <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',r.r?'Ref '+fmt(r.r):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
-function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
-function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forEach(x=>
+// ---- RENDER: Tasks (Linear-style board) ----
+function fmtDue(d){ if(!d)return""; const dt=new Date(d+"T12:00:00"); return dt.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+function tSelHtml(opts, sel, handler){ return `<select class="na-in" onchange="${handler}">${opts.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join("")}</select>`; }
+function taskCard(t){
+  const p=T_PRIO[t.priority||"none"], as=asg(t.assignee), subs=t.subtasks||[], done=subs.filter(s=>s.done).length;
+  const overdue = t.due && t.status!=="done" && t.due < TODAY;
+  const dl = t.dealId!=null ? DEALS.find(d=>d.id===t.dealId) : null;
+  return `<div class="tcard" draggable="true" ondragstart="dragTask(event,${t.id})" onclick="openTask(${t.id})">
+    <div class="tcard-top"><span class="prio" style="background:${p.c}" title="${p.l}"></span>
+      ${(t.labels||[]).slice(0,3).map(l=>`<span class="tlabel">${esc(l)}</span>`).join("")}</div>
+    <div class="tcard-title">${esc(t.title)||'<span style="color:var(--na-muted-2)">Untitled task</span>'}</div>
+    <div class="tcard-meta">
+      ${t.due?`<span class="tdue ${overdue?'over':''}">${fmtDue(t.due)}</span>`:""}
+      ${subs.length?`<span class="tsub">☑ ${done}/${subs.length}</span>`:""}
+      ${dl?`<span class="tlink" title="${esc(dl.client)}">🔗</span>`:""}
+      <span class="tsp"></span>
+      ${as?`<span class="tavatar" style="background:${as.color}" title="${as.name}">${as.name[0]}</span>`:`<span class="tavatar none">?</span>`}
+    </div></div>`;
+}
+function renderTasks(){
+  document.getElementById("cnt-tasks").textContent=TASKS.length;
+  const fa=(document.getElementById("tfAssignee")||{}).value||"all";
+  document.getElementById("tasksBoard").innerHTML = T_STATUS.map(st=>{
+    let items=TASKS.filter(t=>(t.status||"backlog")===st.id);
+    if(fa!=="all") items=items.filter(t=>(t.assignee||"")===fa);
+    return `<div class="tcol" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="this.classList.remove('drag');dropTask(event,'${st.id}')">
+      <div class="tcol-h"><span class="tcol-dot ${st.id}"></span>${st.name} <span class="tcol-n">${items.length}</span>
+        <button class="tcol-add" onclick="newTask('${st.id}')" title="Add task">+</button></div>
+      <div class="tcol-body">${items.map(taskCard).join("")||'<div class="tcol-empty">No tasks</div>'}</div>
+    </div>`;
+  }).join("");
+}
+let _openTask=null;
+function openTask(id){ _openTask=id; renderTaskModal(); document.getElementById("taskScrim").classList.remove("hide"); }
+function closeTask(e){ if(e&&e.target&&e.target.id!=="taskScrim")return; document.getElementById("taskScrim").classList.add("hide"); _openTask=null; }
+function renderTaskModal(){
+  const t=TASKS.find(x=>x.id===_openTask); if(!t)return;
+  const E=`editTask(${t.id},`, subs=t.subtasks||[];
+  const dealOpts=[["","— none —"]].concat(DEALS.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,250).map(d=>[String(d.id),(d.client||'—')+" · "+[d.year,d.make,d.model].filter(Boolean).join(' ')]));
+  document.getElementById("taskModal").innerHTML=`
+    <div class="tm-head"><input class="tm-title" value="${esc(t.title)}" placeholder="Task title…" onchange="${E}'title',this.value)">
+      <button class="nc-x" onclick="closeTask()">✕</button></div>
+    <div class="tm-body">
+      <div class="tm-row"><span class="tm-l">Status</span>${tSelHtml(T_STATUS.map(s=>[s.id,s.name]),t.status||'backlog',E+"'status',this.value)")}</div>
+      <div class="tm-row"><span class="tm-l">Priority</span>${tSelHtml(Object.entries(T_PRIO).map(([k,v])=>[k,v.l]),t.priority||'none',E+"'priority',this.value)")}</div>
+      <div class="tm-row"><span class="tm-l">Assignee</span>${tSelHtml([["","Unassigned"]].concat(ASSIGNEES.map(a=>[a.id,a.name])),t.assignee||'',E+"'assignee',this.value)")}</div>
+      <div class="tm-row"><span class="tm-l">Due date</span><input type="date" class="na-in" value="${t.due||''}" onchange="${E}'due',this.value)"></div>
+      <div class="tm-row"><span class="tm-l">Labels</span><input class="na-in" style="flex:1" value="${esc((t.labels||[]).join(', '))}" placeholder="Payroll, Deals, Follow-up…" onchange="editTaskLabels(${t.id},this.value)"></div>
+      <div class="tm-row"><span class="tm-l">Link deal</span><select class="na-in" style="flex:1" onchange="editTask(${t.id},'dealId',this.value?+this.value:null)">${dealOpts.map(([v,l])=>`<option value="${v}" ${v===String(t.dealId||'')?'selected':''}>${esc(l)}</option>`).join("")}</select></div>
+      <div class="tm-sub"><div class="tm-l">Sub-tasks ${subs.length?'· '+subs.filter(s=>s.done).length+'/'+subs.length:''}</div>
+        ${subs.map((s,i)=>`<div class="subrow"><input type="checkbox" ${s.done?'checked':''} onchange="toggleSub(${t.id},${i})"><input class="subtext ${s.done?'done':''}" value="${esc(s.text)}" onchange="editSub(${t.id},${i},this.value)"><button class="subx" onclick="delSub(${t.id},${i})">✕</button></div>`).join("")}
+        <div class="subrow"><input type="checkbox" disabled style="opacity:.3"><input id="newSub" class="subtext" placeholder="Add sub-task, press Enter" onkeydown="if(event.key==='Enter'){addSub(${t.id},this.value);}"></div>
+      </div>
+      <div class="tm-notes"><div class="tm-l">Notes</div><textarea class="na-ed" rows="4" placeholder="Details, context…" onchange="${E}'notes',this.value)">${esc(t.notes||'')}</textarea></div>
+    </div>
+    <div class="tm-foot"><button class="del-btn" onclick="delTask(${t.id})">Delete task</button><span class="mini">Created ${t.created||'—'}</span></div>`;
+}
+function editTask(id,field,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t[field]=val; saveTask(id); renderTasks(); if(_openTask===id)renderTaskModal(); }
+function editTaskLabels(id,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t.labels=val.split(',').map(s=>s.trim()).filter(Boolean); saveTask(id); renderTasks(); renderTaskModal(); }
+function toggleSub(id,i){ const t=TASKS.find(x=>x.id===id); t.subtasks[i].done=!t.subtasks[i].done; saveTask(id); renderTasks(); renderTaskModal(); }
+function editSub(id,i,val){ const t=TASKS.find(x=>x.id===id); t.subtasks[i].text=val; saveTask(id); }
+function delSub(id,i){ const t=TASKS.find(x=>x.id===id); t.subtasks.splice(i,1); saveTask(id); renderTasks(); renderTaskModal(); }
+function addSub(id,val){ val=(val||'').trim(); if(!val)return; const t=TASKS.find(x=>x.id===id); (t.subtasks=t.subtasks||[]).push({text:val,done:false}); saveTask(id); renderTasks(); renderTaskModal(); setTimeout(()=>{const el=document.getElementById('newSub'); if(el)el.focus();},20); }
+function newTask(status){
+  const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
+  TASKS.unshift({id,title:"",status:status||"todo",priority:"none",assignee:"",due:"",notes:"",subtasks:[],labels:[],dealId:null,created:TODAY});
+  saveTask(id); renderTasks(); openTask(id); setTimeout(()=>{const el=document.querySelector(".tm-title"); if(el)el.focus();},40);
+}
+function delTask(id){ if(!confirm("Delete this task?"))return; const i=TASKS.findIndex(t=>t.id===id); if(i>=0)TASKS.splice(i,1); closeTask(); deleteTaskRemote(id); renderTasks(); }
+let _dragTask=null;
+function dragTask(e,id){ _dragTask=id; e.dataTransfer.effectAllowed="move"; }
+function dropTask(e,status){ e.preventDefault(); if(_dragTask==null)return; const t=TASKS.find(x=>x.id===_dragTask); if(t&&t.status!==status){ t.status=status; saveTask(_dragTask); renderTasks(); } _dragTask=null; }
+function saveTask(id){ const t=TASKS.find(x=>x.id===id); if(t) saveRow({task:t}); }
+function deleteTaskRemote(id){ saveRow({deleteTask:id}); }
+
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderTasks(); }
+function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","tasks","pnl"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
-  document.getElementById("periodWrap").style.display = (t==="dashboard")?"none":"flex";
-  document.getElementById("kpis").style.display = (t==="dashboard")?"none":"grid";
+  const bare = (t==="dashboard"||t==="tasks");
+  document.getElementById("periodWrap").style.display = bare?"none":"flex";
+  document.getElementById("kpis").style.display = bare?"none":"grid";
   lsSet("na_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
@@ -957,6 +1094,7 @@ document.getElementById("dashScope").addEventListener("click",e=>{const b=e.targ
   dashScope=b.dataset.s; document.querySelectorAll("#dashScope button").forEach(x=>x.classList.toggle("on",x===b)); renderDashboard();});
 // populate agent filter
 document.getElementById("fAgent").innerHTML += AGENTS.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+document.getElementById("tfAssignee").innerHTML += ASSIGNEES.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
 document.getElementById("periodLabel").textContent=range.label;
 renderAll();
 setTab(lsGet("na_tab")||"dashboard");
@@ -965,6 +1103,7 @@ if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("p
 if(location.hash.indexOf("new")>=0){ newDeal(); }
 if(location.hash.indexOf("exp")>=0){ setTab("expenses"); }
 if(location.hash.indexOf("agents")>=0){ setTab("agents"); }
+if(location.hash.indexOf("tasks")>=0){ setTab("tasks"); }
 if(location.hash.indexOf("chat")>=0){ openChat(); }
 </script>
 </body>

@@ -733,7 +733,8 @@ def nova_admins_save():
     data = request.get_json(silent=True) or {}
     if not all(isinstance(data.get(k), list) for k in ("agents", "deals", "expenses")):
         return jsonify({"error": "Expected agents, deals and expenses arrays."}), 400
-    clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"]}
+    clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"],
+             "tasks": data.get("tasks", [])}
     if len(json.dumps(clean)) > 12_000_000:
         return jsonify({"error": "Payload too large."}), 413
     try:
@@ -752,7 +753,7 @@ def nova_admins_mutate():
     try:
         with _NOVA_LOCK:
             data = _nova_load()
-            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense")):
+            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense"), ("tasks", "task")):
                 item = body.get(key)
                 if isinstance(item, dict):
                     arr = data.setdefault(coll, [])
