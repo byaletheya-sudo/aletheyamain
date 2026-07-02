@@ -219,23 +219,68 @@
   .save-tag.saving{color:var(--na-amber);border-color:rgba(251,191,36,.3);}
   .save-tag.err{color:var(--na-red);border-color:rgba(248,113,113,.3);}
   .save-tag.hide{display:none;}
-  /* chat add-deal modal */
-  .na-chat-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
-  .na-chat{width:100%;max-width:640px;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:18px;display:flex;flex-direction:column;max-height:82vh;box-shadow:0 30px 80px rgba(0,0,0,.6);}
-  .nc-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--na-line);font-weight:650;font-size:14px;}
+  /* ===== ADD-BY-CHAT — agent experience ===== */
+  .na-chat-scrim{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 0%,rgba(30,26,60,.55),rgba(4,6,10,.82));backdrop-filter:blur(9px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:agFade .2s ease;}
+  @keyframes agFade{from{opacity:0}to{opacity:1}}
   .nc-x{all:unset;cursor:pointer;color:var(--na-muted);font-size:15px;line-height:1;}
   .nc-x:hover{color:var(--na-fg);}
-  .nc-log{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-height:130px;}
-  .nc-msg{max-width:86%;padding:9px 13px;border-radius:13px;font-size:13px;line-height:1.5;}
-  .nc-msg.me{align-self:flex-end;background:var(--na-blue);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap;}
-  .nc-msg.bot{align-self:flex-start;background:var(--na-panel-2);border:1px solid var(--na-line);border-bottom-left-radius:4px;}
-  .nc-msg.bot.ok{border-color:rgba(52,211,153,.32);}
-  .nc-msg.bot .nm-link{color:#76b4ff;cursor:pointer;font-weight:650;}
-  .nc-input{display:flex;gap:9px;padding:13px 16px;border-top:1px solid var(--na-line);align-items:flex-end;}
-  .nc-input textarea{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:11px;padding:10px 12px;font-family:inherit;font-size:13px;resize:none;outline:none;max-height:120px;}
-  .nc-input textarea:focus{border-color:var(--na-blue);}
-  .nc-input .na-btn{padding:10px 18px;}
-  .nc-mic{all:unset;cursor:pointer;width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;border:1px solid var(--na-line);color:var(--na-muted);background:var(--na-panel-2);flex:none;}
+  .agent{position:relative;width:100%;max-width:580px;max-height:88vh;overflow:auto;background:linear-gradient(180deg,#181a24,#111219);border:1px solid var(--na-line-2);border-radius:24px;box-shadow:0 40px 110px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.04);padding:30px 26px 20px;text-align:center;animation:agRise .28s cubic-bezier(.2,.9,.25,1);}
+  @keyframes agRise{from{transform:translateY(14px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .agent::-webkit-scrollbar{width:0;}
+  .ag-x{position:absolute;top:16px;right:18px;all:unset;cursor:pointer;color:var(--na-muted);font-size:15px;line-height:1;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .ag-x:hover{background:var(--na-panel-2);color:var(--na-fg);}
+  .ag-kicker{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--na-muted);text-transform:uppercase;margin-bottom:12px;}
+  .orb-wrap{display:flex;justify-content:center;margin:2px 0 16px;}
+  .orb{width:66px;height:66px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 34% 28%,#cfe0ff,#3a8eef 46%,#8a5cf0 100%);
+    box-shadow:0 0 30px rgba(58,142,239,.55),0 0 66px rgba(138,92,240,.34);animation:orbFloat 4.2s ease-in-out infinite;}
+  .orb::before{content:"";position:absolute;inset:9px 26px auto 14px;height:12px;border-radius:50%;background:rgba(255,255,255,.55);filter:blur(3px);transform:rotate(-18deg);}
+  .orb::after{content:"";position:absolute;inset:-8px;border-radius:50%;z-index:-1;filter:blur(8px);
+    background:conic-gradient(from 0deg,transparent,rgba(138,92,240,.6),transparent 42%,transparent,rgba(58,142,239,.5),transparent 92%);animation:orbSpin 3.6s linear infinite;}
+  .orb.think{animation:orbPulse .74s ease-in-out infinite;}
+  .orb.think::after{animation:orbSpin 1.1s linear infinite;}
+  .orb.listen{box-shadow:0 0 34px rgba(248,113,113,.62),0 0 70px rgba(248,113,113,.4);}
+  .orb.done{box-shadow:0 0 34px rgba(52,211,153,.7),0 0 70px rgba(52,211,153,.42);}
+  @keyframes orbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  @keyframes orbSpin{to{transform:rotate(360deg)}}
+  @keyframes orbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
+  .ag-say{font-size:15.5px;font-weight:640;color:var(--na-fg);line-height:1.5;margin:0 auto 18px;max-width:410px;min-height:22px;}
+  .ag-say .mini{display:block;font-size:12px;font-weight:500;color:var(--na-muted);margin-top:4px;}
+  .ag-body{margin-bottom:6px;text-align:left;}
+  .ag-chips{display:flex;flex-direction:column;gap:8px;}
+  .ag-chip{all:unset;cursor:pointer;background:var(--na-panel);border:1px solid var(--na-line);border-radius:12px;padding:11px 14px;font-size:12.5px;color:var(--na-muted);transition:.13s;}
+  .ag-chip:hover{color:var(--na-fg);border-color:var(--na-line-2);background:var(--na-panel-2);transform:translateY(-1px);}
+  .ag-chip b{color:var(--na-fg);font-weight:700;}
+  .ag-preview{display:flex;flex-direction:column;gap:10px;}
+  .agcard{background:linear-gradient(180deg,var(--na-panel),var(--na-bg));border:1px solid var(--na-line);border-radius:14px;padding:13px 14px;animation:agRise .3s ease backwards;}
+  .agcard-h{display:flex;align-items:center;gap:9px;}
+  .prio-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .agcard-t{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--na-fg);font-size:14.5px;font-weight:660;outline:none;padding:2px 0;font-family:inherit;}
+  .agcard-t:focus{border-bottom-color:var(--na-line-2);}
+  .tavatar{width:22px;height:22px;border-radius:50%;flex:none;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#3a8eef,#8a5cf0);}
+  .agc-veh{font-size:12.5px;color:var(--na-muted);margin-top:5px;}
+  .agcard-m{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
+  .agcard-m .tag{font-size:10.5px;font-weight:650;color:var(--na-muted);background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:6px;padding:2px 8px;}
+  .agc-econ{display:grid;grid-template-columns:repeat(6,1fr);margin-top:12px;border:1px solid var(--na-line);border-radius:11px;overflow:hidden;}
+  .agc-econ>div{padding:8px 4px;text-align:center;border-right:1px solid var(--na-line);}
+  .agc-econ>div:last-child{border-right:none;}
+  .agc-econ .lab{font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted);white-space:nowrap;}
+  .agc-econ .val{font-size:13px;font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums;color:var(--na-fg);}
+  .agc-econ .nova{background:rgba(52,211,153,.07);}
+  .agc-econ .nova .val{color:var(--na-green);}
+  .agcard-note{margin-top:10px;font-size:12px;color:var(--na-muted);background:var(--na-panel-2);border-radius:9px;padding:8px 10px;line-height:1.5;}
+  .ag-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:16px;}
+  .na-btn.ghost{background:transparent;border:1px solid var(--na-line);color:var(--na-muted);}
+  .na-btn.ghost:hover{color:var(--na-fg);border-color:var(--na-line-2);}
+  .ag-done{display:flex;flex-direction:column;gap:7px;}
+  .ag-doneline{font-size:13px;color:var(--na-fg);display:flex;align-items:center;gap:8px;}
+  .ag-doneline .ck{color:var(--na-green);font-weight:800;}
+  .ag-doneline .nm-link{color:#76b4ff;cursor:pointer;font-size:11.5px;margin-left:auto;}
+  .ag-input{display:flex;gap:9px;align-items:flex-end;border-top:1px solid var(--na-line);padding-top:15px;margin-top:16px;}
+  .ag-input textarea{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:13px;padding:12px 14px;font-family:inherit;font-size:13.5px;line-height:1.45;resize:none;outline:none;max-height:130px;transition:border-color .13s;}
+  .ag-input textarea:focus{border-color:var(--na-blue);}
+  .ag-input .na-btn{padding:12px 16px;font-size:15px;line-height:1;}
+  .nc-mic{all:unset;cursor:pointer;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid var(--na-line);color:var(--na-muted);background:var(--na-panel-2);flex:none;}
   .nc-mic:hover{color:var(--na-fg);border-color:var(--na-line-2);}
   .nc-mic.rec{background:rgba(248,113,113,.15);color:var(--na-red);border-color:rgba(248,113,113,.45);animation:micpulse 1.1s infinite;}
   @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.45}}
@@ -290,7 +335,11 @@
     .na-search{min-width:0;flex:1;}
     /* modals: full-bleed */
     .na-chat-scrim{padding:10px;align-items:flex-end;}
-    .na-chat{max-height:92vh;border-radius:16px 16px 12px 12px;}
+    .agent{max-height:92vh;border-radius:20px 20px 14px 14px;padding:26px 18px 16px;}
+    .agc-econ{grid-template-columns:repeat(3,1fr);}
+    .agc-econ>div{border-bottom:1px solid var(--na-line);}
+    .agc-econ>div:nth-child(3n){border-right:none;}
+    .agc-econ>div:nth-child(n+4){border-bottom:none;}
     .tm-row{flex-wrap:wrap;}
     .tm-row .na-in{max-width:100%;}
     .pp-menu{right:auto;left:0;}
@@ -454,13 +503,16 @@
 </div>
 
 <div class="na-chat-scrim hide" id="chatScrim" onclick="closeChat(event)">
-  <div class="na-chat" onclick="event.stopPropagation()">
-    <div class="nc-head"><span>✨ Add a deal — just describe it</span><button class="nc-x" onclick="closeChat()">✕</button></div>
-    <div class="nc-log" id="chatLog"></div>
-    <div class="nc-input">
-      <textarea id="chatText" rows="2" placeholder="Describe the deal, or tap 🎤 to speak it — agent, car, client, front/back, lead source, payment…"></textarea>
-      <button class="nc-mic" id="micBtn" onclick="toggleMic()" title="Dictate (voice)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
-      <button class="na-btn" id="chatSend" onclick="sendChat()">Add</button>
+  <div class="agent" onclick="event.stopPropagation()">
+    <button class="ag-x" onclick="closeChat()">✕</button>
+    <div class="ag-kicker">Nova Agent</div>
+    <div class="orb-wrap"><div class="orb" id="agentOrb"></div></div>
+    <div class="ag-say" id="agentSay"></div>
+    <div class="ag-body" id="agentBody"></div>
+    <div class="ag-input">
+      <textarea id="chatText" rows="1" placeholder="Describe the deal however it comes out — I'll run the math…"></textarea>
+      <button class="nc-mic" id="micBtn" onclick="toggleMic()" title="Speak"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
+      <button class="na-btn" id="chatSend" onclick="sendChat()" title="Send">→</button>
     </div>
   </div>
 </div>
@@ -686,12 +738,71 @@ function newDeal(){
   openRow=id; renderAll(); saveDeal(id);
   setTimeout(()=>{ const el=document.querySelector("#det-"+id+" input"); if(el){ el.focus(); el.scrollIntoView({block:"center"}); } }, 30);
 }
-// ---- Add-by-chat ----
-function openChat(){ document.getElementById("chatScrim").classList.remove("hide");
-  if(!document.getElementById("chatLog").children.length)
-    chatBot("Describe a deal in your own words — agent, car, client, front/back, lead source, payment — or paste the Garage note. I'll log it.", false);
-  setTimeout(()=>document.getElementById("chatText").focus(),30); }
-function closeChat(){ document.getElementById("chatScrim").classList.add("hide"); if(_recOn&&_rec){try{_rec.stop();}catch(e){}} }
+// ================= ADD-BY-CHAT — agent experience =================
+// A presence, not a chatbot: the orb reacts, and the agent SHOWS you the deal
+// it read — with the full money math (net pool → agent cut → Nova) — so you
+// verify the split BEFORE it lands in the ledger.
+const agEsc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+let agState="idle", agPending=null;
+const AG_GREET=[
+  "Describe a deal in your own words — I'll run the split and show you.",
+  "Tell me the deal — client, car, agent, front/back. I'll do the math.",
+  "Paste the Garage note or just say it. I'll lay out the numbers."
+];
+const AG_IDEAS=[
+  {t:"Nema closed a lease", s:"2025 BMW X5, client Sarah, $2,500 front $800 back, Stripe, Nova lead"},
+  {t:"Own-lead deal", s:"Honda Accord for Mike, $1,800 front, no back, cash — my own lead"},
+  {t:"Referral deal with warranty", s:"Toyota RAV4, $2k front $1,200 back, sold warranty, $300 referral fee"}
+];
+function orb(cls){ const o=document.getElementById("agentOrb"); if(o)o.className="orb"+(cls?" "+cls:""); }
+function agSay(main,sub){ document.getElementById("agentSay").innerHTML=agEsc(main)+(sub?`<span class="mini">${agEsc(sub)}</span>`:""); }
+function _apick(a){ return a[Math.floor((Date.now()/1000)%a.length)]; }
+
+function openChat(){ document.getElementById("chatScrim").classList.remove("hide"); resetAgent(); setTimeout(()=>document.getElementById("chatText").focus(),50); }
+function closeChat(e){ if(e&&e.target&&e.target.id!=="chatScrim")return; document.getElementById("chatScrim").classList.add("hide"); if(_recOn&&_rec){try{_rec.stop();}catch(x){}} }
+function resetAgent(){
+  agState="idle"; agPending=null; orb(); agSay(_apick(AG_GREET));
+  document.getElementById("agentBody").innerHTML=
+    `<div class="ag-chips">`+AG_IDEAS.map(c=>`<button class="ag-chip" onclick="useIdea(this)" data-full="${agEsc(c.t)} — ${agEsc(c.s)}"><b>${agEsc(c.t)}</b> — ${agEsc(c.s)}</button>`).join("")+`</div>`;
+  const ta=document.getElementById("chatText"); if(ta){ ta.value=""; ta.style.height="auto"; }
+}
+function useIdea(el){ const ta=document.getElementById("chatText"); ta.value=el.getAttribute("data-full"); sendChat(); }
+// build a deal object (no id/side-effects) so we can run calc() for the preview
+function agDealObj(o){
+  const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
+  const agentId=(AGENTS.find(a=>a.id===o.agentId)?o.agentId:(AGENTS[0]&&AGENTS[0].id))||"";
+  return {id:0, date:o.date||TODAY, client:o.client||"", year:o.year||2026, make:o.make||"", model:o.model||"",
+    vin:o.vin||"", dealer:o.dealer||"", type:o.type||"Lease", term:o.term||"", agentId, lead:o.lead||"own",
+    wOffered:!!o.wOffered, wSold:!!o.wSold, front:num(o.front), back:num(o.back),
+    feeJason:num(o.feeJason), feeReferral:num(o.feeReferral), override:null, pay:o.pay||"Stripe",
+    fColl:!!o.fColl, bColl:!!o.bColl, aPaidF:!!o.aPaidF, aPaidFd:o.aPaidFd||"", aPaidB:!!o.aPaidB, aPaidBd:o.aPaidBd||"", notes:o.notes||""};
+}
+function agDealCard(o){
+  const d=agDealObj(o), c=calc(d), ag=A(d.agentId);
+  const veh=[d.year,d.make,d.model].filter(Boolean).join(" ")||"Vehicle";
+  return `<div class="ag-preview"><div class="agcard">
+    <div class="agcard-h"><span class="prio-dot" style="background:#3a8eef"></span>
+      <input class="agcard-t" value="${agEsc(d.client||'')}" placeholder="Client name" oninput="agPending.client=this.value">
+      ${ag?`<span class="tavatar">${agEsc((ag.name||'?')[0])}</span>`:''}</div>
+    <div class="agc-veh">${agEsc(veh)}${d.dealer?` · ${agEsc(d.dealer)}`:''}</div>
+    <div class="agcard-m">
+      <span class="tag">${agEsc(d.type||'Lease')}${d.term?` · ${agEsc(d.term)}`:''}</span>
+      <span class="tag">${agEsc(leadLabel[d.lead]||d.lead)} lead</span>
+      <span class="tag">${agEsc(ag?ag.name:'no agent')}</span>
+      <span class="tag">${agEsc(d.pay||'Stripe')}</span>
+      ${d.wSold?'<span class="tag">＋ Warranty</span>':''}
+    </div>
+    <div class="agc-econ">
+      <div><div class="lab">Front</div><div class="val">${fmt(d.front)}</div></div>
+      <div><div class="lab">Back</div><div class="val">${fmt(d.back)}</div></div>
+      <div><div class="lab">Fees</div><div class="val">${fmt(c.fees)}</div></div>
+      <div><div class="lab">Net pool</div><div class="val">${fmt(c.netPool)}</div></div>
+      <div><div class="lab">Agent ${c.splitPct}%</div><div class="val">${fmt(c.agentCut)}</div></div>
+      <div class="nova"><div class="lab">Nova</div><div class="val">${fmt(c.novaCut)}</div></div>
+    </div>
+    ${d.notes?`<div class="agcard-note">${agEsc(d.notes)}</div>`:''}
+  </div></div>`;
+}
 // Voice dictation via the browser Web Speech API (Chrome + HTTPS).
 let _rec=null, _recOn=false;
 function toggleMic(){
@@ -700,30 +811,45 @@ function toggleMic(){
   if(_recOn){ try{_rec.stop();}catch(e){} return; }
   _rec=new SR(); _rec.lang="en-US"; _rec.interimResults=true; _rec.continuous=true;
   const ta=document.getElementById("chatText"); const base=ta.value.trim();
-  _rec.onstart=()=>{ _recOn=true; const b=document.getElementById("micBtn"); if(b)b.classList.add("rec"); };
-  _rec.onend  =()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); };
-  _rec.onerror=()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); };
+  _rec.onstart=()=>{ _recOn=true; const b=document.getElementById("micBtn"); if(b)b.classList.add("rec"); if(agState==="idle")orb("listen"); };
+  _rec.onend  =()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); if(agState==="idle")orb(); };
+  _rec.onerror=()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); if(agState==="idle")orb(); };
   _rec.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; ta.value=(base?base+" ":"")+t; };
   try{_rec.start();}catch(e){}
 }
-function chatMe(t){ const l=document.getElementById("chatLog"),d=document.createElement("div"); d.className="nc-msg me"; d.textContent=t; l.appendChild(d); l.scrollTop=l.scrollHeight; }
-function chatBot(html,ok){ const l=document.getElementById("chatLog"),d=document.createElement("div"); d.className="nc-msg bot"+(ok?" ok":""); d.innerHTML=html; l.appendChild(d); l.scrollTop=l.scrollHeight; return d; }
 async function sendChat(){
-  const ta=document.getElementById("chatText"), text=ta.value.trim(); if(!text) return;
-  chatMe(text); ta.value=""; const btn=document.getElementById("chatSend"); btn.disabled=true;
-  const thinking=chatBot("<span class='mini'>reading the deal…</span>", false);
+  const ta=document.getElementById("chatText"), text=ta.value.trim();
+  if(!text||agState==="thinking") return;
+  agState="thinking"; orb("think"); agSay("Reading the deal…","pulling the numbers and running the split");
+  document.getElementById("agentBody").innerHTML="";
   try{
     const res=await fetch("/nova-admins/parse",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({text, today:TODAY, agents:AGENTS.map(a=>({id:a.id,name:a.name}))})});
-    const out=await res.json(); thinking.remove();
-    if(!res.ok||out.error){ chatBot("⚠️ "+(out.error||"Couldn't reach the parser."),false); btn.disabled=false; return; }
-    if(!out.ok){ chatBot("That didn't read like a deal — try including the client, the car, and the agent.",false); btn.disabled=false; return; }
-    const id=addParsedDeal(out), d=DEALS.find(x=>x.id===id), c=calc(d);
-    chatBot(`✓ Logged <b>${d.client||'—'}</b> · ${[d.year,d.make,d.model].filter(Boolean).join(' ')||'vehicle'}<br>`
-      +`${out.summary||''}<br><span class="mini">${(A(d.agentId)||{}).name||'no agent'} · ${leadLabel[d.lead]||d.lead} · net pool ${fmt(c.netPool)} · agent ${fmt(c.agentCut)} · Nova ${fmt(c.novaCut)}</span><br>`
-      +`<span class="nm-link" onclick="reviewDeal(${id})">Open &amp; review →</span>`, true);
-  }catch(err){ thinking.remove(); chatBot("⚠️ "+err.message,false); }
-  btn.disabled=false;
+    const out=await res.json();
+    if(!res.ok||out.error){ orb(); agState="idle"; agSay("⚠️ "+(out.error||"I couldn't reach my brain just now."),"try again in a moment"); return; }
+    if(!out.ok){ orb(); agState="idle"; agSay("That didn't read like a deal.","include the client, the car, and the agent and I'll run it"); return; }
+    agPending=out; agState="review"; orb();
+    const c=calc(agDealObj(out));
+    agSay(out.summary?out.summary:"Here's the deal I read.", `net pool ${fmt(c.netPool)} · agent ${fmt(c.agentCut)} · Nova ${fmt(c.novaCut)} — look right?`);
+    renderPreview();
+  }catch(err){ orb(); agState="idle"; agSay("⚠️ "+err.message); }
+}
+function renderPreview(){
+  document.getElementById("agentBody").innerHTML=
+    agDealCard(agPending)
+    +`<div class="ag-actions"><button class="na-btn ghost" onclick="resetAgent()">↺ Start over</button>`
+    +`<button class="na-btn" onclick="commitAgent()">✓ Log this deal</button></div>`;
+  const ta=document.getElementById("chatText"); if(ta){ ta.value=""; ta.style.height="auto"; }
+}
+function commitAgent(){
+  if(!agPending) return;
+  const id=addParsedDeal(agPending), d=DEALS.find(x=>x.id===id), c=calc(d);
+  orb("done"); agState="done";
+  agSay(`Logged — ${d.client||'deal'} is in the ledger.`, `Nova takes ${fmt(c.novaCut)} on this one.`);
+  document.getElementById("agentBody").innerHTML=
+    `<div class="ag-done"><div class="ag-doneline"><span class="ck">✓</span> ${agEsc(d.client||'—')} · ${agEsc([d.year,d.make,d.model].filter(Boolean).join(' ')||'vehicle')}<span class="nm-link" onclick="reviewDeal(${id})">open &amp; review →</span></div></div>`
+    +`<div class="ag-actions"><button class="na-btn ghost" onclick="closeChat()">Close</button><button class="na-btn" onclick="resetAgent()">+ Log another</button></div>`;
+  agPending=null; setTimeout(()=>{ if(agState==="done") orb(); },1400);
 }
 function reviewDeal(id){ closeChat(); setTab("ledger"); openRow=id; renderLedger();
   setTimeout(()=>{ const el=document.getElementById("det-"+id); if(el) el.scrollIntoView({block:"center"}); },30); }
@@ -1000,6 +1126,7 @@ function closePP(){ document.getElementById("periodMenu").classList.add("hide");
 document.addEventListener("click",e=>{ if(!e.target.closest(".pp-wrap")) closePP(); });
 document.getElementById("periodMenu").addEventListener("click",e=>{const b=e.target.closest(".pp-opt"); if(b) setRange(b.dataset.k);});
 document.getElementById("chatText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); }});
+document.getElementById("chatText").addEventListener("input",function(){ this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,130)+"px"; });
 ["fAgent","fLead","fStatus","fSearch"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
 // populate agent filter
 document.getElementById("dashScope").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
