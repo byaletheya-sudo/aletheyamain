@@ -66,6 +66,7 @@
   .na-tbl td{padding:12px 13px;border-bottom:1px solid var(--na-line);vertical-align:middle;}
   .na-tbl tr.drow{cursor:pointer;transition:background .12s;}
   .na-tbl tr.drow:hover{background:var(--na-panel-2);}
+  .na-tbl tr#lgMore td.lg-more{text-align:center;padding:14px;color:var(--na-muted-2);font-size:11.5px;font-weight:600;}
   .na-tbl tr:last-child td{border-bottom:none;}
   .veh{font-weight:600;}
   .sub{color:var(--na-muted);font-size:11.5px;}
@@ -542,12 +543,19 @@ function renderKpis(){
 
 // ---- RENDER: Ledger ----
 let openRow=null;
+// Virtualized: render rows in batches (scroll for more) and only build the ONE
+// open deal's detail row — not a hidden detail for all 202. Cuts the ledger from
+// ~404 rows to ~50 on first paint.
+let _lgShown=50, _lgIO=null;
+function lgReset(){ _lgShown=50; }
 function renderLedger(){
   const ds=filteredDeals();
   document.getElementById("cnt-ledger").textContent=DEALS.filter(inPeriod).length;
   const body=document.getElementById("ledgerBody");
-  if(!ds.length){ body.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--na-muted)">No deals match.</td></tr>`; return; }
-  body.innerHTML = ds.map(d=>{
+  if(!ds.length){ body.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--na-muted)">No deals match.</td></tr>`; if(_lgIO)_lgIO.disconnect(); return; }
+  const openIdx = openRow!=null ? ds.findIndex(d=>d.id===openRow) : -1;   // keep a jumped-to row inside the window
+  const limit = Math.min(ds.length, Math.max(_lgShown, openIdx+1));
+  body.innerHTML = ds.slice(0,limit).map(d=>{
     const c=calc(d), ag=A(d.agentId), cs=collStatus(d), ps=paidStatus(d);
     return `<tr class="drow${openRow===d.id?' open':''}" onclick="toggleRow(${d.id})">
       <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
@@ -561,13 +569,16 @@ function renderLedger(){
       <td>${d.wSold?'<span class="wbadge sold">SOLD</span>':(d.wOffered?'<span class="wbadge">offered</span>':'<span class="mini">—</span>')}</td>
       <td><span class="stat ${cs}">${cs==='g'?'● Collected':cs==='a'?'◐ Partial':cs==='n'?'— Draft':'○ Owed'}</span></td>
       <td><span class="stat ${ps}">${ps==='g'?'● Paid':ps==='a'?'◐ Partial':ps==='n'?'— Draft':'○ Unpaid'}</span></td>
-    </tr>${detailRow(d)}`;
-  }).join("");
-  if(openRow) { const el=document.getElementById("det-"+openRow); if(el) el.classList.remove("hide"); }
+    </tr>${openRow===d.id?detailRow(d):''}`;
+  }).join("")
+    + (limit<ds.length ? `<tr id="lgMore"><td colspan="11" class="lg-more">↓ Showing ${limit} of ${ds.length} deals — scroll to load more</td></tr>` : "");
+  if(_lgIO) _lgIO.disconnect();
+  const s=document.getElementById("lgMore");
+  if(s){ _lgIO=new IntersectionObserver(function(es){ if(es[0].isIntersecting){ _lgShown+=50; renderLedger(); } },{rootMargin:"500px"}); _lgIO.observe(s); }
 }
 function detailRow(d){
   const c=calc(d), E=`edit(${d.id},`, T=`toggleField(${d.id},`;
-  return `<tr class="detail hide" id="det-${d.id}"><td colspan="11">
+  return `<tr class="detail" id="det-${d.id}"><td colspan="11">
     <div class="det-banner">
       <span class="db-dot" style="background:${aColor(d.agentId)}"></span>
       <span class="db-name">${d.client||'New deal'}</span>
@@ -898,16 +909,16 @@ function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forE
   lsSet("na_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
-function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; renderAll(); }
+function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; lgReset(); renderAll(); }
 function applyCustom(){ const f=document.getElementById("ppFrom").value, t=document.getElementById("ppTo").value; if(!f||!t)return;
   range={from:f,to:t,label:f+" → "+t}; document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; renderAll(); }
 function togglePP(e){ e.stopPropagation(); document.getElementById("periodMenu").classList.toggle("hide"); }
 function closePP(){ document.getElementById("periodMenu").classList.add("hide"); }
 document.addEventListener("click",e=>{ if(!e.target.closest(".pp-wrap")) closePP(); });
 document.getElementById("periodMenu").addEventListener("click",e=>{const b=e.target.closest(".pp-opt"); if(b) setRange(b.dataset.k);});
-["fAgent","fLead","fStatus"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
+["fAgent","fLead","fStatus"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{lgReset();renderLedger();}));
 // search: debounce so we don't rebuild the whole (up to 202-row) table on every keystroke
-let _searchT=null; document.getElementById("fSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(renderLedger,140); });
+let _searchT=null; document.getElementById("fSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(()=>{lgReset();renderLedger();},140); });
 // populate agent filter
 document.getElementById("dashScope").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
   dashScope=b.dataset.s; document.querySelectorAll("#dashScope button").forEach(x=>x.classList.toggle("on",x===b)); renderDashboard();});

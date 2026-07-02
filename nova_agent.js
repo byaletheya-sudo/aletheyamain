@@ -157,6 +157,19 @@
 
   function orb(c){ orbEl.className="nva-orb big"+(c?" "+c:""); }
   function say(m,sub){ sayEl.innerHTML=nl(m)+(sub?'<span class="sub">'+nl(sub)+'</span>':""); }
+  // rotating "thinking" status — feels like it's working through the data
+  var THINK=["reading the live numbers…","checking the ledger…","lining up the details…","almost there…"];
+  var _thinkI=null;
+  function startThink(){ var i=0; _thinkI=setInterval(function(){ i=(i+1)%THINK.length; var s=sayEl.querySelector(".sub"); if(s)s.textContent=THINK[i]; },1050); }
+  function stopThink(){ if(_thinkI){ clearInterval(_thinkI); _thinkI=null; } }
+  // typewriter reveal — streams the answer in word by word
+  var _streamT=null;
+  function streamInto(el, text){
+    if(_streamT){ clearTimeout(_streamT); _streamT=null; }
+    var toks=String(text==null?"":text).split(/(\s+)/), i=0, acc="";
+    el.innerHTML="";
+    (function step(){ if(i>=toks.length){ _streamT=null; return; } acc+=toks[i++]; el.innerHTML=nl(acc); _streamT=setTimeout(step,16); })();
+  }
 
   var GREET=[
     "What do you need? Ask about the numbers, or tell me to do something.",
@@ -192,11 +205,12 @@
 
   async function send(text){
     text=(text||ta.value||"").trim(); if(!text||state==="thinking") return;
-    state="thinking"; orb("think"); say("Thinking…","reading the live numbers"); bodyEl.innerHTML="";
+    state="thinking"; orb("think"); say("Thinking…",THINK[0]); startThink(); bodyEl.innerHTML="";
     try{
       var r=await fetch("/nova-admins/agent",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({text:text, page:PAGE, today:today()})});
       var out=await r.json();
+      stopThink();
       if(!r.ok||out.error){ orb(); state="idle"; say("⚠️ "+(out.error||"I couldn't reach my brain just now."),"try again in a moment"); return; }
       ta.value=""; ta.style.height="auto";
       if(out.kind==="navigate"){
@@ -210,10 +224,11 @@
         say(out.reply||"Here's what I'll do.","review, then confirm");
         renderActs(); return;
       }
-      // answer (default)
+      // answer (default) — stream it in
       orb(); state="idle"; say("Here's what I found.");
-      bodyEl.innerHTML='<div class="nva-ans">'+nl(out.reply||"—")+"</div>";
-    }catch(e){ orb(); state="idle"; say("⚠️ "+e.message); }
+      bodyEl.innerHTML='<div class="nva-ans"></div>';
+      streamInto(bodyEl.querySelector(".nva-ans"), out.reply||"—");
+    }catch(e){ stopThink(); orb(); state="idle"; say("⚠️ "+e.message); }
   }
 
   function renderActs(){
