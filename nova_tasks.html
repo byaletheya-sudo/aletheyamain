@@ -161,6 +161,15 @@
   .tm-priodot{width:11px;height:11px;border-radius:50%;flex:none;margin-top:7px;}
   .tm-tags{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:2px 18px 12px;border-bottom:1px solid var(--na-line);}
   .tm-priotag{font-size:11px;font-weight:700;}
+  .tm-typetoggle{display:flex;gap:5px;padding:2px 18px 12px;}
+  .tm-typetoggle .tt{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px;border-radius:9px;font-size:12.5px;font-weight:650;color:var(--na-muted);background:var(--na-panel);border:1px solid var(--na-line);transition:.12s;}
+  .tm-typetoggle .tt:hover{color:var(--na-fg);}
+  .tm-typetoggle .tt.on{color:var(--na-fg);background:rgba(58,142,239,.12);border-color:var(--na-blue);}
+  .tm-reptag{font-size:10.5px;font-weight:700;color:#76b4ff;background:rgba(58,142,239,.12);border-radius:6px;padding:2px 8px;}
+  .trep{color:#76b4ff;font-weight:700;}
+  .tev-time{font-family:var(--na-mono);font-size:10.5px;font-weight:700;color:#76b4ff;background:rgba(58,142,239,.12);border-radius:5px;padding:1px 6px;}
+  .tcal-chip.ev{border-left-width:3px;font-weight:600;}
+  .tcal-chip.ev b{color:var(--na-fg);font-variant-numeric:tabular-nums;}
   .tm-asg{align-items:flex-start;}
   .asg-pick{display:flex;flex-wrap:wrap;gap:7px;}
   .asg-chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 5px;border-radius:999px;
@@ -227,6 +236,7 @@
     </nav>
     <select class="na-sel" id="tfAssignee" onchange="renderTasks()"><option value="all">All assignees</option></select>
     <div class="na-spacer"></div>
+    <button class="na-btn ghost" onclick="newEvent(TODAY)">🗓 Event</button>
     <button class="na-btn" onclick="newTask('todo')">+ New task</button>
   </div>
   <div id="tasksView"></div>
@@ -263,10 +273,13 @@ function deleteTaskRemote(id){ saveRow({deleteTask:id}); }
 
 // ---- stats ----
 function renderStats(){
-  const open=TASKS.filter(t=>t.status!=="done");
+  // count the SAME set the board shows (respects the assignee filter) — so "1 open"
+  // never disagrees with an empty board. Events aren't to-dos, so exclude them.
+  const src=filtered().filter(t=>t.type!=="event");
+  const open=src.filter(t=>t.status!=="done");
   const overdue=open.filter(t=>t.due&&t.due<TODAY).length;
   const dueToday=open.filter(t=>t.due===TODAY).length;
-  const doneWeek=TASKS.filter(t=>t.status==="done").length;
+  const doneWeek=src.filter(t=>t.status==="done").length;
   document.getElementById("tStats").innerHTML=[
     {l:"Open tasks",v:open.length,s:"across the board",c:""},
     {l:"Overdue",v:overdue,s:overdue?"needs attention":"all clear",c:overdue?"red":"green"},
@@ -288,6 +301,7 @@ function taskCard(t){
     <div class="tcard-title">${esc(t.title)||'<span style="color:var(--na-muted-2)">Untitled task</span>'}</div>
     <div class="tcard-meta">
       ${t.due?`<span class="tdue ${overdue?'over':''}">${fmtDue(t.due)}</span>`:""}
+      ${(t.repeat&&t.repeat!=="none")?`<span class="trep" title="Repeats ${REPEAT_LBL[t.repeat]||''}">↻</span>`:""}
       ${subs.length?`<span class="tsub">☑ ${done}/${subs.length}</span>`:""}
       ${dl?`<span class="tlink" title="${esc(dl.client)}">🔗</span>`:""}
       <span class="tsp"></span>
@@ -306,12 +320,45 @@ function ymd(d){ return d.getFullYear()+"-"+_pad(d.getMonth()+1)+"-"+_pad(d.getD
 function filtered(){ const fa=(document.getElementById("tfAssignee")||{}).value||"all";
   return fa==="all"?TASKS.slice():TASKS.filter(t=>asgList(t).includes(fa)); }
 function stName(id){ return (T_STATUS.find(s=>s.id===id)||{}).name||id; }
+// ---- repeats + events ----
+const REPEATS=[["none","Doesn't repeat"],["daily","Every day"],["weekdays","Every weekday"],["weekly","Every week"],["biweekly","Every 2 weeks"],["monthly","Every month"]];
+const REPEAT_LBL={daily:"Daily",weekdays:"Weekdays",weekly:"Weekly",biweekly:"Every 2 wks",monthly:"Monthly"};
+function isEvent(t){ return t.type==="event"; }
+function nextDue(d,rep){ const dt=new Date((d||TODAY)+"T12:00:00");
+  if(rep==="daily")dt.setDate(dt.getDate()+1);
+  else if(rep==="weekdays"){ do{dt.setDate(dt.getDate()+1);}while(dt.getDay()===0||dt.getDay()===6); }
+  else if(rep==="weekly")dt.setDate(dt.getDate()+7);
+  else if(rep==="biweekly")dt.setDate(dt.getDate()+14);
+  else if(rep==="monthly")dt.setMonth(dt.getMonth()+1);
+  return ymd(dt); }
+// does item t land on calendar day k (expands recurrence from its start date)?
+function occursOn(t,k){ if(!t.due)return false; const rep=t.repeat||"none";
+  if(rep==="none")return t.due===k; if(k<t.due)return false;
+  const a=new Date(t.due+"T12:00:00"),b=new Date(k+"T12:00:00"),days=Math.round((b-a)/864e5);
+  if(rep==="daily")return true;
+  if(rep==="weekdays"){const w=b.getDay();return w!==0&&w!==6;}
+  if(rep==="weekly")return days%7===0;
+  if(rep==="biweekly")return days%14===0;
+  if(rep==="monthly")return b.getDate()===a.getDate();
+  return t.due===k; }
+function fmtTime(t){ if(!t)return""; const p=t.split(":"),H=+p[0],m=p[1]; return ((H%12)||12)+(m&&m!=="00"?":"+m:"")+(H<12?"am":"pm"); }
+// completing a recurring TASK rolls it to the next occurrence instead of just done
+function setStatus(t,s){
+  if(s==="done" && !isEvent(t) && (t.repeat&&t.repeat!=="none") && t.due){
+    t.due=nextDue(t.due,t.repeat); (t.subtasks||[]).forEach(x=>x.done=false); t.status="todo"; return "rolled";
+  }
+  t.status=s; return "set";
+}
+function setItemType(id,kind){ const t=TASKS.find(x=>x.id===id); if(!t)return;
+  t.type=kind; if(kind==="event"&&!t.time)t.time="09:00"; if(kind==="event"&&!t.due)t.due=TODAY;
+  saveTask(id); renderTasks(); renderTaskModal(); }
 
 function renderTasks(){
   document.querySelectorAll("#viewSwitch button").forEach(b=>b.classList.toggle("on",b.dataset.v===tView));
   const el=document.getElementById("tasksView"), items=filtered();
-  if(tView==="board"){ el.className="tboard"; el.innerHTML=boardHtml(items); }
-  else if(tView==="list"){ el.className="tlist"; el.innerHTML=listHtml(items); }
+  const tasksOnly=items.filter(t=>!isEvent(t));   // events aren't to-dos → calendar/agenda/table only
+  if(tView==="board"){ el.className="tboard"; el.innerHTML=boardHtml(tasksOnly); }
+  else if(tView==="list"){ el.className="tlist"; el.innerHTML=listHtml(tasksOnly); }
   else if(tView==="table"){ el.className="ttablewrap"; el.innerHTML=tableHtml(items); }
   else if(tView==="cal"){ el.className=""; el.innerHTML=calHtml(items); }
   else { el.className="tagenda"; el.innerHTML=agendaHtml(items); }
@@ -332,15 +379,18 @@ function boardHtml(items){
 
 // Shared compact row (list + agenda)
 function lrowHtml(t,showStatus){
-  const p=T_PRIO[t.priority||"none"], as=asg(t.assignee), subs=t.subtasks||[], dn=subs.filter(s=>s.done).length;
-  const overdue=t.due&&t.status!=="done"&&t.due<TODAY;
+  const isEv=isEvent(t);
+  const p=T_PRIO[t.priority||"none"], subs=t.subtasks||[], dn=subs.filter(s=>s.done).length;
+  const overdue=!isEv&&t.due&&t.status!=="done"&&t.due<TODAY;
   return `<div class="lrow" onclick="openTask(${t.id})">
     <span class="prio" style="background:${p.c}"></span>
-    <span class="lt ${t.status==='done'?'done':''}">${esc(t.title)||'Untitled task'}</span>
+    <span class="lt ${!isEv&&t.status==='done'?'done':''}">${isEv?'🗓 ':''}${esc(t.title)||(isEv?'Untitled event':'Untitled task')}</span>
     ${(t.labels||[]).slice(0,2).map(l=>`<span class="tlabel">${esc(l)}</span>`).join("")}
     <span class="meta">
-      ${showStatus?`<span class="stpill ${t.status}">${stName(t.status||'backlog')}</span>`:""}
-      ${subs.length?`<span class="tsub">☑ ${dn}/${subs.length}</span>`:""}
+      ${isEv&&t.time?`<span class="tev-time">${fmtTime(t.time)}</span>`:''}
+      ${(t.repeat&&t.repeat!=="none")?`<span class="trep" title="Repeats">↻</span>`:""}
+      ${!isEv&&showStatus?`<span class="stpill ${t.status}">${stName(t.status||'backlog')}</span>`:""}
+      ${!isEv&&subs.length?`<span class="tsub">☑ ${dn}/${subs.length}</span>`:""}
       ${t.due?`<span class="tdue ${overdue?'over':''}">${fmtDue(t.due)}</span>`:""}
       ${avatars(t)}
     </span></div>`;
@@ -383,20 +433,27 @@ function calToday(){ calRef=new Date(NOW.getFullYear(),NOW.getMonth(),1); render
 function calHtml(items){
   const m=calRef.getMonth(), first=new Date(calRef);
   const start=new Date(first); start.setDate(1-((first.getDay()+6)%7));
-  const byDay={}; items.forEach(t=>{ if(t.due)(byDay[t.due]=byDay[t.due]||[]).push(t); });
+  const events=items.filter(isEvent), byDayT={};
+  items.filter(t=>!isEvent(t)&&t.due).forEach(t=>(byDayT[t.due]=byDayT[t.due]||[]).push(t));
   let cells="";
   for(let i=0;i<42;i++){
     const d=new Date(start); d.setDate(start.getDate()+i); const k=ymd(d);
-    const g=(byDay[k]||[]).sort((a,b)=>PRIO_ORD[a.priority||"none"]-PRIO_ORD[b.priority||"none"]);
+    const evs=events.filter(t=>occursOn(t,k)).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+    const tks=(byDayT[k]||[]).sort((a,b)=>PRIO_ORD[a.priority||"none"]-PRIO_ORD[b.priority||"none"]);
+    const g=evs.concat(tks);
     cells+=`<div class="tcal-cell ${d.getMonth()!==m?'dim':''} ${k===TODAY?'today':''}" onclick="newTaskOn('${k}')">
       <div class="tcal-d">${d.getDate()}</div>`
-      + g.slice(0,3).map(t=>`<span class="tcal-chip ${t.status==='done'?'done':''}" style="border-color:${T_PRIO[t.priority||'none'].c}" onclick="event.stopPropagation();openTask(${t.id})">${esc(t.title)||'Untitled'}</span>`).join("")
+      + g.slice(0,3).map(t=> isEvent(t)
+          ? `<span class="tcal-chip ev" style="background:${T_PRIO[t.priority||'none'].c}22;border-color:${T_PRIO[t.priority||'none'].c}" onclick="event.stopPropagation();openTask(${t.id})">${t.time?`<b>${fmtTime(t.time)}</b> `:''}${esc(t.title)||'Event'}</span>`
+          : `<span class="tcal-chip ${t.status==='done'?'done':''}" style="border-color:${T_PRIO[t.priority||'none'].c}" onclick="event.stopPropagation();openTask(${t.id})">${esc(t.title)||'Untitled'}</span>`
+        ).join("")
       + (g.length>3?`<span class="tcal-more">+${g.length-3} more</span>`:"") + `</div>`;
   }
   const dows=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=>`<div class="tcal-dow">${x}</div>`).join("");
   return `<div class="tcal-head"><h3>${calRef.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</h3>
     <button class="tcal-nav" onclick="calMove(-1)">‹</button><button class="tcal-nav" onclick="calMove(1)">›</button>
     <button class="na-btn ghost" style="padding:5px 11px;font-size:11px" onclick="calToday()">Today</button>
+    <button class="na-btn" style="padding:5px 11px;font-size:11px" onclick="newEvent(TODAY)">🗓 Event</button>
     <span class="mini" style="margin-left:auto">tap a day to add a task</span></div>
     <div class="tcal-grid">${dows}${cells}</div>`;
 }
@@ -410,13 +467,16 @@ function agendaHtml(items){
   const head=`<div class="tcal-head"><h3>Week of ${days[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${days[6].toLocaleDateString("en-US",{month:"short",day:"numeric"})}</h3>
     <button class="tcal-nav" onclick="agMove(-1)">‹</button><button class="tcal-nav" onclick="agMove(1)">›</button>
     <button class="na-btn ghost" style="padding:5px 11px;font-size:11px" onclick="agToday()">This week</button></div>`;
-  const over=items.filter(t=>t.due&&t.due<TODAY&&t.status!=="done").sort((a,b)=>a.due<b.due?-1:1);
+  const over=items.filter(t=>!isEvent(t)&&t.due&&t.due<TODAY&&t.status!=="done").sort((a,b)=>a.due<b.due?-1:1);
   const overSec=over.length?`<div class="ag-day overdue"><div class="ag-h"><span class="d">Overdue</span><span class="sub">${over.length} task${over.length>1?'s':''}</span></div>${over.map(t=>lrowHtml(t,true)).join("")}</div>`:"";
   const daySecs=days.map(d=>{const k=ymd(d);
-    const g=items.filter(t=>t.due===k).sort((a,b)=>PRIO_ORD[a.priority||"none"]-PRIO_ORD[b.priority||"none"]);
+    const g=items.filter(t=>isEvent(t)?occursOn(t,k):t.due===k).sort((a,b)=>{
+      if(isEvent(a)!==isEvent(b))return isEvent(a)?-1:1;
+      if(isEvent(a))return (a.time||"").localeCompare(b.time||"");
+      return PRIO_ORD[a.priority||"none"]-PRIO_ORD[b.priority||"none"]; });
     return `<div class="ag-day ${k===TODAY?'today':''}"><div class="ag-h"><span class="d">${d.toLocaleDateString("en-US",{weekday:"long"})}</span><span class="sub">${d.toLocaleDateString("en-US",{month:"short",day:"numeric"})}${k===TODAY?' · today':''}</span></div>${g.map(t=>lrowHtml(t,true)).join("")||'<div class="lempty" style="border-bottom:none">Nothing due</div>'}</div>`;
   }).join("");
-  const un=items.filter(t=>!t.due&&t.status!=="done");
+  const un=items.filter(t=>!isEvent(t)&&!t.due&&t.status!=="done");
   const unSec=un.length?`<div class="ag-day"><div class="ag-h"><span class="d">No due date</span><span class="sub">${un.length}</span></div>${un.map(t=>lrowHtml(t,true)).join("")}</div>`:"";
   return head+overSec+daySecs+unSec;
 }
@@ -432,38 +492,50 @@ function renderTaskModal(){
   const t=TASKS.find(x=>x.id===_openTask); if(!t)return;
   const E=`editTask(${t.id},`, subs=t.subtasks||[];
   const dealOpts=[["","— none —"]].concat(DEALS.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,250).map(d=>[String(d.id),(d.client||'—')+" · "+[d.year,d.make,d.model].filter(Boolean).join(' ')]));
+  const isEv=isEvent(t);
   const p=T_PRIO[t.priority||"none"]||T_PRIO.none, done=subs.filter(s=>s.done).length;
   const pct=subs.length?Math.round(done/subs.length*100):0;
   const dl=t.dealId!=null?DEALS.find(d=>d.id===t.dealId):null;
-  const overdue=t.due&&t.status!=="done"&&t.due<TODAY;
+  const overdue=!isEv&&t.due&&t.status!=="done"&&t.due<TODAY;
+  const repTxt=REPEAT_LBL[t.repeat]||"";
+  const prioSel=tSelHtml(Object.entries(T_PRIO).map(([k,v])=>[k,v.l]),t.priority||'none',E+"'priority',this.value)");
   document.getElementById("taskModal").innerHTML=`
     <div class="tm-head">
       <span class="tm-priodot" style="background:${p.c}" title="${p.l}"></span>
-      <input class="tm-title" value="${esc(t.title)}" placeholder="Task title…" onchange="${E}'title',this.value)">
+      <input class="tm-title" value="${esc(t.title)}" placeholder="${isEv?'Event title…':'Task title…'}" onchange="${E}'title',this.value)">
       <button class="nc-x" onclick="closeTask()">✕</button></div>
+    <div class="tm-typetoggle">
+      <button class="tt ${!isEv?'on':''}" onclick="setItemType(${t.id},'task')">☑ Task</button>
+      <button class="tt ${isEv?'on':''}" onclick="setItemType(${t.id},'event')">🗓 Event</button>
+    </div>
     <div class="tm-tags">
-      <span class="stpill ${t.status||'backlog'}">${stName(t.status||'backlog')}</span>
+      ${isEv?`<span class="tdue" style="color:#76b4ff">🗓 ${t.due?fmtDue(t.due):'no date'}${t.time?' · '+fmtTime(t.time):''}</span>`
+            :`<span class="stpill ${t.status||'backlog'}">${stName(t.status||'backlog')}</span>`}
       <span class="tm-priotag" style="color:${p.c}">${p.l}</span>
       <span id="tmAvatars">${avatars(t)}</span>
-      ${t.due?`<span class="tdue ${overdue?'over':''}">📅 ${fmtDue(t.due)}</span>`:''}
+      ${repTxt?`<span class="tm-reptag">↻ ${repTxt}</span>`:''}
+      ${!isEv&&t.due?`<span class="tdue ${overdue?'over':''}">📅 ${fmtDue(t.due)}</span>`:''}
     </div>
     <div class="tm-body">
-      <div class="tm-row"><span class="tm-l">Status</span>${tSelHtml(T_STATUS.map(s=>[s.id,s.name]),t.status||'backlog',E+"'status',this.value)")}
-        <span class="tm-l" style="width:auto;margin-left:6px">Priority</span>${tSelHtml(Object.entries(T_PRIO).map(([k,v])=>[k,v.l]),t.priority||'none',E+"'priority',this.value)")}</div>
-      <div class="tm-row tm-asg"><span class="tm-l">Assignees</span>
+      ${isEv?`<div class="tm-row"><span class="tm-l">Priority</span>${prioSel}</div>`
+            :`<div class="tm-row"><span class="tm-l">Status</span>${tSelHtml(T_STATUS.map(s=>[s.id,s.name]),t.status||'backlog',E+"'status',this.value)")}
+        <span class="tm-l" style="width:auto;margin-left:6px">Priority</span>${prioSel}</div>`}
+      <div class="tm-row tm-asg"><span class="tm-l">${isEv?'With':'Assignees'}</span>
         <div class="asg-pick">${ASSIGNEES.map(a=>`<button class="asg-chip ${asgList(t).includes(a.id)?'on':''}" onclick="toggleAsg(${t.id},'${a.id}')"><span class="tavatar" style="background:${a.color}">${esc(a.name[0])}</span>${esc(a.name)}</button>`).join("")}</div></div>
-      <div class="tm-row"><span class="tm-l">Due date</span><input type="date" class="na-in" value="${t.due||''}" onchange="${E}'due',this.value)">
-        <span class="tm-l" style="width:auto;margin-left:6px">Labels</span><input class="na-in" style="flex:1;min-width:120px" value="${esc((t.labels||[]).join(', '))}" placeholder="Payroll, Deals…" onchange="editTaskLabels(${t.id},this.value)"></div>
-      <div class="tm-row"><span class="tm-l">Link deal</span><select class="na-in" style="flex:1" onchange="editTask(${t.id},'dealId',this.value?+this.value:null)">${dealOpts.map(([v,l])=>`<option value="${v}" ${v===String(t.dealId||'')?'selected':''}>${esc(l)}</option>`).join("")}</select></div>
+      <div class="tm-row"><span class="tm-l">${isEv?'Date':'Due date'}</span><input type="date" class="na-in" value="${t.due||''}" onchange="${E}'due',this.value)">
+        ${isEv?`<span class="tm-l" style="width:auto;margin-left:6px">Time</span><input type="time" class="na-in" value="${t.time||''}" onchange="${E}'time',this.value)">`:''}
+        <span class="tm-l" style="width:auto;margin-left:6px">Repeat</span>${tSelHtml(REPEATS,t.repeat||'none',E+"'repeat',this.value)")}</div>
+      <div class="tm-row"><span class="tm-l">Labels</span><input class="na-in" style="flex:1;min-width:120px" value="${esc((t.labels||[]).join(', '))}" placeholder="Payroll, Deals…" onchange="editTaskLabels(${t.id},this.value)"></div>
+      ${!isEv?`<div class="tm-row"><span class="tm-l">Link deal</span><select class="na-in" style="flex:1" onchange="editTask(${t.id},'dealId',this.value?+this.value:null)">${dealOpts.map(([v,l])=>`<option value="${v}" ${v===String(t.dealId||'')?'selected':''}>${esc(l)}</option>`).join("")}</select></div>
       ${dl?`<div class="tm-dealcard" onclick="location.href='/nova-admins#open'">🚗&nbsp; <b>${esc(dl.client||'—')}</b> · ${esc([dl.year,dl.make,dl.model].filter(Boolean).join(' '))||'vehicle'}<span class="tm-dealgo">open in ledger →</span></div>`:''}
       <div class="tm-sub"><div class="tm-subhead"><span class="tm-l" style="width:auto">Sub-tasks</span>${subs.length?`<span class="tm-subcount">${done}/${subs.length}</span>`:''}</div>
         ${subs.length?`<div class="subbar"><span style="width:${pct}%"></span></div>`:''}
         ${subs.map((s,i)=>`<div class="subrow"><input type="checkbox" ${s.done?'checked':''} onchange="toggleSub(${t.id},${i})"><input class="subtext ${s.done?'done':''}" value="${esc(s.text)}" onchange="editSub(${t.id},${i},this.value)"><button class="subx" onclick="delSub(${t.id},${i})">✕</button></div>`).join("")}
         <div class="subrow"><input type="checkbox" disabled style="opacity:.3"><input id="newSub" class="subtext" placeholder="Add sub-task, press Enter" onkeydown="if(event.key==='Enter'){addSub(${t.id},this.value);}"></div>
-      </div>
+      </div>`:''}
       <div class="tm-notes"><div class="tm-l">Notes</div><textarea class="na-ed" rows="4" placeholder="Details, context…" onchange="${E}'notes',this.value)">${esc(t.notes||'')}</textarea></div>
     </div>
-    <div class="tm-foot"><button class="del-btn" onclick="delTask(${t.id})">Delete task</button><span class="mini">Created ${t.created||'—'}</span></div>`;
+    <div class="tm-foot"><button class="del-btn" onclick="delTask(${t.id})">Delete ${isEv?'event':'task'}</button><span class="mini">Created ${t.created||'—'}</span></div>`;
 }
 // toggle a person on/off a task; update picker + header avatars in place (no modal rebuild → keeps focus)
 function toggleAsg(id,aid){ const t=TASKS.find(x=>x.id===id); if(!t)return;
@@ -477,7 +549,9 @@ function toggleAsg(id,aid){ const t=TASKS.find(x=>x.id===id); if(!t)return;
 // NOTE: field edits do NOT rebuild the modal — that used to wipe an un-entered
 // sub-task (and anything else you were typing). The native inputs already show
 // their own new value; only the board behind needs refreshing.
-function editTask(id,field,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t[field]=val; saveTask(id); renderTasks(); }
+function editTask(id,field,val){ const t=TASKS.find(x=>x.id===id); if(!t)return;
+  if(field==="status"){ const r=setStatus(t,val); saveTask(id); renderTasks(); if(r==="rolled"&&_openTask===id){ renderTaskModal(); } return; }
+  t[field]=val; saveTask(id); renderTasks(); }
 function editTaskLabels(id,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t.labels=val.split(',').map(s=>s.trim()).filter(Boolean); saveTask(id); renderTasks(); }
 function toggleSub(id,i){ flushNewSub(); const t=TASKS.find(x=>x.id===id); t.subtasks[i].done=!t.subtasks[i].done; saveTask(id); renderTasks(); renderTaskModal(); }
 function editSub(id,i,val){ const t=TASKS.find(x=>x.id===id); t.subtasks[i].text=val; saveTask(id); }
@@ -485,13 +559,18 @@ function delSub(id,i){ flushNewSub(); const t=TASKS.find(x=>x.id===id); t.subtas
 function addSub(id,val){ val=(val||'').trim(); if(!val)return; const t=TASKS.find(x=>x.id===id); (t.subtasks=t.subtasks||[]).push({text:val,done:false}); saveTask(id); renderTasks(); renderTaskModal(); setTimeout(()=>{const el=document.getElementById('newSub'); if(el)el.focus();},20); }
 function newTask(status,due){
   const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
-  TASKS.unshift({id,title:"",status:status||"todo",priority:"none",assignee:ME,assignees:[ME],due:due||"",notes:"",subtasks:[],labels:[],dealId:null,createdBy:ME,created:TODAY});
+  TASKS.unshift({id,title:"",type:"task",status:status||"todo",priority:"none",assignee:ME,assignees:[ME],due:due||"",time:"",repeat:"none",notes:"",subtasks:[],labels:[],dealId:null,createdBy:ME,created:TODAY});
+  saveTask(id); renderTasks(); openTask(id); setTimeout(()=>{const el=document.querySelector(".tm-title"); if(el)el.focus();},40);
+}
+function newEvent(due){
+  const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
+  TASKS.unshift({id,title:"",type:"event",status:"todo",priority:"none",assignee:ME,assignees:[ME],due:due||TODAY,time:"09:00",repeat:"none",notes:"",subtasks:[],labels:[],dealId:null,createdBy:ME,created:TODAY});
   saveTask(id); renderTasks(); openTask(id); setTimeout(()=>{const el=document.querySelector(".tm-title"); if(el)el.focus();},40);
 }
 function delTask(id){ if(!confirm("Delete this task?"))return; const i=TASKS.findIndex(t=>t.id===id); if(i>=0)TASKS.splice(i,1); closeTask(); deleteTaskRemote(id); renderTasks(); }
 let _dragTask=null;
 function dragTask(e,id){ _dragTask=id; e.dataTransfer.effectAllowed="move"; }
-function dropTask(e,status){ e.preventDefault(); if(_dragTask==null)return; const t=TASKS.find(x=>x.id===_dragTask); if(t&&t.status!==status){ t.status=status; saveTask(_dragTask); renderTasks(); } _dragTask=null; }
+function dropTask(e,status){ e.preventDefault(); if(_dragTask==null)return; const t=TASKS.find(x=>x.id===_dragTask); if(t&&t.status!==status){ setStatus(t,status); saveTask(_dragTask); renderTasks(); } _dragTask=null; }
 
 
 // ---- boot ----

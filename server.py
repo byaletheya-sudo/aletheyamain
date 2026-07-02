@@ -1199,7 +1199,8 @@ def _nova_new_id(arr):
     return mx + 1
 
 
-_ALLOWED_TASK = {"title", "status", "priority", "assignee", "assignees", "due", "notes"}
+_ALLOWED_TASK = {"title", "status", "priority", "assignee", "assignees", "due", "notes", "type", "repeat", "time"}
+_REPEATS = ("none", "daily", "weekdays", "weekly", "biweekly", "monthly")
 _ASSIGNEE_IDS = ("nema", "arvin", "edgar")
 
 
@@ -1249,7 +1250,9 @@ def _nova_apply_actions(store, actions, user=None):
                      "due": data.get("due") or "", "notes": data.get("notes") or "",
                      "subtasks": [{"text": str(s), "done": False} for s in (data.get("subtasks") or [])],
                      "labels": [str(x) for x in (data.get("labels") or [])][:3], "dealId": None,
-                     "createdBy": uid, "created": today}
+                     "type": "event" if data.get("type") == "event" else "task",
+                     "repeat": data.get("repeat") if data.get("repeat") in _REPEATS else "none",
+                     "time": data.get("time") or "", "createdBy": uid, "created": today}
                 tasks.insert(0, t)
                 results.append({"op": op, "ok": True, "id": t["id"], "label": t["title"]})
             elif op == "create_note":
@@ -1371,7 +1374,8 @@ def nova_admins_agent():
         "- 'act': they want to create or change records — PROPOSE actions (do not execute; the user confirms). "
         "reply = one short line describing what you'll do; give each action a human 'summary'.\n"
         "ACTIONS — 'data' MUST be a JSON string:\n"
-        " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), labels[], notes, subtasks[]}\n"
+        " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), repeat(none|daily|weekdays|weekly|biweekly|monthly), labels[], notes, subtasks[]}"
+        " — for a calendar EVENT (a meeting/appointment) add type='event' and time='HH:MM' (24h); events show on the calendar.\n"
         " create_note data={title, body}\n"
         " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral), front, back, feeReferral, pay(Stripe|Zelle|Cash|Check), notes}\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
