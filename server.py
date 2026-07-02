@@ -53,18 +53,43 @@ RESTRICTED_API = ("/deal-parse", "/deal-search", "/deals", "/contacts", "/publis
 # Override with TOOLBOX_PASSWORD in the host env (recommended — this repo is public).
 TOOLBOX_PASSWORD = os.environ.get("TOOLBOX_PASSWORD") or "arvin"
 
-# Nova Admins — the back-office deal ledger / agent-payroll tool. Its OWN gate
-# (session["admin_ok"]), separate from the Nova workspace login. Override with
-# NOVA_ADMIN_PASSWORD in the host env — DO set it: this repo is public, so the
-# default below is readable, and this tool holds financial / commission data.
-NOVA_ADMIN_PASSWORD = os.environ.get("NOVA_ADMIN_PASSWORD") or "ADMIN"
-if not os.environ.get("NOVA_ADMIN_PASSWORD"):
-    print("[security] NOVA_ADMIN_PASSWORD is not set — using 'ADMIN'. Set it in Railway (financial data).")
+# Nova Admins — the back-office suite (deals / payroll / tasks / notes). Its OWN gate
+# (session["admin_ok"]), separate from the Nova workspace login. FAIL-CLOSED: there is
+# deliberately NO default password — this repo is public and the suite holds financial,
+# commission and client data. Until NOVA_ADMIN_PASSWORD is set in the host env, the
+# suite cannot be unlocked at all.
+NOVA_ADMIN_PASSWORD = os.environ.get("NOVA_ADMIN_PASSWORD", "").strip()
+if not NOVA_ADMIN_PASSWORD:
+    print("[security] NOVA_ADMIN_PASSWORD is NOT set — Nova Admins is LOCKED until you set it.")
 
 # Optional shared-secret token for headless writes to Nova Admins (seeding the live
 # volume, the nightly Garage sync). When set, an X-Nova-Token header that matches is
-# accepted in place of an admin browser session. No default — token auth is off unless set.
+# accepted in place of an admin browser session. No default; short tokens are refused.
 NOVA_ADMIN_TOKEN = os.environ.get("NOVA_ADMIN_TOKEN", "").strip()
+if NOVA_ADMIN_TOKEN and len(NOVA_ADMIN_TOKEN) < 20:
+    print("[security] NOVA_ADMIN_TOKEN is shorter than 20 chars — ignoring it. Use a long random secret.")
+    NOVA_ADMIN_TOKEN = ""
+
+# Admin session policy: activity keeps a session alive up to the idle limit; the
+# absolute limit forces a fresh login regardless. Tunable via env.
+ADMIN_IDLE_SECONDS = int(os.environ.get("NOVA_ADMIN_IDLE_MIN", "120")) * 60      # default 2h idle
+ADMIN_ABSOLUTE_SECONDS = int(os.environ.get("NOVA_ADMIN_ABS_HOURS", "12")) * 3600  # default 12h absolute
+
+# Stricter throttle for the admin gate than the general site login.
+_ADMIN_MAX = 5
+_ADMIN_WINDOW = 600   # seconds
+
+
+def _audit(ev, **kw):
+    """Append-only audit trail for the Nova Admins suite (on the data volume,
+    never in git). One JSON line per event: who, what, when, from where."""
+    try:
+        rec = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "ip": _client_ip(), "ev": ev}
+        rec.update(kw)
+        with open(os.path.join(GENERATED_DIR, "nova_admins_audit.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
 
 # Tiny in-memory brute-force throttle: max attempts per IP per window.
 _LOGIN_FAILS = {}
@@ -202,17 +227,33 @@ def nova_admin_login_page(message=""):
 @app.route("/nova-admins-login", methods=["GET", "POST"])
 def nova_admins_login():
     if request.method == "POST":
+        if not NOVA_ADMIN_PASSWORD:
+            _audit("admin_login_fail", reason="no_password_configured")
+            return nova_admin_login_page("Locked: NOVA_ADMIN_PASSWORD is not configured on the server."), 503
         ip = _client_ip() + ":na"
         cnt, t0 = _LOGIN_FAILS.get(ip, (0, time.time()))
-        if time.time() - t0 > _LOGIN_WINDOW:
+        if time.time() - t0 > _ADMIN_WINDOW:
             cnt, t0 = 0, time.time()
-        if cnt >= _LOGIN_MAX:
+        if cnt >= _ADMIN_MAX:
+            _audit("admin_login_lockout")
             return nova_admin_login_page("Too many attempts — wait a few minutes and try again."), 429
         if hmac.compare_digest(request.form.get("password", ""), NOVA_ADMIN_PASSWORD):
+            was_site = session.get("ok")           # keep their Nova-workspace login alive
+            was_tb = session.get("toolbox_ok")
+            session.clear()                        # fresh session id (anti-fixation)
+            if was_site:
+                session["ok"] = True
+            if was_tb:
+                session["toolbox_ok"] = True
             session["admin_ok"] = True
+            session["admin_at"] = time.time()      # absolute clock
+            session["admin_seen"] = time.time()    # idle clock
             _LOGIN_FAILS.pop(ip, None)
+            _audit("admin_login_ok")
             return redirect("/nova-admins")
         _LOGIN_FAILS[ip] = (cnt + 1, t0)
+        _audit("admin_login_fail", attempt=cnt + 1)
+        time.sleep(0.3)                            # slow down guessing
         return nova_admin_login_page("Incorrect password — try again."), 401
     if session.get("admin_ok"):
         return redirect("/nova-admins")
@@ -283,13 +324,32 @@ def require_login():
     if p.startswith("/nova-admins"):
         if p == "/nova-admins-login":
             return None
-        if session.get("admin_ok"):
-            return None
+        # scripted access: shared-secret header (no Origin requirements — curl/cron)
         tok = request.headers.get("X-Nova-Token", "")
         if NOVA_ADMIN_TOKEN and tok and hmac.compare_digest(tok, NOVA_ADMIN_TOKEN):
+            if request.method != "GET":
+                _audit("token_write", path=p)
             return None
+        if session.get("admin_ok"):
+            now = time.time()
+            if (now - session.get("admin_at", 0) > ADMIN_ABSOLUTE_SECONDS
+                    or now - session.get("admin_seen", 0) > ADMIN_IDLE_SECONDS):
+                session.pop("admin_ok", None)      # session aged out -> re-login
+                _audit("admin_session_expired")
+            else:
+                session["admin_seen"] = now        # activity keeps it alive
+                # cross-site write protection: browser writes must come from us
+                if request.method != "GET":
+                    origin = request.headers.get("Origin", "")
+                    if origin:
+                        from urllib.parse import urlsplit
+                        if urlsplit(origin).netloc != request.host:
+                            _audit("blocked_cross_origin", path=p, origin=origin)
+                            return jsonify({"error": "Cross-origin request blocked."}), 403
+                return None
         if request.method == "GET":
             return redirect("/nova-admins-login")
+        _audit("unauthorized_write", path=p)
         return jsonify({"error": "This area is locked.", "locked": True}), 403
     # Everything else is the Nova workspace, gated by APP_PASSWORD.
     if session.get("ok"):
@@ -315,7 +375,17 @@ def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"            # no MIME sniffing
     resp.headers["X-Frame-Options"] = "DENY"                       # no clickjacking/embedding
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    resp.headers["Permissions-Policy"] = "geolocation=(), camera=()"   # mic allowed: voice dictation
+    # browsers remember to only ever use HTTPS for this host
+    resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if request.path.startswith("/nova-admins"):
+        # financial data: never cached to disk, and the page can only talk to itself —
+        # no external scripts, no external requests (blocks exfiltration + injected code)
+        resp.headers["Cache-Control"] = "no-store, private"
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
     return resp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -818,6 +888,8 @@ def nova_admins_save():
                      "tasks": data.get("tasks", existing.get("tasks", [])),
                      "notes": data.get("notes", existing.get("notes", []))}
             _nova_write(clean)
+        _audit("data_replace", deals=len(clean["deals"]), expenses=len(clean["expenses"]),
+               tasks=len(clean["tasks"]), notes=len(clean["notes"]))
         return jsonify({"ok": True, "deals": len(clean["deals"]), "expenses": len(clean["expenses"])})
     except Exception as e:
         return jsonify({"error": str(e)[:160]}), 500
@@ -845,6 +917,9 @@ def nova_admins_mutate():
                 if delk in body:
                     data[coll] = [x for x in data.get(coll, []) if x.get("id") != body[delk]]
             _nova_write(data)
+            changed = [k for k in ("deal", "agent", "expense", "task", "note") if k in body] \
+                + [k for k in body if k.startswith("delete")]
+            _audit("mutate", what=",".join(changed) or "none")
             return jsonify({"ok": True, "deals": len(data.get("deals", []))})
     except Exception as e:
         return jsonify({"error": str(e)[:160]}), 500

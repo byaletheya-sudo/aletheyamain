@@ -314,6 +314,7 @@
     </div>
     <div class="na-right">
       <span id="saveTag" class="save-tag hide"></span>
+      <a class="na-btn ghost xs" style="text-decoration:none" href="/logout" title="Sign out of everything">🔒 Lock</a>
       <button class="na-btn ghost xs" onclick="exportData()" title="Download a JSON backup of all data">Export</button>
       <button class="na-btn ghost xs" onclick="document.getElementById('importFile').click()" title="Replace all data from a JSON file (saves to server)">Import</button>
       <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(this)">
