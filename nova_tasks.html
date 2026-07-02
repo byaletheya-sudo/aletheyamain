@@ -488,7 +488,10 @@ function agendaHtml(items){
 // ---- modal ----
 let _openTask=null;
 function openTask(id){ _openTask=id; renderTaskModal(); document.getElementById("taskScrim").classList.remove("hide"); }
-function closeTask(e){ if(e&&e.target&&e.target.id!=="taskScrim")return; document.getElementById("taskScrim").classList.add("hide"); _openTask=null; }
+// Commit whatever's sitting in the "Add sub-task" field so it's never lost on a re-render/close.
+function flushNewSub(){ const el=document.getElementById('newSub'); if(!el)return false; const v=(el.value||'').trim(); if(!v)return false;
+  const t=TASKS.find(x=>x.id===_openTask); if(!t)return false; (t.subtasks=t.subtasks||[]).push({text:v,done:false}); el.value=''; return true; }
+function closeTask(e){ if(e&&e.target&&e.target.id!=="taskScrim")return; if(flushNewSub()&&_openTask!=null){saveTask(_openTask);renderTasks();} document.getElementById("taskScrim").classList.add("hide"); _openTask=null; }
 function renderTaskModal(){
   const t=TASKS.find(x=>x.id===_openTask); if(!t)return;
   const E=`editTask(${t.id},`, subs=t.subtasks||[];
@@ -513,11 +516,14 @@ function renderTaskModal(){
 }
 
 // ---- CRUD ----
-function editTask(id,field,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t[field]=val; saveTask(id); renderTasks(); if(_openTask===id)renderTaskModal(); }
-function editTaskLabels(id,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t.labels=val.split(',').map(s=>s.trim()).filter(Boolean); saveTask(id); renderTasks(); renderTaskModal(); }
-function toggleSub(id,i){ const t=TASKS.find(x=>x.id===id); t.subtasks[i].done=!t.subtasks[i].done; saveTask(id); renderTasks(); renderTaskModal(); }
+// NOTE: field edits do NOT rebuild the modal — that used to wipe an un-entered
+// sub-task (and anything else you were typing). The native inputs already show
+// their own new value; only the board behind needs refreshing.
+function editTask(id,field,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t[field]=val; saveTask(id); renderTasks(); }
+function editTaskLabels(id,val){ const t=TASKS.find(x=>x.id===id); if(!t)return; t.labels=val.split(',').map(s=>s.trim()).filter(Boolean); saveTask(id); renderTasks(); }
+function toggleSub(id,i){ flushNewSub(); const t=TASKS.find(x=>x.id===id); t.subtasks[i].done=!t.subtasks[i].done; saveTask(id); renderTasks(); renderTaskModal(); }
 function editSub(id,i,val){ const t=TASKS.find(x=>x.id===id); t.subtasks[i].text=val; saveTask(id); }
-function delSub(id,i){ const t=TASKS.find(x=>x.id===id); t.subtasks.splice(i,1); saveTask(id); renderTasks(); renderTaskModal(); }
+function delSub(id,i){ flushNewSub(); const t=TASKS.find(x=>x.id===id); t.subtasks.splice(i,1); saveTask(id); renderTasks(); renderTaskModal(); }
 function addSub(id,val){ val=(val||'').trim(); if(!val)return; const t=TASKS.find(x=>x.id===id); (t.subtasks=t.subtasks||[]).push({text:val,done:false}); saveTask(id); renderTasks(); renderTaskModal(); setTimeout(()=>{const el=document.getElementById('newSub'); if(el)el.focus();},20); }
 function newTask(status,due){
   const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
