@@ -573,12 +573,10 @@ def nova_plate():
     return send_file(os.path.join(BASE_DIR, "nova-plate.png"))
 
 
-@app.route("/nova-admins")
-def nova_admins_page():
-    """Back-office deal ledger / agent payroll. Real agents+deals are injected from the
-    gitignored generated/nova_admins.json (kept out of this public repo); the committed
-    HTML ships with placeholder demo data as a fallback."""
-    html = open(os.path.join(BASE_DIR, "nova_admins.html"), encoding="utf-8").read()
+def _nova_admin_serve(filename):
+    """Serve a Nova Admins tool page with the shared dataset injected from the
+    gitignored generated/nova_admins.json (kept out of this public repo)."""
+    html = open(os.path.join(BASE_DIR, filename), encoding="utf-8").read()
     seed_path = os.path.join(GENERATED_DIR, "nova_admins.json")
     if os.path.exists(seed_path):
         try:
@@ -587,6 +585,20 @@ def nova_admins_page():
         except Exception:
             pass
     return html
+
+
+# Nova Admins is a SUITE: each tool is its own page under /nova-admins/*
+# (all behind the same admin gate + sharing one data store).
+@app.route("/nova-admins")
+def nova_admins_page():
+    """Tool 1: the deal ledger / agent payroll."""
+    return _nova_admin_serve("nova_admins.html")
+
+
+@app.route("/nova-admins/tasks")
+def nova_admins_tasks_page():
+    """Tool 2: the Linear-style task manager."""
+    return _nova_admin_serve("nova_tasks.html")
 
 
 @app.route("/nova-admins/parse", methods=["POST"])
