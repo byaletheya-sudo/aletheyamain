@@ -63,12 +63,21 @@
   .ntitle::placeholder{color:var(--na-muted-2);}
   .blk{display:flex;align-items:flex-start;gap:9px;padding:2px 0;}
   .blk-t{flex:1;outline:none;min-height:1.4em;word-break:break-word;white-space:pre-wrap;}
-  .blk-t:empty::before{content:attr(data-ph);color:var(--na-muted-2);}
+  .blk-t:empty:focus::before{content:attr(data-ph);color:var(--na-muted-2);}
   .blk.h1 .blk-t{font-size:20px;font-weight:720;letter-spacing:-.01em;margin-top:8px;}
   .blk.h2 .blk-t{font-size:16px;font-weight:680;margin-top:5px;}
   .blk.bullet::before{content:"•";color:var(--na-muted);margin-top:1px;flex:none;}
   .blk.todo input[type=checkbox]{accent-color:var(--na-green);width:15px;height:15px;margin-top:3px;flex:none;cursor:pointer;}
   .blk.todo.done .blk-t{text-decoration:line-through;color:var(--na-muted-2);}
+  .blk.img{position:relative;padding:6px 0;}
+  .blk.img img{max-width:100%;max-height:460px;border-radius:10px;border:1px solid var(--na-line);display:block;}
+  .imgdel{position:absolute;top:12px;right:8px;all:unset;cursor:pointer;background:rgba(0,0,0,.55);color:#fff;width:24px;height:24px;border-radius:7px;text-align:center;line-height:24px;font-size:12px;opacity:0;transition:opacity .12s;}
+  .blk.img:hover .imgdel{opacity:1;}
+  .ned-body.dropping{outline:2px dashed var(--na-blue);outline-offset:-8px;border-radius:12px;}
+  .slashmenu{position:absolute;z-index:200;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:12px;padding:5px;box-shadow:0 20px 50px rgba(0,0,0,.5);width:200px;}
+  .slashmenu button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;font-size:12.5px;color:var(--na-fg);}
+  .slashmenu button:hover{background:var(--na-panel-2);}
+  .slashmenu .k{color:var(--na-muted);font-size:13px;width:20px;text-align:center;}
   .ned-hint{color:var(--na-muted-2);font-size:11px;padding:8px 26px 14px;border-top:1px solid var(--na-line);}
   .ned-blank{flex:1;display:flex;align-items:center;justify-content:center;color:var(--na-muted-2);font-size:13px;}
   .nback{display:none;}
@@ -114,6 +123,9 @@
   </div>
 
 </div>
+<div id="slashMenu" class="slashmenu hide"></div>
+<input type="file" id="imgFile" accept="image/*" class="hide" onchange="if(this.files[0])downscaleImg(this.files[0],addImage);this.value='';">
+
 
 <script>
 /*NOVA_SEED*/
@@ -152,7 +164,8 @@ function renderList(){
 }
 
 // ---- editor ----
-const PH={p:"Type “/” style shortcuts: “# ” heading · “- ” list · “[] ” to-do",h1:"Heading",h2:"Heading",bullet:"List item",todo:"To-do"};
+const PH={p:"Write something, or press “/” for blocks",h1:"Heading",h2:"Subheading",bullet:"List item",todo:"To-do"};
+const SLASH=[{t:"p",k:"Aa",l:"Text"},{t:"h1",k:"H1",l:"Heading"},{t:"h2",k:"H2",l:"Subheading"},{t:"bullet",k:"•",l:"Bullet list"},{t:"todo",k:"☑",l:"To-do"},{t:"img",k:"🖼",l:"Image"}];
 function openNote(id){ curId=id; renderList(); renderEd(); document.getElementById("nshell").classList.add("editing"); }
 function backToList(){ curId=null; document.getElementById("nshell").classList.remove("editing"); renderList(); renderEd(); }
 function renderEd(focusIdx,caretEnd){
@@ -170,20 +183,65 @@ function renderEd(focusIdx,caretEnd){
       <button class="bt" onclick="togglePin()">${n.pinned?'📌 Unpin':'📌 Pin'}</button>
       <button class="bt warn" onclick="delNote()">Delete</button>
     </div>
-    <div class="ned-body" onclick="if(event.target===this)addBlockEnd()">
+    <div class="ned-body" onclick="if(event.target===this)addBlockEnd()"
+      onpaste="onPaste(event)" ondragover="event.preventDefault();this.classList.add('dropping')" ondragleave="this.classList.remove('dropping')" ondrop="this.classList.remove('dropping');onDrop(event)">
       <input class="ntitle" placeholder="Title" value="${esc(n.title)}" oninput="cur().title=this.value;queueSave()"
         onkeydown="if(event.key==='Enter'){event.preventDefault();focusBlk(0);}">
       <div id="blocks">${n.blocks.map((b,i)=>blkHtml(b,i)).join("")}</div>
     </div>
-    <div class="ned-hint">Enter = new line · “# ” heading · “## ” subheading · “- ” bullet · “[] ” to-do · Backspace on empty removes</div>`;
+    <div class="ned-hint">Press “/” for blocks · “# ” heading · “- ” list · “[] ” to-do · paste or drop an image 🖼 · Backspace on empty removes</div>`;
   if(focusIdx!=null) focusBlk(focusIdx,caretEnd);
 }
 function blkHtml(b,i){
+  if(b.t==="img"){
+    return `<div class="blk img" data-i="${i}"><img src="${b.src||''}" alt="" onclick="event.stopPropagation()">
+      <button class="imgdel" title="Remove image" onclick="delBlock(${i})">✕</button></div>`;
+  }
   return `<div class="blk ${b.t} ${b.t==='todo'&&b.done?'done':''}" data-i="${i}">`
     + (b.t==='todo'?`<input type="checkbox" ${b.done?'checked':''} onchange="tickTodo(${i},this.checked)">`:"")
     + `<div class="blk-t" contenteditable="true" data-ph="${PH[b.t]||''}" data-i="${i}"
         oninput="onBlkInput(${i},this)" onkeydown="onBlkKey(event,${i},this)" onfocus="curBlk=${i}">${esc(b.text)}</div></div>`;
 }
+// ---- slash command menu ----
+let slashBlk=null;
+function openSlash(i,el){
+  slashBlk=i; const r=el.getBoundingClientRect(), m=document.getElementById("slashMenu");
+  m.innerHTML=SLASH.map(s=>`<button onmousedown="event.preventDefault()" onclick="slashPick('${s.t}')"><span class="k">${s.k}</span>${s.l}</button>`).join("");
+  m.style.left=(r.left+window.scrollX)+"px"; m.style.top=(r.bottom+window.scrollY+4)+"px"; m.classList.remove("hide");
+}
+function closeSlash(){ document.getElementById("slashMenu").classList.add("hide"); slashBlk=null; }
+function slashPick(type){
+  const n=cur(), i=slashBlk; closeSlash(); if(i==null||!n||!n.blocks[i])return;
+  const b=n.blocks[i]; b.text="";
+  if(type==="img"){ renderEd(i); pickImage(); return; }
+  b.t=type; if(type==="todo")b.done=false; renderEd(i); queueSave();
+}
+// ---- images ----
+function pickImage(){ document.getElementById("imgFile").click(); }
+function downscaleImg(file, cb){
+  const rd=new FileReader();
+  rd.onload=e=>{ const img=new Image(); img.onload=()=>{
+    const max=1600; let w=img.width,h=img.height;
+    if(w>max||h>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+    cv.getContext("2d").drawImage(img,0,0,w,h);
+    try{ cb(cv.toDataURL("image/jpeg",0.82)); }catch(x){ cb(e.target.result); }
+  }; img.onerror=()=>cb(e.target.result); img.src=e.target.result; };
+  rd.readAsDataURL(file);
+}
+function addImage(src){
+  const n=cur(); if(!n)return;
+  let at=(curBlk!=null && n.blocks[curBlk]!=null)?curBlk:n.blocks.length-1;
+  if(n.blocks[at] && n.blocks[at].t==="p" && !(n.blocks[at].text||"").trim()){ n.blocks[at]={t:"img",src}; }
+  else { n.blocks.splice(at+1,0,{t:"img",src}); at++; }
+  if(!n.blocks[at+1]) n.blocks.push({t:"p",text:""});
+  renderEd(at+1); queueSave();
+}
+function delBlock(i){ const n=cur(); n.blocks.splice(i,1); if(!n.blocks.length)n.blocks.push({t:"p",text:""}); renderEd(Math.max(0,i-1)); queueSave(); }
+function onPaste(e){ const items=(e.clipboardData||{}).items||[];
+  for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImage); return; } } }
+function onDrop(e){ const files=(e.dataTransfer||{}).files||[];
+  for(const f of files){ if(f.type&&f.type.indexOf("image")===0){ e.preventDefault(); downscaleImg(f,addImage); return; } } }
 let curBlk=0;
 function focusBlk(i,caretEnd=true){
   const el=document.querySelector(`.blk-t[data-i="${i}"]`); if(!el)return;
@@ -193,6 +251,8 @@ function focusBlk(i,caretEnd=true){
 }
 function onBlkInput(i,el){
   const n=cur(), b=n.blocks[i], t=el.textContent;
+  if(t==="/"&&b.t==="p"){ b.text="/"; openSlash(i,el); return; }   // slash command menu
+  closeSlash();
   // markdown shortcuts
   const conv=[["# ","h1"],["## ","h2"],["- ","bullet"],["* ","bullet"],["[] ","todo"],["[ ] ","todo"]];
   for(const [pre,type] of conv){
@@ -202,6 +262,8 @@ function onBlkInput(i,el){
 }
 function onBlkKey(e,i,el){
   const n=cur();
+  if(e.key==="Escape"){ closeSlash(); return; }
+  if(slashBlk===i && (e.key==="Enter")){ e.preventDefault(); slashPick("p"); return; }
   if(e.key==="Enter"){ e.preventDefault();
     const t=n.blocks[i].t, keep=(t==="bullet"||t==="todo")&&el.textContent.trim();
     n.blocks.splice(i+1,0,{t:keep?t:"p",text:"",...(keep&&t==="todo"?{done:false}:{})});
@@ -228,6 +290,7 @@ function delNote(){ const n=cur(); if(!n)return; if(!confirm("Delete this note?"
   const i=NOTES.findIndex(x=>x.id===n.id); NOTES.splice(i,1); saveRow({deleteNote:n.id}); backToList(); }
 
 // ---- boot ----
+document.addEventListener("click",e=>{ if(slashBlk!=null && !e.target.closest("#slashMenu") && !e.target.closest(".blk-t")) closeSlash(); });
 renderList(); renderEd();
 if(NOTES.length && window.innerWidth>720){ openNote(sorted()[0].id); document.getElementById("nshell").classList.remove("editing"); }
 if(location.hash.indexOf("open")>=0 && NOTES.length){ openNote(sorted()[0].id); }
