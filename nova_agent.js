@@ -98,6 +98,9 @@
   .nva-mic.rec{background:rgba(248,113,113,.15);color:var(--c-red);border-color:rgba(248,113,113,.45);animation:nvaMic 1.1s infinite;}
   @keyframes nvaMic{0%,100%{opacity:1}50%{opacity:.45}}
   .nva-send{cursor:pointer;border:none;border-radius:12px;padding:12px 16px;font-size:15px;line-height:1;background:var(--c-blue);color:#fff;flex:none;}
+  /* energy: stop animating when the tab is backgrounded, or the user prefers less motion */
+  #nvaRoot.paused .nva-orb,#nvaRoot.paused .nva-orb::after{animation-play-state:paused;}
+  @media (prefers-reduced-motion: reduce){ #nvaRoot .nva-orb,#nvaRoot .nva-orb::before,#nvaRoot .nva-orb::after,#nvaRoot .nva-mic.rec{animation:none !important;} }
   `;
   var st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
 
@@ -259,4 +262,7 @@
     if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){ e.preventDefault(); scrim.classList.contains("show")?close():open(); }
     else if(e.key==="Escape"&&scrim.classList.contains("show")) close();
   });
+  // pause the orb's animation while the tab is in the background (saves battery)
+  function syncPaused(){ root.classList.toggle("paused", document.hidden); }
+  document.addEventListener("visibilitychange", syncPaused); syncPaused();
 })();

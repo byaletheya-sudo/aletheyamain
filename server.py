@@ -690,12 +690,12 @@ def nova_admins_parse_task():
     today = (body.get("today") or "").strip()
     task_schema = {
         "type": "object", "additionalProperties": False,
-        "required": ["title", "status", "priority", "assignee", "due", "labels", "notes", "subtasks"],
+        "required": ["title", "status", "priority", "assignees", "due", "labels", "notes", "subtasks"],
         "properties": {
             "title": {"type": "string"},
             "status": {"type": "string", "enum": ["backlog", "todo", "inprogress", "done", ""]},
             "priority": {"type": "string", "enum": ["urgent", "high", "medium", "low", "none", ""]},
-            "assignee": {"type": "string", "enum": ["nema", "arvin", "edgar", ""]},
+            "assignees": {"type": "array", "items": {"type": "string", "enum": ["nema", "arvin", "edgar"]}},
             "due": {"type": "string"},
             "labels": {"type": "array", "items": {"type": "string"}},
             "notes": {"type": "string"},
@@ -716,7 +716,8 @@ def nova_admins_parse_task():
         "- One message may contain SEVERAL tasks — split them; but an enumeration of steps under one goal is ONE task "
         "with `subtasks` (short imperative strings).\n"
         "- title: short imperative ('Pay agents for June'). Put extra context/details in `notes`.\n"
-        "- assignee: nema / arvin / edgar when a name (or 'me' = edgar) is mentioned, else ''.\n"
+        "- assignees: array of nema / arvin / edgar for EVERYONE the task is for ('me' = edgar); [] if nobody named. "
+        "Multiple people allowed — 'Nema and Edgar' -> [\"nema\",\"edgar\"].\n"
         "- priority: only if urgency is expressed ('asap'/'urgent' -> urgent; 'important' -> high; 'whenever/low prio' -> low), else ''.\n"
         "- status: 'todo' unless they say it's already started ('inprogress'), an idea/someday ('backlog'), or done.\n"
         "- labels: 1-2 short category tags ONLY if obvious (Payroll, Collections, Deals, Follow-up, Ops, Automation, Finance).\n"
@@ -1021,8 +1022,9 @@ def _nova_snapshot(store, today, query=""):
         "deals_shown": len(picked), "deals_total": len(deals),
         "deals": [deal_row(d) for d in picked],
         "tasks": [{"id": t.get("id"), "title": t.get("title"), "status": t.get("status"),
-                   "priority": t.get("priority"), "assignee": t.get("assignee"), "due": t.get("due"),
-                   "subtasks": len(t.get("subtasks", []))} for t in tasks],
+                   "priority": t.get("priority"),
+                   "assignees": t.get("assignees") or ([t["assignee"]] if t.get("assignee") else []),
+                   "due": t.get("due"), "subtasks": len(t.get("subtasks", []))} for t in tasks],
         "notes": [{"id": n.get("id"), "title": n.get("title")} for n in notes],
     }
 
@@ -1037,7 +1039,20 @@ def _nova_new_id(arr):
     return mx + 1
 
 
-_ALLOWED_TASK = {"title", "status", "priority", "assignee", "due", "notes"}
+_ALLOWED_TASK = {"title", "status", "priority", "assignee", "assignees", "due", "notes"}
+_ASSIGNEE_IDS = ("nema", "arvin", "edgar")
+
+
+def _norm_assignees(data):
+    """Accept assignees[] (or a single assignee), keep only valid ids, dedup."""
+    raw = data.get("assignees")
+    if not isinstance(raw, list):
+        raw = [data.get("assignee")] if data.get("assignee") else []
+    out = []
+    for a in raw:
+        if a in _ASSIGNEE_IDS and a not in out:
+            out.append(a)
+    return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeJason", "pay", "lead", "agentId", "notes", "override", "type", "term", "dealer"}
 
 
@@ -1065,10 +1080,11 @@ def _nova_apply_actions(store, actions):
         rid = str(a.get("id") or "")
         try:
             if op == "create_task":
+                _ids = _norm_assignees(data)
                 t = {"id": _nova_new_id(tasks), "title": str(data.get("title") or "Untitled task"),
                      "status": data.get("status") if data.get("status") in ("backlog", "todo", "inprogress", "done") else "todo",
                      "priority": data.get("priority") if data.get("priority") in ("urgent", "high", "medium", "low", "none") else "none",
-                     "assignee": data.get("assignee") if data.get("assignee") in ("nema", "arvin", "edgar") else "",
+                     "assignees": _ids, "assignee": _ids[0] if _ids else "",
                      "due": data.get("due") or "", "notes": data.get("notes") or "",
                      "subtasks": [{"text": str(s), "done": False} for s in (data.get("subtasks") or [])],
                      "labels": [str(x) for x in (data.get("labels") or [])][:3], "dealId": None, "created": today}
@@ -1083,7 +1099,7 @@ def _nova_apply_actions(store, actions):
             elif op == "create_deal":
                 aid = data.get("agentId") if any(x.get("id") == data.get("agentId") for x in agents) else (agents[0].get("id") if agents else "")
                 d = {"id": _nova_new_id(deals), "date": data.get("date") or today, "client": data.get("client") or "",
-                     "year": data.get("year") or 2026, "make": data.get("make") or "", "model": data.get("model") or "",
+                     "year": data.get("year") or int(time.strftime("%Y")), "make": data.get("make") or "", "model": data.get("model") or "",
                      "vin": "", "dealer": data.get("dealer") or "", "type": data.get("type") if data.get("type") in ("Lease", "Buy") else "Lease",
                      "term": data.get("term") or "", "agentId": aid,
                      "lead": data.get("lead") if data.get("lead") in ("own", "nova", "referral") else "own",
@@ -1104,8 +1120,11 @@ def _nova_apply_actions(store, actions):
                     t["status"] = "done"
                 else:
                     for k, v in data.items():
-                        if k in _ALLOWED_TASK:
+                        if k in _ALLOWED_TASK and k not in ("assignee", "assignees"):
                             t[k] = v
+                    if "assignees" in data or "assignee" in data:
+                        _ids = _norm_assignees(data)
+                        t["assignees"], t["assignee"] = _ids, (_ids[0] if _ids else "")
                 results.append({"op": op, "ok": True, "id": t.get("id"), "label": t.get("title")})
             elif op in ("update_deal", "mark_deal_collected", "mark_agent_paid"):
                 d = next((x for x in deals if str(x.get("id")) == rid), None)
@@ -1188,10 +1207,10 @@ def nova_admins_agent():
         "- 'act': they want to create or change records — PROPOSE actions (do not execute; the user confirms). "
         "reply = one short line describing what you'll do; give each action a human 'summary'.\n"
         "ACTIONS — 'data' MUST be a JSON string:\n"
-        " create_task data={title, status, priority, assignee, due(YYYY-MM-DD), labels[], notes, subtasks[]}\n"
+        " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), labels[], notes, subtasks[]}\n"
         " create_note data={title, body}\n"
         " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral), front, back, feeReferral, pay(Stripe|Zelle|Cash|Check), notes}\n"
-        " update_task id=<taskId> data={status|priority|assignee|due|title|notes}\n"
+        " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
         " update_deal id=<dealId> data={front|back|feeReferral|pay|lead|agentId|notes|override}\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"

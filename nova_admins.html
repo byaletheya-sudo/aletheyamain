@@ -713,7 +713,7 @@ function edit(id, field, val, numeric){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
   if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
   else { if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; } d[field]=val; }
-  renderAll(); saveDeal(id);
+  scheduleRender(); saveDeal(id);
 }
 function toggleField(id, field){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
@@ -721,7 +721,7 @@ function toggleField(id, field){
   if(field==='wSold' && d.wSold) d.wOffered=true;
   if(field==='aPaidF') d.aPaidFd=d.aPaidF?TODAY:'';
   if(field==='aPaidB') d.aPaidBd=d.aPaidB?TODAY:'';
-  renderAll(); saveDeal(id);
+  scheduleRender(); saveDeal(id);
 }
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); deleteDealRemote(id); }
 function newDeal(){
@@ -1109,6 +1109,10 @@ function renderFees(){
     : '<p class="mini">No fees shared in this period.</p>';
 }
 function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
+// Coalesce bursts of edits into ONE render on the next frame (a checkbox toggle
+// no longer rebuilds all 7 tabs synchronously on every click).
+let _rafRender=null;
+function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
 function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
@@ -1127,7 +1131,9 @@ document.addEventListener("click",e=>{ if(!e.target.closest(".pp-wrap")) closePP
 document.getElementById("periodMenu").addEventListener("click",e=>{const b=e.target.closest(".pp-opt"); if(b) setRange(b.dataset.k);});
 document.getElementById("chatText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); }});
 document.getElementById("chatText").addEventListener("input",function(){ this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,130)+"px"; });
-["fAgent","fLead","fStatus","fSearch"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
+["fAgent","fLead","fStatus"].forEach(id=>document.getElementById(id).addEventListener("input",renderLedger));
+// search: debounce so we don't rebuild the whole (up to 202-row) table on every keystroke
+let _searchT=null; document.getElementById("fSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(renderLedger,140); });
 // populate agent filter
 document.getElementById("dashScope").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
   dashScope=b.dataset.s; document.querySelectorAll("#dashScope button").forEach(x=>x.classList.toggle("on",x===b)); renderDashboard();});
