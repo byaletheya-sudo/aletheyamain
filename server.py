@@ -925,6 +925,324 @@ def nova_admins_mutate():
         return jsonify({"error": str(e)[:160]}), 500
 
 
+# ---------------------------------------------------------------------------
+# Nova Admins · SYSTEM-WIDE AGENT
+# One assistant, stickied on every Admin page. It can ANSWER from live data,
+# NAVIGATE anywhere, CREATE deals/tasks/notes, and MODIFY existing records.
+# Answers + navigation come back immediately; writes come back as a PROPOSAL
+# the user confirms, then /agent/apply executes them under the lock + audit.
+# ---------------------------------------------------------------------------
+
+def _n_num(x):
+    try:
+        return float(x or 0)
+    except Exception:
+        return 0.0
+
+
+def _nova_fee_stripe(d):
+    """Mirror the client feeStripe(): stored value wins, else 3% of front for Stripe."""
+    v = d.get("feeStripe")
+    if v not in (None, ""):
+        return _n_num(v)
+    return round(_n_num(d.get("front")) * 0.03) if d.get("pay") == "Stripe" else 0.0
+
+
+def _nova_calc(d, amap):
+    """Mirror the client calc(): netPool = front+back − fees; agentCut = netPool×pct
+    (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
+    front, back = _n_num(d.get("front")), _n_num(d.get("back"))
+    fees = _n_num(d.get("feeJason")) + _nova_fee_stripe(d) + _n_num(d.get("feeReferral"))
+    net = front + back - fees
+    pct = ((amap.get(d.get("agentId")) or {}).get("pct") or {}).get(d.get("lead")) or 0
+    ov = d.get("override")
+    agent = _n_num(ov) if ov not in (None, "") else net * pct / 100.0
+    return {"fees": fees, "net": net, "agent": agent, "nova": net - agent, "pct": pct}
+
+
+def _nova_snapshot(store, today, query=""):
+    """A compact, grounded picture of the business for the agent: headline metrics,
+    agents, the most relevant deals (recent + any matching the query), tasks and notes."""
+    agents = store.get("agents", []) or []
+    amap = {a.get("id"): a for a in agents}
+    deals = store.get("deals", []) or []
+    tasks = store.get("tasks", []) or []
+    notes = store.get("notes", []) or []
+    ym, yr = today[:7], today[:4]
+    mtd = ytd = 0.0
+    owed_in = owed_out = 0
+    per_agent = {}
+    for d in deals:
+        c = _nova_calc(d, amap)
+        dt = str(d.get("date") or "")
+        if dt[:4] == yr:
+            ytd += c["nova"]
+        if dt[:7] == ym:
+            mtd += c["nova"]
+            aid = d.get("agentId") or ""
+            pa = per_agent.setdefault(aid, {"name": (amap.get(aid) or {}).get("name", aid or "—"), "cut": 0.0})
+            pa["cut"] += c["agent"]
+        if (_n_num(d.get("front")) > 0 and not d.get("fColl")) or (_n_num(d.get("back")) > 0 and not d.get("bColl")):
+            owed_in += 1
+        if c["agent"] > 1 and not (d.get("aPaidF") and d.get("aPaidB")):
+            owed_out += 1
+    q = [w for w in (query or "").lower().split() if len(w) > 2]
+
+    def match(d):
+        blob = " ".join(str(d.get(k, "")) for k in ("client", "make", "model", "dealer", "agentId", "notes")).lower()
+        return any(w in blob for w in q)
+
+    ranked = sorted(deals, key=lambda d: str(d.get("date") or ""), reverse=True)
+    picked = [d for d in ranked if q and match(d)][:40]
+    seen = {id(d) for d in picked}
+    for d in ranked:
+        if len(picked) >= 60:
+            break
+        if id(d) not in seen:
+            picked.append(d)
+
+    def deal_row(d):
+        c = _nova_calc(d, amap)
+        return {"id": d.get("id"), "date": d.get("date"), "client": d.get("client"),
+                "vehicle": " ".join(str(d.get(k, "")) for k in ("year", "make", "model")).strip(),
+                "agent": (amap.get(d.get("agentId")) or {}).get("name", d.get("agentId")),
+                "lead": d.get("lead"), "front": d.get("front"), "back": d.get("back"), "pay": d.get("pay"),
+                "collected": {"front": bool(d.get("fColl")), "back": bool(d.get("bColl"))},
+                "agentPaid": {"front": bool(d.get("aPaidF")), "back": bool(d.get("aPaidB"))},
+                "netPool": round(c["net"]), "agentCut": round(c["agent"]), "novaCut": round(c["nova"])}
+
+    return {
+        "today": today,
+        "metrics": {"deals_total": len(deals), "mtd_nova_profit": round(mtd), "ytd_nova_profit": round(ytd),
+                    "deals_with_uncollected_money": owed_in, "deals_agent_unpaid": owed_out,
+                    "per_agent_mtd": [{"name": v["name"], "cut": round(v["cut"])}
+                                      for v in sorted(per_agent.values(), key=lambda x: -x["cut"])]},
+        "agents": [{"id": a.get("id"), "name": a.get("name"), "pct": a.get("pct")} for a in agents],
+        "deals_shown": len(picked), "deals_total": len(deals),
+        "deals": [deal_row(d) for d in picked],
+        "tasks": [{"id": t.get("id"), "title": t.get("title"), "status": t.get("status"),
+                   "priority": t.get("priority"), "assignee": t.get("assignee"), "due": t.get("due"),
+                   "subtasks": len(t.get("subtasks", []))} for t in tasks],
+        "notes": [{"id": n.get("id"), "title": n.get("title")} for n in notes],
+    }
+
+
+def _nova_new_id(arr):
+    mx = 0
+    for x in arr:
+        try:
+            mx = max(mx, int(x.get("id", 0) or 0))
+        except Exception:
+            pass
+    return mx + 1
+
+
+_ALLOWED_TASK = {"title", "status", "priority", "assignee", "due", "notes"}
+_ALLOWED_DEAL = {"front", "back", "feeReferral", "feeJason", "pay", "lead", "agentId", "notes", "override", "type", "term", "dealer"}
+
+
+def _nova_apply_actions(store, actions):
+    """Execute the agent's confirmed actions against the store IN PLACE. Pure &
+    testable — every op is allow-listed and returns a per-action result."""
+    agents = store.get("agents", []) or []
+    deals = store.setdefault("deals", [])
+    tasks = store.setdefault("tasks", [])
+    notes = store.setdefault("notes", [])
+    today = time.strftime("%Y-%m-%d")
+
+    def jload(s):
+        if isinstance(s, dict):
+            return s
+        try:
+            return json.loads(s) if isinstance(s, str) and s.strip() else {}
+        except Exception:
+            return {}
+
+    results = []
+    for a in (actions or [])[:25]:
+        op = a.get("op")
+        data = jload(a.get("data"))
+        rid = str(a.get("id") or "")
+        try:
+            if op == "create_task":
+                t = {"id": _nova_new_id(tasks), "title": str(data.get("title") or "Untitled task"),
+                     "status": data.get("status") if data.get("status") in ("backlog", "todo", "inprogress", "done") else "todo",
+                     "priority": data.get("priority") if data.get("priority") in ("urgent", "high", "medium", "low", "none") else "none",
+                     "assignee": data.get("assignee") if data.get("assignee") in ("nema", "arvin", "edgar") else "",
+                     "due": data.get("due") or "", "notes": data.get("notes") or "",
+                     "subtasks": [{"text": str(s), "done": False} for s in (data.get("subtasks") or [])],
+                     "labels": [str(x) for x in (data.get("labels") or [])][:3], "dealId": None, "created": today}
+                tasks.insert(0, t)
+                results.append({"op": op, "ok": True, "id": t["id"], "label": t["title"]})
+            elif op == "create_note":
+                n = {"id": _nova_new_id(notes), "title": str(data.get("title") or "Untitled note"),
+                     "blocks": [{"t": "p", "text": str(data.get("body") or "")}], "pinned": False,
+                     "created": today, "updated": today}
+                notes.insert(0, n)
+                results.append({"op": op, "ok": True, "id": n["id"], "label": n["title"]})
+            elif op == "create_deal":
+                aid = data.get("agentId") if any(x.get("id") == data.get("agentId") for x in agents) else (agents[0].get("id") if agents else "")
+                d = {"id": _nova_new_id(deals), "date": data.get("date") or today, "client": data.get("client") or "",
+                     "year": data.get("year") or 2026, "make": data.get("make") or "", "model": data.get("model") or "",
+                     "vin": "", "dealer": data.get("dealer") or "", "type": data.get("type") if data.get("type") in ("Lease", "Buy") else "Lease",
+                     "term": data.get("term") or "", "agentId": aid,
+                     "lead": data.get("lead") if data.get("lead") in ("own", "nova", "referral") else "own",
+                     "wOffered": False, "wSold": bool(data.get("wSold")), "front": _n_num(data.get("front")), "back": _n_num(data.get("back")),
+                     "feeJason": _n_num(data.get("feeJason")), "feeReferral": _n_num(data.get("feeReferral")), "override": None,
+                     "pay": data.get("pay") if data.get("pay") in ("Stripe", "Zelle", "Cash", "Check") else "Stripe",
+                     "fColl": False, "bColl": False, "aPaidF": False, "aPaidFd": "", "aPaidB": False, "aPaidBd": "", "notes": data.get("notes") or ""}
+                deals.insert(0, d)
+                results.append({"op": op, "ok": True, "id": d["id"], "label": d["client"] or "deal"})
+            elif op in ("update_task", "complete_task", "delete_task"):
+                t = next((x for x in tasks if str(x.get("id")) == rid), None)
+                if not t:
+                    results.append({"op": op, "ok": False, "error": "task not found"})
+                    continue
+                if op == "delete_task":
+                    tasks[:] = [x for x in tasks if x is not t]
+                elif op == "complete_task":
+                    t["status"] = "done"
+                else:
+                    for k, v in data.items():
+                        if k in _ALLOWED_TASK:
+                            t[k] = v
+                results.append({"op": op, "ok": True, "id": t.get("id"), "label": t.get("title")})
+            elif op in ("update_deal", "mark_deal_collected", "mark_agent_paid"):
+                d = next((x for x in deals if str(x.get("id")) == rid), None)
+                if not d:
+                    results.append({"op": op, "ok": False, "error": "deal not found"})
+                    continue
+                if op == "update_deal":
+                    for k, v in data.items():
+                        if k in _ALLOWED_DEAL:
+                            d[k] = v
+                elif op == "mark_deal_collected":
+                    side = data.get("side", "both")
+                    if side in ("front", "both"):
+                        d["fColl"] = True
+                    if side in ("back", "both"):
+                        d["bColl"] = True
+                else:  # mark_agent_paid
+                    side = data.get("side", "both")
+                    if side in ("front", "both"):
+                        d["aPaidF"], d["aPaidFd"] = True, today
+                    if side in ("back", "both"):
+                        d["aPaidB"], d["aPaidBd"] = True, today
+                results.append({"op": op, "ok": True, "id": d.get("id"), "label": d.get("client") or "deal"})
+            else:
+                results.append({"op": op, "ok": False, "error": "unknown op"})
+        except Exception as e:
+            results.append({"op": op, "ok": False, "error": str(e)[:120]})
+    return results
+
+
+_AGENT_ACTION = {
+    "type": "object", "additionalProperties": False,
+    "required": ["op", "id", "summary", "data"],
+    "properties": {
+        "op": {"type": "string", "enum": ["create_task", "create_deal", "create_note", "update_task",
+                                          "complete_task", "update_deal", "mark_deal_collected",
+                                          "mark_agent_paid", "delete_task"]},
+        "id": {"type": "string"},
+        "summary": {"type": "string"},
+        "data": {"type": "string"},
+    },
+}
+_AGENT_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["kind", "reply", "navigate_page", "navigate_hash", "actions"],
+    "properties": {
+        "kind": {"type": "string", "enum": ["answer", "navigate", "act"]},
+        "reply": {"type": "string"},
+        "navigate_page": {"type": "string", "enum": ["ledger", "tasks", "notes", ""]},
+        "navigate_hash": {"type": "string"},
+        "actions": {"type": "array", "items": _AGENT_ACTION},
+    },
+}
+
+
+@app.route("/nova-admins/agent", methods=["POST"])
+def nova_admins_agent():
+    """The system-wide agent brain: reads a live snapshot, then answers, navigates,
+    or PROPOSES writes (confirmed separately via /agent/apply)."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Ask me something."}), 400
+    today = (body.get("today") or time.strftime("%Y-%m-%d")).strip()
+    page = (body.get("page") or "").strip()
+    with _NOVA_LOCK:
+        store = _nova_load()
+    snap = _nova_snapshot(store, today, text)
+    sys = (
+        "You are the Nova Admins agent — a sharp, trusted back-office operator for Nova, a car brokerage. "
+        "You are stickied on every admin page and see a LIVE snapshot of the business (headline metrics, agents "
+        "and their split %, the most relevant deals, tasks, notes). Help from anywhere. Return STRICT JSON.\n"
+        "Choose kind:\n"
+        "- 'answer': they asked a question — answer concisely and SPECIFICALLY from the snapshot (real numbers, names, "
+        "$ amounts). If the needed record isn't in the snapshot, say so briefly. No actions.\n"
+        "- 'navigate': they want to go somewhere — set navigate_page (ledger|tasks|notes); navigate_hash only if sure "
+        "(tasks views: '#view=board|list|table|cal|agenda'; ledger tabs open by default). reply = one short line.\n"
+        "- 'act': they want to create or change records — PROPOSE actions (do not execute; the user confirms). "
+        "reply = one short line describing what you'll do; give each action a human 'summary'.\n"
+        "ACTIONS — 'data' MUST be a JSON string:\n"
+        " create_task data={title, status, priority, assignee, due(YYYY-MM-DD), labels[], notes, subtasks[]}\n"
+        " create_note data={title, body}\n"
+        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral), front, back, feeReferral, pay(Stripe|Zelle|Cash|Check), notes}\n"
+        " update_task id=<taskId> data={status|priority|assignee|due|title|notes}\n"
+        " complete_task id=<taskId> data={}\n"
+        " update_deal id=<dealId> data={front|back|feeReferral|pay|lead|agentId|notes|override}\n"
+        " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
+        " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
+        " delete_task id=<taskId> data={}\n"
+        f"- Today is {today}; resolve relative dates to YYYY-MM-DD. assignees: nema/arvin/edgar (me=edgar).\n"
+        "- Match deals/tasks/agents by the ids in the snapshot. If no clearly-matching record exists for an update, "
+        "return kind='answer' and say you couldn't find it — never guess an id.\n"
+        "- Be decisive but safe: only propose what was clearly asked. Unused fields: navigate_page='', navigate_hash='', actions=[]."
+    )
+    user = "SNAPSHOT:\n" + json.dumps(snap) + "\n\nUSER REQUEST:\n" + text
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
+            response_format={"type": "json_schema", "json_schema": {"name": "agent", "strict": True, "schema": _AGENT_SCHEMA}},
+        )
+        out = json.loads(resp.choices[0].message.content)
+        _audit("agent_query", kind=out.get("kind"), page=page, acts=len(out.get("actions") or []))
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": "Agent error — " + str(e)[:160]}), 500
+
+
+@app.route("/nova-admins/agent/apply", methods=["POST"])
+def nova_admins_agent_apply():
+    """Execute the agent's CONFIRMED actions under the lock, with an audit line."""
+    body = request.json or {}
+    actions = body.get("actions") or []
+    if not isinstance(actions, list) or not actions:
+        return jsonify({"error": "No actions to apply."}), 400
+    try:
+        with _NOVA_LOCK:
+            store = _nova_load()
+            results = _nova_apply_actions(store, actions)
+            _nova_write(store)
+        _audit("agent_apply", ops=",".join(r.get("op", "") for r in results),
+               ok=sum(1 for r in results if r.get("ok")), fail=sum(1 for r in results if not r.get("ok")))
+        return jsonify({"ok": True, "results": results})
+    except Exception as e:
+        return jsonify({"error": str(e)[:160]}), 500
+
+
+@app.route("/nova-admins/agent.js")
+def nova_admins_agent_js():
+    """The shared, stickied agent widget, injected into every Admin page."""
+    return app.response_class(open(os.path.join(BASE_DIR, "nova_agent.js"), encoding="utf-8").read(),
+                              mimetype="application/javascript")
+
+
 @app.route("/toolbox")
 def toolbox():
     return send_file(os.path.join(BASE_DIR, "toolbox.html"))
