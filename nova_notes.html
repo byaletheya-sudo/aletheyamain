@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nova Admins — Notes</title>
+<script src="/nova-admins/common.js"></script>
 <style>
   :root{
     --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
@@ -132,7 +133,7 @@
 </div>
 <div id="slashMenu" class="slashmenu hide"></div>
 <div id="shareMenu" class="shr-menu hide"></div>
-<input type="file" id="imgFile" accept="image/*" class="hide" onchange="if(this.files[0])downscaleImg(this.files[0],addImage);this.value='';">
+<input type="file" id="imgFile" accept="image/*" class="hide" onchange="if(this.files[0])downscaleImg(this.files[0],addImageFromData);this.value='';">
 
 
 <script>
@@ -149,17 +150,11 @@ NOTES.forEach(n=>{ if(!n.owner){ n.owner="edgar"; n.sharedWith=TEAM.filter(u=>u.
 function canSee(n){ return n.owner===ME || (n.sharedWith||[]).includes(ME); }
 const NOW=new Date(), _pad=n=>String(n).padStart(2,"0");
 const TODAY=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1)+"-"+_pad(NOW.getDate());
-function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
-function markSaved(s,cls){ const el=document.getElementById("saveTag"); el.textContent=s; el.className="save-tag "+cls; }
-async function saveRow(payload){
-  if(location.protocol==="file:")return;
-  markSaved("Saving…","saving");
-  try{ const r=await fetch("/nova-admins/mutate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    markSaved(r.ok?"✓ Saved":"Save failed", r.ok?"ok":"err"); }
-  catch(e){ markSaved("Save failed — offline","err"); }
-}
 let _saveT=null;
-function queueSave(){ const n=cur(); if(!n)return; n.updated=TODAY; clearTimeout(_saveT); _saveT=setTimeout(()=>saveRow({note:n}),700); renderList(); }
+function queueSave(){ const n=cur(); if(!n)return; n.updated=TODAY; clearTimeout(_saveT); _saveT=setTimeout(()=>saveNote(n),700); renderList(); }
+async function saveNote(n){ await externalizeImages(n); saveRow({note:n}); }
+// Replace any inline base64 image with a stored URL so the note payload stays tiny.
+async function externalizeImages(n){ for(const b of (n.blocks||[])){ if(b.t==="img" && typeof b.src==="string" && b.src.slice(0,5)==="data:"){ b.src=await uploadImg(b.src); } } }
 
 let curId=null;
 function cur(){ return NOTES.find(n=>n.id===curId); }
@@ -258,11 +253,20 @@ function addImage(src){
   if(!n.blocks[at+1]) n.blocks.push({t:"p",text:""});
   renderEd(at+1); queueSave();
 }
+// Upload an image ONCE to the server and store its URL — so autosaves never
+// re-ship the base64. Falls back to inline data-URL if the upload can't happen.
+async function uploadImg(dataUrl){
+  if(location.protocol==="file:") return dataUrl;
+  try{ const r=await fetch("/nova-admins/img",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:dataUrl})});
+    const o=await r.json(); return (r.ok&&o.url)?o.url:dataUrl; }
+  catch(e){ return dataUrl; }
+}
+async function addImageFromData(dataUrl){ addImage(await uploadImg(dataUrl)); }
 function delBlock(i){ const n=cur(); n.blocks.splice(i,1); if(!n.blocks.length)n.blocks.push({t:"p",text:""}); renderEd(Math.max(0,i-1)); queueSave(); }
 function onPaste(e){ const items=(e.clipboardData||{}).items||[];
-  for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImage); return; } } }
+  for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImageFromData); return; } } }
 function onDrop(e){ const files=(e.dataTransfer||{}).files||[];
-  for(const f of files){ if(f.type&&f.type.indexOf("image")===0){ e.preventDefault(); downscaleImg(f,addImage); return; } } }
+  for(const f of files){ if(f.type&&f.type.indexOf("image")===0){ e.preventDefault(); downscaleImg(f,addImageFromData); return; } } }
 let curBlk=0;
 function focusBlk(i,caretEnd=true){
   const el=document.querySelector(`.blk-t[data-i="${i}"]`); if(!el)return;

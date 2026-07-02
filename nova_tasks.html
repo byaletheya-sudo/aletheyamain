@@ -4,14 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nova Admins — Tasks</title>
+<link rel="stylesheet" href="/nova-admins/common.css">
+<script src="/nova-admins/common.js"></script>
 <style>
-  :root{
-    --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
-    --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
-    --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-green-bg:rgba(52,211,153,.13);
-    --na-red:#f87171; --na-red-bg:rgba(248,113,113,.13); --na-amber:#fbbf24; --na-amber-bg:rgba(251,191,36,.13);
-    --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
-  }
   *{box-sizing:border-box}
   body{margin:0;background:var(--na-bg);color:var(--na-fg);
     font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;font-size:13.5px;line-height:1.45;
@@ -143,69 +138,6 @@
   .ag-day.today .ag-h .d{color:#76b4ff;}
   .ag-day.overdue .ag-h .d{color:var(--na-red);}
 
-  /* ===== ADD-BY-CHAT — agent experience ===== */
-  .na-chat-scrim{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 0%,rgba(30,26,60,.55),rgba(4,6,10,.82));backdrop-filter:blur(9px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:agFade .2s ease;}
-  @keyframes agFade{from{opacity:0}to{opacity:1}}
-  .agent{position:relative;width:100%;max-width:560px;max-height:88vh;overflow:auto;background:linear-gradient(180deg,#181a24,#111219);border:1px solid var(--na-line-2);border-radius:24px;box-shadow:0 40px 110px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.04);padding:30px 26px 20px;text-align:center;animation:agRise .28s cubic-bezier(.2,.9,.25,1);}
-  @keyframes agRise{from{transform:translateY(14px) scale(.98);opacity:0}to{transform:none;opacity:1}}
-  .agent::-webkit-scrollbar{width:0;}
-  .ag-x{position:absolute;top:16px;right:18px;all:unset;cursor:pointer;color:var(--na-muted);font-size:15px;line-height:1;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
-  .ag-x:hover{background:var(--na-panel-2);color:var(--na-fg);}
-  .ag-kicker{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--na-muted);text-transform:uppercase;margin-bottom:12px;}
-  /* the orb */
-  .orb-wrap{display:flex;justify-content:center;margin:2px 0 16px;}
-  .orb{width:66px;height:66px;border-radius:50%;position:relative;
-    background:radial-gradient(circle at 34% 28%,#cfe0ff,#3a8eef 46%,#8a5cf0 100%);
-    box-shadow:0 0 30px rgba(58,142,239,.55),0 0 66px rgba(138,92,240,.34);animation:orbFloat 4.2s ease-in-out infinite;}
-  .orb::before{content:"";position:absolute;inset:9px 26px auto 14px;height:12px;border-radius:50%;background:rgba(255,255,255,.55);filter:blur(3px);transform:rotate(-18deg);}
-  .orb::after{content:"";position:absolute;inset:-8px;border-radius:50%;z-index:-1;filter:blur(8px);
-    background:conic-gradient(from 0deg,transparent,rgba(138,92,240,.6),transparent 42%,transparent,rgba(58,142,239,.5),transparent 92%);animation:orbSpin 3.6s linear infinite;}
-  .orb.think{animation:orbPulse .74s ease-in-out infinite;}
-  .orb.think::after{animation:orbSpin 1.1s linear infinite;}
-  .orb.listen{box-shadow:0 0 34px rgba(248,113,113,.62),0 0 70px rgba(248,113,113,.4);}
-  .orb.done{box-shadow:0 0 34px rgba(52,211,153,.7),0 0 70px rgba(52,211,153,.42);}
-  @keyframes orbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-  @keyframes orbSpin{to{transform:rotate(360deg)}}
-  @keyframes orbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
-  .ag-say{font-size:15.5px;font-weight:640;color:var(--na-fg);line-height:1.5;margin:0 auto 18px;max-width:400px;min-height:22px;}
-  .ag-say .mini{display:block;font-size:12px;font-weight:500;color:var(--na-muted);margin-top:4px;}
-  .ag-body{margin-bottom:6px;text-align:left;}
-  /* idea chips */
-  .ag-chips{display:flex;flex-direction:column;gap:8px;}
-  .ag-chip{all:unset;cursor:pointer;background:var(--na-panel);border:1px solid var(--na-line);border-radius:12px;padding:11px 14px;font-size:12.5px;color:var(--na-muted);transition:.13s;}
-  .ag-chip:hover{color:var(--na-fg);border-color:var(--na-line-2);background:var(--na-panel-2);transform:translateY(-1px);}
-  .ag-chip b{color:var(--na-fg);font-weight:700;}
-  /* preview cards */
-  .ag-preview{display:flex;flex-direction:column;gap:10px;}
-  .agcard{background:linear-gradient(180deg,var(--na-panel),var(--na-bg));border:1px solid var(--na-line);border-radius:14px;padding:13px 14px;animation:agRise .3s ease backwards;}
-  .agcard:nth-child(2){animation-delay:.05s}.agcard:nth-child(3){animation-delay:.1s}.agcard:nth-child(4){animation-delay:.15s}
-  .agcard-h{display:flex;align-items:center;gap:9px;}
-  .prio-dot{width:9px;height:9px;border-radius:50%;flex:none;}
-  .agcard-t{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--na-fg);font-size:14.5px;font-weight:660;outline:none;padding:2px 0;font-family:inherit;}
-  .agcard-t:focus{border-bottom-color:var(--na-line-2);}
-  .tavatar{width:22px;height:22px;border-radius:50%;flex:none;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
-  .agcard-m{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
-  .agcard-m .tag{font-size:10.5px;font-weight:650;color:var(--na-muted);background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:6px;padding:2px 8px;}
-  .agcard-subs{margin:10px 0 0;padding:0;list-style:none;}
-  .agcard-subs li{font-size:12px;color:var(--na-muted);padding:3px 0 3px 20px;position:relative;}
-  .agcard-subs li::before{content:"";position:absolute;left:4px;top:8px;width:7px;height:7px;border:1.5px solid var(--na-line-2);border-radius:3px;}
-  .agcard-note{margin-top:9px;font-size:12px;color:var(--na-muted);background:var(--na-panel-2);border-radius:9px;padding:8px 10px;line-height:1.5;}
-  .ag-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:16px;}
-  .na-btn.ghost{background:transparent;border:1px solid var(--na-line);color:var(--na-muted);}
-  .na-btn.ghost:hover{color:var(--na-fg);border-color:var(--na-line-2);}
-  .ag-done{display:flex;flex-direction:column;gap:7px;}
-  .ag-doneline{font-size:13px;color:var(--na-fg);display:flex;align-items:center;gap:8px;animation:agRise .3s ease backwards;}
-  .ag-doneline .ck{color:var(--na-green);font-weight:800;}
-  .ag-doneline .nm-link{color:#76b4ff;cursor:pointer;font-size:11.5px;margin-left:auto;}
-  /* input dock */
-  .ag-input{display:flex;gap:9px;align-items:flex-end;border-top:1px solid var(--na-line);padding-top:15px;margin-top:16px;}
-  .ag-input textarea{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:13px;padding:12px 14px;font-family:inherit;font-size:13.5px;line-height:1.45;resize:none;outline:none;max-height:130px;transition:border-color .13s;}
-  .ag-input textarea:focus{border-color:var(--na-blue);}
-  .ag-input .na-btn{padding:12px 16px;font-size:15px;line-height:1;}
-  .nc-mic{all:unset;cursor:pointer;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid var(--na-line);color:var(--na-muted);background:var(--na-panel-2);flex:none;}
-  .nc-mic:hover{color:var(--na-fg);border-color:var(--na-line-2);}
-  .nc-mic.rec{background:rgba(248,113,113,.15);color:var(--na-red);border-color:rgba(248,113,113,.45);animation:micpulse 1.1s infinite;}
-  @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.45}}
 
   /* task modal */
   .tmodal-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -301,21 +233,6 @@
 
 </div>
 
-<div class="na-chat-scrim hide" id="chatScrim" onclick="closeChat(event)">
-  <div class="agent" onclick="event.stopPropagation()">
-    <button class="ag-x" onclick="closeChat()">✕</button>
-    <div class="ag-kicker">Nova Agent</div>
-    <div class="orb-wrap"><div class="orb" id="agentOrb"></div></div>
-    <div class="ag-say" id="agentSay"></div>
-    <div class="ag-body" id="agentBody"></div>
-    <div class="ag-input">
-      <textarea id="chatText" rows="1" placeholder="Say it however it comes out — I'll shape the tasks…"></textarea>
-      <button class="nc-mic" id="micBtn" onclick="toggleMic()" title="Speak"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
-      <button class="na-btn" id="chatSend" onclick="sendChat()" title="Send">→</button>
-    </div>
-  </div>
-</div>
-
 <div class="tmodal-scrim hide" id="taskScrim" onclick="closeTask(event)">
   <div class="tmodal" onclick="event.stopPropagation()" id="taskModal"></div>
 </div>
@@ -339,17 +256,8 @@ function setAsg(t,ids){ ids=ids.filter((v,i)=>v&&ids.indexOf(v)===i); t.assignee
 function avatars(t){ const ids=asgList(t); if(!ids.length) return '<span class="tavatar none">?</span>';
   return '<span class="tavstack">'+ids.slice(0,3).map(function(id){var a=asg(id);return a?'<span class="tavatar" style="background:'+a.color+'" title="'+esc(a.name)+'">'+esc(a.name[0])+'</span>':'';}).join("")
     +(ids.length>3?'<span class="tavatar more">+'+(ids.length-3)+'</span>':'')+'</span>'; }
-function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 
 // ---- persistence (row-level, shared store) ----
-function markSaved(s,cls){ const el=document.getElementById("saveTag"); if(!el)return; el.textContent=s; el.className="save-tag "+cls; }
-async function saveRow(payload){
-  if(location.protocol==="file:")return;
-  markSaved("Saving…","saving");
-  try{ const r=await fetch("/nova-admins/mutate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    markSaved(r.ok?"✓ Saved":"Save failed", r.ok?"ok":"err"); }
-  catch(e){ markSaved("Save failed — offline","err"); }
-}
 function saveTask(id){ const t=TASKS.find(x=>x.id===id); if(t) saveRow({task:t}); }
 function deleteTaskRemote(id){ saveRow({deleteTask:id}); }
 
@@ -387,8 +295,6 @@ function taskCard(t){
     </div></div>`;
 }
 // ---- five views: board / list / table / calendar / agenda ----
-function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
-function lsSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
 const PRIO_ORD={urgent:0,high:1,medium:2,low:3,none:4};
 const ST_ORD={backlog:0,todo:1,inprogress:2,done:3};
 let tView=lsGet("nt_view")||"board";
@@ -587,116 +493,8 @@ let _dragTask=null;
 function dragTask(e,id){ _dragTask=id; e.dataTransfer.effectAllowed="move"; }
 function dropTask(e,status){ e.preventDefault(); if(_dragTask==null)return; const t=TASKS.find(x=>x.id===_dragTask); if(t&&t.status!==status){ t.status=status; saveTask(_dragTask); renderTasks(); } _dragTask=null; }
 
-// ================= ADD-BY-CHAT — agent experience =================
-// A little presence: orb reacts (idle / listen / think / done), the agent
-// SHOWS you the tasks it understood as editable preview cards, and only
-// commits them to the board on your say-so.
-let agState="idle", agPending=[];
-const AG_GREET=[
-  "What needs to get done? Speak it or type it — I'll shape the tasks.",
-  "I'm listening. Tell me what's on your plate and I'll lay it out.",
-  "Give it to me however it comes out — who, what, when. I'll do the rest."
-];
-const AG_IDEAS=[
-  {t:"Pay the agents by Friday", s:"verify the totals, then send the zelles — high priority for Nema"},
-  {t:"Follow up with clients who haven't paid", s:"3 of them, this week, high priority"},
-  {t:"Renew the Meta ads Monday", s:"and check last week's ROAS before topping up budget"},
-  {t:"Reconcile last month's expenses", s:"Nema — cross-check the statement to the ledger"}
-];
-function orb(cls){ const o=document.getElementById("agentOrb"); if(o)o.className="orb"+(cls?" "+cls:""); }
-function agSay(main,sub){ document.getElementById("agentSay").innerHTML=esc(main)+(sub?`<span class="mini">${esc(sub)}</span>`:""); }
-function _pick(a){ return a[Math.floor((Date.now()/1000)%a.length)]; }
-
-function openChat(){ document.getElementById("chatScrim").classList.remove("hide"); resetAgent(); setTimeout(()=>document.getElementById("chatText").focus(),50); }
-function closeChat(e){ if(e&&e.target&&e.target.id!=="chatScrim")return; document.getElementById("chatScrim").classList.add("hide"); if(_recOn&&_rec){try{_rec.stop();}catch(x){}} }
-function resetAgent(){
-  agState="idle"; agPending=[]; orb(); agSay(_pick(AG_GREET));
-  document.getElementById("agentBody").innerHTML=
-    `<div class="ag-chips">`+AG_IDEAS.map(c=>`<button class="ag-chip" onclick="useIdea(this)" data-full="${esc(c.t)} — ${esc(c.s)}"><b>${esc(c.t)}</b> — ${esc(c.s)}</button>`).join("")+`</div>`;
-  const ta=document.getElementById("chatText"); if(ta){ ta.value=""; ta.style.height="auto"; }
-}
-function useIdea(el){ const ta=document.getElementById("chatText"); ta.value=el.getAttribute("data-full"); sendChat(); }
-
-async function sendChat(){
-  const ta=document.getElementById("chatText"), text=ta.value.trim();
-  if(!text||agState==="thinking") return;
-  agState="thinking"; orb("think"); agSay("Reading that…","picking out the tasks, owners and dates");
-  document.getElementById("agentBody").innerHTML="";
-  try{
-    const res=await fetch("/nova-admins/parse-task",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({text, today:TODAY})});
-    const out=await res.json();
-    if(!res.ok||out.error){ orb(); agState="idle"; agSay("⚠️ "+(out.error||"I couldn't reach my brain just now."),"try again in a moment"); return; }
-    if(!out.ok||!(out.tasks||[]).length){ orb(); agState="idle"; agSay("That didn't sound like a task.","tell me what needs to get done and I'll build it"); return; }
-    agPending=out.tasks; agState="review"; orb();
-    const n=agPending.length;
-    agSay(out.summary?out.summary:`Here's what I've got — ${n} task${n>1?"s":""}.`, "edit any title, then send it to the board");
-    renderPreview();
-  }catch(err){ orb(); agState="idle"; agSay("⚠️ "+err.message); }
-}
-function renderPreview(){
-  const n=agPending.length;
-  document.getElementById("agentBody").innerHTML=
-    `<div class="ag-preview">`+agPending.map((t,i)=>agCard(t,i)).join("")+`</div>`
-    +`<div class="ag-actions"><button class="na-btn ghost" onclick="resetAgent()">↺ Start over</button>`
-    +`<button class="na-btn" onclick="commitAgent()">✓ Add ${n} task${n>1?"s":""} to board</button></div>`;
-  const ta=document.getElementById("chatText"); if(ta){ ta.value=""; ta.style.height="auto"; }
-}
-function agCard(t,i){
-  const p=T_PRIO[t.priority]||T_PRIO.none, as=asg(t.assignee), subs=t.subtasks||[];
-  const st=(T_STATUS.find(s=>s.id===t.status)||{name:"Todo"}).name;
-  return `<div class="agcard">
-    <div class="agcard-h"><span class="prio-dot" style="background:${p.c}"></span>
-      <input class="agcard-t" value="${esc(t.title)}" oninput="agPending[${i}].title=this.value">
-      ${asgList(t).length?avatars(t):""}</div>
-    <div class="agcard-m">
-      <span class="tag">${st}</span>
-      ${p.l!=="No priority"?`<span class="tag" style="color:${p.c}">${p.l}</span>`:""}
-      ${t.due?`<span class="tag">📅 ${fmtDue(t.due)}</span>`:""}
-      ${(t.labels||[]).map(l=>`<span class="tag">#${esc(l)}</span>`).join("")}
-    </div>
-    ${subs.length?`<ul class="agcard-subs">${subs.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:""}
-    ${t.notes?`<div class="agcard-note">${esc(t.notes)}</div>`:""}
-  </div>`;
-}
-function commitAgent(){
-  if(!agPending.length) return;
-  const made=agPending.map(addParsedTask); renderTasks();
-  orb("done"); agState="done";
-  agSay(`Done — ${made.length} task${made.length>1?"s":""} on the board.`,"anything else?");
-  document.getElementById("agentBody").innerHTML=
-    `<div class="ag-done">`+made.map((t,i)=>`<div class="ag-doneline" style="animation-delay:${i*.05}s"><span class="ck">✓</span> ${esc(t.title)}<span class="nm-link" onclick="closeChat();openTask(${t.id})">open →</span></div>`).join("")+`</div>`
-    +`<div class="ag-actions"><button class="na-btn ghost" onclick="closeChat()">Close</button><button class="na-btn" onclick="resetAgent()">+ Add more</button></div>`;
-  agPending=[]; setTimeout(()=>{ if(agState==="done") orb(); },1400);
-}
-function addParsedTask(o){
-  const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
-  const ids=(Array.isArray(o.assignees)?o.assignees:(o.assignee?[o.assignee]:[])).filter(a=>ASSIGNEES.some(x=>x.id===a));
-  const t={id, title:o.title||"", status:["backlog","todo","inprogress","done"].includes(o.status)?o.status:"todo",
-    priority:["urgent","high","medium","low"].includes(o.priority)?o.priority:"none",
-    assignees:ids, assignee:ids[0]||"", due:/^\d{4}-\d{2}-\d{2}$/.test(o.due||"")?o.due:"",
-    notes:o.notes||"", subtasks:(o.subtasks||[]).map(s=>({text:String(s),done:false})),
-    labels:(o.labels||[]).slice(0,3), dealId:null, createdBy:ME, created:TODAY};
-  TASKS.unshift(t); saveTask(id); return t;
-}
-// voice dictation (Chrome + HTTPS)
-let _rec=null,_recOn=false;
-function toggleMic(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ alert("Voice input needs Chrome over HTTPS — not available here."); return; }
-  if(_recOn){ try{_rec.stop();}catch(e){} return; }
-  _rec=new SR(); _rec.lang="en-US"; _rec.interimResults=true; _rec.continuous=true;
-  const ta=document.getElementById("chatText"); const base=ta.value.trim();
-  _rec.onstart=()=>{ _recOn=true; const b=document.getElementById("micBtn"); if(b)b.classList.add("rec"); if(agState==="idle")orb("listen"); };
-  _rec.onend  =()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); if(agState==="idle")orb(); };
-  _rec.onerror=()=>{ _recOn=false; const b=document.getElementById("micBtn"); if(b)b.classList.remove("rec"); if(agState==="idle")orb(); };
-  _rec.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; ta.value=(base?base+" ":"")+t; };
-  try{_rec.start();}catch(e){}
-}
 
 // ---- boot ----
-document.getElementById("chatText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); }});
-document.getElementById("chatText").addEventListener("input",function(){ this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,130)+"px"; });
 document.getElementById("tfAssignee").innerHTML += ASSIGNEES.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
 document.getElementById("tfAssignee").value=ME;   // default the board to MY tasks (flip to "All assignees" to see everyone)
 TASKS.forEach(t=>{ if(!Array.isArray(t.assignees)) t.assignees = t.assignee?[t.assignee]:[]; }); // migrate old single-assignee tasks

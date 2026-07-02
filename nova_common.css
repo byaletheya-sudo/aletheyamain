@@ -1,0 +1,8 @@
+/* Nova Admins · shared design tokens — loaded once, cached, used across suite pages. */
+:root{
+  --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
+  --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
+  --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-green-bg:rgba(52,211,153,.13);
+  --na-red:#f87171; --na-red-bg:rgba(248,113,113,.13); --na-amber:#fbbf24; --na-amber-bg:rgba(251,191,36,.13);
+  --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+}

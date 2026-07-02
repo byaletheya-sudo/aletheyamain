@@ -500,6 +500,16 @@ def load_api_key():
 
 API_KEY = load_api_key()
 
+# One reused OpenAI client instead of constructing a fresh one on every request.
+_OAI_CLIENT = None
+
+
+def _oai():
+    global _OAI_CLIENT
+    if _OAI_CLIENT is None:
+        _OAI_CLIENT = OpenAI(api_key=API_KEY)
+    return _OAI_CLIENT
+
 
 # the catalog (image source). Set CARSXE_API_KEY in the host env.
 CARSXE_API_KEY = os.environ.get("CARSXE_API_KEY", "").strip()
@@ -817,7 +827,7 @@ def nova_admins_parse_task():
         "- ok=false only if the message clearly isn't a task. summary = one short confirmation sentence."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": sys}, {"role": "user", "content": text}],
@@ -881,7 +891,7 @@ def nova_admins_parse():
         "summary = one short sentence describing what you logged."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": sys}, {"role": "user", "content": text}],
@@ -1084,11 +1094,17 @@ def _nova_calc(d, amap):
     (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
     front, back = _n_num(d.get("front")), _n_num(d.get("back"))
     fees = _n_num(d.get("feeJason")) + _nova_fee_stripe(d) + _n_num(d.get("feeReferral"))
-    net = front + back - fees
+    combined = front + back
+    net = combined - fees
     pct = ((amap.get(d.get("agentId")) or {}).get("pct") or {}).get(d.get("lead")) or 0
     ov = d.get("override")
     agent = _n_num(ov) if ov not in (None, "") else net * pct / 100.0
-    return {"fees": fees, "net": net, "agent": agent, "nova": net - agent, "pct": pct}
+    # pro-rated agent share per side — matches the dashboard's collect/pay math exactly
+    front_net = front - fees * (front / combined) if combined else 0.0
+    back_net = back - fees * (back / combined) if combined else 0.0
+    ratio = agent / (net or 1)
+    return {"fees": fees, "net": net, "agent": agent, "nova": net - agent, "pct": pct,
+            "agentFront": front_net * ratio, "agentBack": back_net * ratio}
 
 
 def _nova_snapshot(store, today, query=""):
@@ -1102,6 +1118,7 @@ def _nova_snapshot(store, today, query=""):
     ym, yr = today[:7], today[:4]
     mtd = ytd = 0.0
     owed_in = owed_out = 0
+    to_collect = owed_agents = 0.0
     per_agent = {}
     for d in deals:
         c = _nova_calc(d, amap)
@@ -1113,9 +1130,21 @@ def _nova_snapshot(store, today, query=""):
             aid = d.get("agentId") or ""
             pa = per_agent.setdefault(aid, {"name": (amap.get(aid) or {}).get("name", aid or "—"), "cut": 0.0})
             pa["cut"] += c["agent"]
-        if (_n_num(d.get("front")) > 0 and not d.get("fColl")) or (_n_num(d.get("back")) > 0 and not d.get("bColl")):
+        # money IN owed to Nova (per uncollected side) — matches the dashboard exactly
+        f = False
+        if _n_num(d.get("front")) > 0 and not d.get("fColl"):
+            to_collect += _n_num(d.get("front")); f = True
+        if _n_num(d.get("back")) > 0 and not d.get("bColl"):
+            to_collect += _n_num(d.get("back")); f = True
+        if f:
             owed_in += 1
-        if c["agent"] > 1 and not (d.get("aPaidF") and d.get("aPaidB")):
+        # money OUT owed to the agent (per unpaid side with a real agent share)
+        p = False
+        if c["agentFront"] > 1 and not d.get("aPaidF"):
+            owed_agents += c["agentFront"]; p = True
+        if c["agentBack"] > 1 and not d.get("aPaidB"):
+            owed_agents += c["agentBack"]; p = True
+        if p:
             owed_out += 1
     q = [w for w in (query or "").lower().split() if len(w) > 2]
 
@@ -1145,7 +1174,8 @@ def _nova_snapshot(store, today, query=""):
     return {
         "today": today,
         "metrics": {"deals_total": len(deals), "mtd_nova_profit": round(mtd), "ytd_nova_profit": round(ytd),
-                    "deals_with_uncollected_money": owed_in, "deals_agent_unpaid": owed_out,
+                    "to_collect": round(to_collect), "deals_with_uncollected_money": owed_in,
+                    "owed_to_agents": round(owed_agents), "deals_agent_unpaid": owed_out,
                     "per_agent_mtd": [{"name": v["name"], "cut": round(v["cut"])}
                                       for v in sorted(per_agent.values(), key=lambda x: -x["cut"])]},
         "agents": [{"id": a.get("id"), "name": a.get("name"), "pct": a.get("pct")} for a in agents],
@@ -1357,7 +1387,7 @@ def nova_admins_agent():
     )
     user = "SNAPSHOT:\n" + json.dumps(snap) + "\n\nUSER REQUEST:\n" + text
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
@@ -1408,6 +1438,56 @@ def nova_admins_agent_js():
     """The shared, stickied agent widget, injected into every Admin page."""
     return app.response_class(open(os.path.join(BASE_DIR, "nova_agent.js"), encoding="utf-8").read(),
                               mimetype="application/javascript")
+
+
+def _note_img_dir():
+    return os.path.join(GENERATED_DIR, "nova_note_images")
+
+
+@app.route("/nova-admins/common.css")
+def nova_admins_common_css():
+    """Shared Nova Admins stylesheet (palette + base components), cached across pages."""
+    resp = app.response_class(open(os.path.join(BASE_DIR, "nova_common.css"), encoding="utf-8").read(),
+                              mimetype="text/css")
+    return resp
+
+
+@app.route("/nova-admins/common.js")
+def nova_admins_common_js():
+    """Shared Nova Admins helpers (esc, storage, row saves), cached across pages."""
+    return app.response_class(open(os.path.join(BASE_DIR, "nova_common.js"), encoding="utf-8").read(),
+                              mimetype="application/javascript")
+
+
+@app.route("/nova-admins/img", methods=["POST"])
+def nova_admins_img_upload():
+    """Store a note image ONCE (so autosaves don't re-ship base64). Returns its URL."""
+    body = request.get_json(silent=True) or {}
+    m = re.match(r"^data:image/(png|jpeg|jpg|webp|gif);base64,(.+)$", body.get("data") or "", re.DOTALL)
+    if not m:
+        return jsonify({"error": "Expected a base64 image data URL."}), 400
+    ext = {"jpeg": "jpg"}.get(m.group(1), m.group(1))
+    try:
+        raw = base64.b64decode(m.group(2))
+    except Exception:
+        return jsonify({"error": "Bad image data."}), 400
+    if len(raw) > 8_000_000:
+        return jsonify({"error": "Image too large (8MB max)."}), 413
+    os.makedirs(_note_img_dir(), exist_ok=True)
+    name = secrets.token_hex(12) + "." + ext
+    with open(os.path.join(_note_img_dir(), name), "wb") as f:
+        f.write(raw)
+    _audit("note_img_upload", bytes=len(raw))
+    return jsonify({"url": "/nova-admins/img/" + name})
+
+
+@app.route("/nova-admins/img/<name>")
+def nova_admins_img_get(name):
+    """Serve a stored note image (gated by the admin session; no path traversal)."""
+    if not re.match(r"^[a-f0-9]{24}\.(png|jpg|jpeg|webp|gif)$", name):
+        return "", 404
+    path = os.path.join(_note_img_dir(), name)
+    return send_file(path) if os.path.exists(path) else ("", 404)
 
 
 @app.route("/toolbox")
@@ -1566,7 +1646,7 @@ def toolbox_pdf_parse():
         f"FIELDS:\n{field_list}\n\nTEXT:\n{text}"
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "user", "content": prompt}],
@@ -1715,7 +1795,7 @@ def toolbox_rx_parse():
             user_content.append({"type": "image_url", "image_url": {"url": url}})
 
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1",
             messages=[{"role": "system", "content": sys},
@@ -1811,7 +1891,7 @@ def generate():
         })
 
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
 
         # STEP 1 — look up the real, current design online (so a brand-new model year
         # is rendered correctly instead of an outdated training-data version).
@@ -1914,7 +1994,7 @@ def caption():
     if not vehicle:
         return jsonify({"error": "Add a make/model first."}), 400
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         prompt = (
             "Write a short, punchy Instagram caption for a luxury car dealership called Nova Auto.\n"
             f"Context: {badge or 'SOLD'} — {vehicle}.\n"
@@ -1961,7 +2041,7 @@ def review_parse():
         "mentioned, e.g. '2024 BMW X5'; else '')."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
@@ -2004,7 +2084,7 @@ def reviews_parse():
         "if mentioned, e.g. '2024 BMW X5'; else ''). Do not merge separate reviews; do not fabricate reviews."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
@@ -2046,7 +2126,7 @@ def review_caption():
         "caption in quotation marks. Vary the wording each time."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.responses.create(model="gpt-4.1-mini", input=prompt)
         text = (getattr(resp, "output_text", "") or "").strip()
         return jsonify({"caption": text})
@@ -2481,7 +2561,7 @@ def bulk_parse():
         "deal_type=onepay and put the up-front total in das. Default deal_type=lease when unclear."
     )
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
@@ -2715,7 +2795,7 @@ def deal_parse():
         model = "gpt-4.1-mini"
         user_content = text
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
@@ -2818,7 +2898,7 @@ def desk_parse():
         model = "gpt-4.1-mini"
         user_content = text
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
@@ -3003,7 +3083,7 @@ def broker_chat():
         system += ("\n\n(Live deals from novautousa.com/deals are momentarily unavailable — if asked about live "
                    "deals, say so and suggest checking the Deal Hub.)")
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system}] + clean,
@@ -3074,7 +3154,7 @@ def deal_search():
     )
     user = "QUERY: " + query + "\n\nVEHICLES:\n" + "\n".join(lines)
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -3209,7 +3289,7 @@ def detect_plate():
     if "," not in image_data:
         image_data = "data:image/png;base64," + image_data
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         resp = client.chat.completions.create(
             model="gpt-4.1",
             messages=[{"role": "user", "content": [
@@ -3238,7 +3318,7 @@ def generate_background():
         return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
     style = (request.json or {}).get("style", "studio")
     try:
-        client = OpenAI(api_key=API_KEY)
+        client = _oai()
         result = client.images.generate(
             model="gpt-image-1",
             prompt=bg_prompt(style),
