@@ -295,6 +295,45 @@
   .ins.green .ins-v{color:var(--na-green);} .ins.amber .ins-v{color:var(--na-amber);}
   .ins-s{font-size:11px;color:var(--na-muted);margin-top:3px;}
   .hide{display:none;}
+
+  /* ===== mobile (≤720px) ===== */
+  @media (max-width:720px){
+    .na-app{padding:16px 14px 60px;}
+    .na-title{font-size:24px;}
+    .na-title-row{align-items:center;}
+    .na-right{flex-wrap:wrap;justify-content:flex-end;row-gap:6px;}
+    .na-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .na-tabs::-webkit-scrollbar{display:none;}
+    .na-tab{white-space:nowrap;flex:none;}
+    .na-kpis{grid-template-columns:repeat(2,1fr);}
+    .na-kpi.hero{grid-column:1/-1;}
+    .dash-heroes{grid-template-columns:1fr;}
+    .dash-stats{grid-template-columns:repeat(2,1fr);}
+    .dash-insights{grid-template-columns:repeat(2,1fr);}
+    .na-two{grid-template-columns:1fr;}
+    .fees-strip{grid-template-columns:repeat(2,1fr);}
+    .out-strip{grid-template-columns:1fr 1fr;}
+    .na-agents{grid-template-columns:1fr;}
+    .mchart{gap:6px;height:120px;}
+    .mc-val{font-size:8.5px;}
+    /* ledger table: horizontal scroll instead of squish */
+    .na-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .na-tbl{min-width:980px;}
+    .det{grid-template-columns:1fr;gap:16px;padding:14px 14px;}
+    .det-edit-head{padding:12px 14px 4px;}
+    .pay-grid{grid-template-columns:1fr;}
+    .na-filters{gap:8px;}
+    .na-search{min-width:0;flex:1;}
+    /* tasks: swipeable columns */
+    .tboard{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;gap:10px;padding-bottom:6px;}
+    .tcol{flex:0 0 82vw;scroll-snap-align:start;}
+    /* modals: full-bleed */
+    .na-chat-scrim,.tmodal-scrim{padding:10px;align-items:flex-end;}
+    .na-chat,.tmodal{max-height:92vh;border-radius:16px 16px 12px 12px;}
+    .tm-row{flex-wrap:wrap;}
+    .tm-row .na-in{max-width:100%;}
+    .pp-menu{right:auto;left:0;}
+  }
   .mini{font-size:10.5px;color:var(--na-muted-2);}
   .ov-flag{font-size:9.5px;font-weight:700;color:var(--na-purple);background:rgba(138,92,240,.14);padding:1px 5px;border-radius:5px;margin-left:5px;}
 </style>
