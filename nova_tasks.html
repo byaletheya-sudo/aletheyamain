@@ -295,7 +295,6 @@
     </nav>
     <select class="na-sel" id="tfAssignee" onchange="renderTasks()"><option value="all">All assignees</option></select>
     <div class="na-spacer"></div>
-    <button class="na-btn" style="background:var(--na-purple)" onclick="openChat()">✨ Add by chat</button>
     <button class="na-btn" onclick="newTask('todo')">+ New task</button>
   </div>
   <div id="tasksView"></div>
@@ -327,6 +326,8 @@ const SEED = (typeof window!=="undefined" && window.NOVA_SEED) || {};
 const TASKS = SEED.tasks || [];
 const DEALS = SEED.deals || [];
 const ASSIGNEES = [{id:"nema",name:"Nema",color:"#f472b6"},{id:"arvin",name:"Arvin",color:"#8a5cf0"},{id:"edgar",name:"Edgar",color:"#3a8eef"}];
+const NOVA_USER=(window.NOVA_USER&&window.NOVA_USER.id)?window.NOVA_USER:{id:"edgar",name:"Edgar",role:"owner"};
+const ME=NOVA_USER.id;
 const T_STATUS = [{id:"backlog",name:"Backlog"},{id:"todo",name:"Todo"},{id:"inprogress",name:"In Progress"},{id:"done",name:"Done"}];
 const T_PRIO = {urgent:{l:"Urgent",c:"#f87171"},high:{l:"High",c:"#fb923c"},medium:{l:"Medium",c:"#fbbf24"},low:{l:"Low",c:"#60a5fa"},none:{l:"No priority",c:"#646a78"}};
 const NOW=new Date(), _pad=n=>String(n).padStart(2,"0");
@@ -578,7 +579,7 @@ function delSub(id,i){ flushNewSub(); const t=TASKS.find(x=>x.id===id); t.subtas
 function addSub(id,val){ val=(val||'').trim(); if(!val)return; const t=TASKS.find(x=>x.id===id); (t.subtasks=t.subtasks||[]).push({text:val,done:false}); saveTask(id); renderTasks(); renderTaskModal(); setTimeout(()=>{const el=document.getElementById('newSub'); if(el)el.focus();},20); }
 function newTask(status,due){
   const id=(TASKS.reduce((m,t)=>Math.max(m,t.id),0)||0)+1;
-  TASKS.unshift({id,title:"",status:status||"todo",priority:"none",assignee:"",assignees:[],due:due||"",notes:"",subtasks:[],labels:[],dealId:null,created:TODAY});
+  TASKS.unshift({id,title:"",status:status||"todo",priority:"none",assignee:ME,assignees:[ME],due:due||"",notes:"",subtasks:[],labels:[],dealId:null,createdBy:ME,created:TODAY});
   saveTask(id); renderTasks(); openTask(id); setTimeout(()=>{const el=document.querySelector(".tm-title"); if(el)el.focus();},40);
 }
 function delTask(id){ if(!confirm("Delete this task?"))return; const i=TASKS.findIndex(t=>t.id===id); if(i>=0)TASKS.splice(i,1); closeTask(); deleteTaskRemote(id); renderTasks(); }
@@ -675,7 +676,7 @@ function addParsedTask(o){
     priority:["urgent","high","medium","low"].includes(o.priority)?o.priority:"none",
     assignees:ids, assignee:ids[0]||"", due:/^\d{4}-\d{2}-\d{2}$/.test(o.due||"")?o.due:"",
     notes:o.notes||"", subtasks:(o.subtasks||[]).map(s=>({text:String(s),done:false})),
-    labels:(o.labels||[]).slice(0,3), dealId:null, created:TODAY};
+    labels:(o.labels||[]).slice(0,3), dealId:null, createdBy:ME, created:TODAY};
   TASKS.unshift(t); saveTask(id); return t;
 }
 // voice dictation (Chrome + HTTPS)
@@ -697,10 +698,10 @@ function toggleMic(){
 document.getElementById("chatText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); }});
 document.getElementById("chatText").addEventListener("input",function(){ this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,130)+"px"; });
 document.getElementById("tfAssignee").innerHTML += ASSIGNEES.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+document.getElementById("tfAssignee").value=ME;   // default the board to MY tasks (flip to "All assignees" to see everyone)
 TASKS.forEach(t=>{ if(!Array.isArray(t.assignees)) t.assignees = t.assignee?[t.assignee]:[]; }); // migrate old single-assignee tasks
 const _hv=(location.hash.match(/view=(\w+)/)||[])[1]; if(_hv) tView=_hv;   // deep-link: #view=cal etc.
 renderTasks();
-if(location.hash.indexOf("chat")>=0){ openChat(); }
 if(location.hash.indexOf("open")>=0 && TASKS.length){ openTask(TASKS[0].id); }
 </script>
 <script src="/nova-admins/agent.js" defer></script>

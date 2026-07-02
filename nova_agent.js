@@ -13,6 +13,8 @@
   var P = location.pathname.replace(/\/+$/,"");
   var PAGE = P.endsWith("/tasks") ? "tasks" : P.endsWith("/notes") ? "notes" : "ledger";
   var NAV = {ledger:"/nova-admins", tasks:"/nova-admins/tasks", notes:"/nova-admins/notes"};
+  var ME = (window.NOVA_USER && window.NOVA_USER.id) ? window.NOVA_USER : {id:"edgar", name:"Edgar", role:"owner"};
+  var UCOLOR = {edgar:"#3a8eef", nema:"#f472b6", arvin:"#8a5cf0"};
   function today(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
   function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   function nl(s){ return esc(s).replace(/\n/g,"<br>"); }
@@ -98,6 +100,27 @@
   .nva-mic.rec{background:rgba(248,113,113,.15);color:var(--c-red);border-color:rgba(248,113,113,.45);animation:nvaMic 1.1s infinite;}
   @keyframes nvaMic{0%,100%{opacity:1}50%{opacity:.45}}
   .nva-send{cursor:pointer;border:none;border-radius:12px;padding:12px 16px;font-size:15px;line-height:1;background:var(--c-blue);color:#fff;flex:none;}
+  /* account chip (bottom-left) + menu + password modal */
+  .nva-acct{position:fixed;left:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;padding:6px 13px 6px 6px;border-radius:999px;cursor:pointer;border:1px solid var(--c-line2);background:linear-gradient(180deg,rgba(30,33,44,.96),rgba(17,18,25,.96));backdrop-filter:blur(8px);box-shadow:0 12px 30px rgba(0,0,0,.4);color:var(--c-fg);font:600 12.5px/1 -apple-system,system-ui,sans-serif;transition:transform .15s;}
+  .nva-acct:hover{transform:translateY(-2px);}
+  .nva-acct .av{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;}
+  @media(max-width:600px){.nva-acct .nm{display:none;}.nva-acct{padding:6px;left:14px;bottom:14px;}}
+  .nva-amenu{position:fixed;left:18px;bottom:62px;z-index:2147483002;width:214px;background:var(--c-panel);border:1px solid var(--c-line2);border-radius:14px;padding:6px;box-shadow:0 24px 60px rgba(0,0,0,.6);display:none;}
+  .nva-amenu.show{display:block;}
+  .nva-amenu .who{padding:9px 11px 10px;border-bottom:1px solid var(--c-line);margin-bottom:5px;}
+  .nva-amenu .who b{display:block;font-size:13px;} .nva-amenu .who span{font-size:11px;color:var(--c-mut);text-transform:capitalize;}
+  .nva-amenu .mi{display:block;width:100%;text-align:left;background:none;border:none;color:var(--c-fg);padding:9px 11px;border-radius:8px;font:500 12.5px/1.2 -apple-system,system-ui,sans-serif;cursor:pointer;}
+  .nva-amenu .mi:hover{background:var(--c-panel2);}
+  .nva-amenu .mi.danger{color:var(--c-red);}
+  .nva-acctf{display:flex;flex-direction:column;gap:4px;text-align:left;margin-top:6px;}
+  .nva-acctf label{font-size:11px;color:var(--c-mut);font-weight:600;margin-top:6px;}
+  .nva-acctf input,.nva-team input{background:var(--c-panel2);border:1px solid var(--c-line);border-radius:10px;padding:11px 13px;color:var(--c-fg);font-size:13px;outline:none;}
+  .nva-acctf input:focus,.nva-team input:focus{border-color:var(--c-blue);}
+  .nva-team{margin-top:14px;border-top:1px solid var(--c-line);padding-top:12px;text-align:left;}
+  .nva-team .row{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .nva-team .row .av{width:24px;height:24px;border-radius:50%;color:#fff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .nva-team .row input{flex:1;padding:8px 10px;font-size:12px;}
+  .nva-msg{font-size:12px;margin-top:8px;min-height:16px;}
   /* energy: stop animating when the tab is backgrounded, or the user prefers less motion */
   #nvaRoot.paused .nva-orb,#nvaRoot.paused .nva-orb::after{animation-play-state:paused;}
   @media (prefers-reduced-motion: reduce){ #nvaRoot .nva-orb,#nvaRoot .nva-orb::before,#nvaRoot .nva-orb::after,#nvaRoot .nva-mic.rec{animation:none !important;} }
@@ -122,7 +145,10 @@
    +      '<button class="nva-send" id="nvaSend">→</button>'
    +    '</div>'
    +  '</div>'
-   +'</div>';
+   +'</div>'
+   +'<div class="nva-acct" id="nvaAcct" title="Account"><span class="av" style="background:'+(UCOLOR[ME.id]||"#3a8eef")+'">'+esc((ME.name||"?")[0])+'</span><span class="nm">'+esc(ME.name||"")+'</span></div>'
+   +'<div class="nva-amenu" id="nvaAmenu"></div>'
+   +'<div class="nva-scrim" id="nvaAcctScrim"><div class="nva-panel" id="nvaAcctPanel" style="max-width:420px"></div></div>';
   document.body.appendChild(root);
 
   var $ = function(id){ return document.getElementById(id); };
@@ -150,7 +176,7 @@
   };
   function reset(){
     state="idle"; pending=[]; orb();
-    say(GREET[Math.floor((Date.now()/1000)%GREET.length)]);
+    say("Hey "+(ME.name||"there")+" — "+GREET[Math.floor((Date.now()/1000)%GREET.length)]);
     bodyEl.innerHTML='<div class="nva-chips">'+(IDEAS[PAGE]||IDEAS.ledger).map(function(c){
       return '<button class="nva-chip" data-full="'+esc(c.t+(/[:?]$/.test(c.t)?" ":""))+'"><b>'+esc(c.t)+'</b> — '+esc(c.s)+'</button>';
     }).join("")+'</div>';
@@ -262,6 +288,57 @@
     if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){ e.preventDefault(); scrim.classList.contains("show")?close():open(); }
     else if(e.key==="Escape"&&scrim.classList.contains("show")) close();
   });
+  // ---------- account: identity, sign out, password management ----------
+  var amenu=$("nvaAmenu"), acctScrim=$("nvaAcctScrim");
+  function renderAmenu(){
+    amenu.innerHTML='<div class="who"><b>'+esc(ME.name)+'</b><span>'+esc(ME.role||"owner")+'</span></div>'
+      +'<button class="mi" id="miPw">Change my password</button>'
+      +(ME.id==="edgar"?'<button class="mi" id="miTeam">Team &amp; passwords</button>':'')
+      +'<button class="mi danger" id="miOut">Sign out</button>';
+    $("miPw").onclick=function(){ acctMenu(false); openAcct(false); };
+    if($("miTeam")) $("miTeam").onclick=function(){ acctMenu(false); openAcct(true); };
+    $("miOut").onclick=function(){ location.href="/nova-admins/logout"; };
+  }
+  function acctMenu(show){ if(show===undefined) show=!amenu.classList.contains("show"); if(show)renderAmenu(); amenu.classList.toggle("show",show); }
+  function closeAcct(){ acctScrim.classList.remove("show"); }
+  function savePw(uid,pw,pw2,msgEl){
+    if((pw||"").length<6){ msgEl.style.color="var(--c-red)"; msgEl.textContent="Too short — 6+ characters."; return; }
+    if(pw2!==undefined && pw!==pw2){ msgEl.style.color="var(--c-red)"; msgEl.textContent="Passwords don't match."; return; }
+    fetch("/nova-admins/set-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user:uid,password:pw})})
+      .then(function(x){return x.json();}).then(function(o){
+        if(o.ok){ msgEl.style.color="var(--c-green)"; msgEl.textContent="Saved ✓"; }
+        else { msgEl.style.color="var(--c-red)"; msgEl.textContent=o.error||"Failed."; }
+      }).catch(function(){ msgEl.style.color="var(--c-red)"; msgEl.textContent="Network error."; });
+  }
+  window.__novaSetPw=function(uid){ var el=document.getElementById("tp_"+uid); if(!el)return; savePw(uid, el.value, undefined, document.getElementById("teamMsg")); el.value=""; };
+  function renderTeam(){
+    fetch("/nova-admins/users").then(function(x){return x.json();}).then(function(r){
+      var others=(r.users||[]).filter(function(u){return u.id!==ME.id;});
+      $("teamWrap").innerHTML='<div class="nva-team"><div class="nva-kick" style="text-align:left;margin-bottom:10px">Set a teammate\'s password</div>'
+        +others.map(function(u){ return '<div class="row"><span class="av" style="background:'+(UCOLOR[u.id]||"#3a8eef")+'">'+esc(u.name[0])+'</span>'
+          +'<input type="password" id="tp_'+u.id+'" placeholder="'+(u.hasPass?"Reset "+esc(u.name)+"\'s password":"Set "+esc(u.name)+"\'s password")+'">'
+          +'<button class="nva-btn" style="padding:8px 12px" onclick="window.__novaSetPw(\''+u.id+'\')">Set</button></div>'; }).join("")
+        +'<div class="nva-msg" id="teamMsg"></div></div>';
+    }).catch(function(){});
+  }
+  function openAcct(team){
+    acctScrim.classList.add("show");
+    var p=$("nvaAcctPanel");
+    p.innerHTML='<button class="nva-x" id="acctX">✕</button><div class="nva-kick">Account</div>'
+      +'<div class="nva-say" style="margin-bottom:6px">Signed in as '+esc(ME.name)+'</div>'
+      +'<div class="nva-acctf"><label>New password</label><input type="password" id="pwNew" placeholder="At least 6 characters" autocomplete="new-password">'
+      +'<label>Confirm</label><input type="password" id="pwNew2" placeholder="Repeat it"></div>'
+      +'<div class="nva-msg" id="pwMsg"></div>'
+      +'<div class="nva-actions"><button class="nva-btn" id="pwSave">Save password</button></div>'
+      +'<div id="teamWrap"></div>';
+    $("acctX").onclick=closeAcct;
+    $("pwSave").onclick=function(){ savePw(ME.id, $("pwNew").value, $("pwNew2").value, $("pwMsg")); };
+    if(team && ME.id==="edgar") renderTeam();
+  }
+  $("nvaAcct").onclick=function(e){ e.stopPropagation(); acctMenu(); };
+  acctScrim.addEventListener("click",function(e){ if(e.target===acctScrim) closeAcct(); });
+  document.addEventListener("click",function(e){ if(!e.target.closest("#nvaAmenu")&&!e.target.closest("#nvaAcct")) amenu.classList.remove("show"); });
+
   // pause the orb's animation while the tab is in the background (saves battery)
   function syncPaused(){ root.classList.toggle("paused", document.hidden); }
   document.addEventListener("visibilitychange", syncPaused); syncPaused();

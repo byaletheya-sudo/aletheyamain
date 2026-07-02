@@ -440,7 +440,6 @@
       <input class="na-search" id="fSearch" placeholder="Search client, VIN, vehicle…">
       <div class="na-spacer"></div>
       <button class="na-btn ghost">⌁ Sync from Garage</button>
-      <button class="na-btn" style="background:var(--na-purple)" onclick="openChat()">✨ Add by chat</button>
       <button class="na-btn" onclick="newDeal()">+ New Deal</button>
     </div>
     <div class="na-tablewrap">
@@ -1147,7 +1146,6 @@ if(location.hash.indexOf("pp")>=0){ setTab("ledger"); document.getElementById("p
 if(location.hash.indexOf("new")>=0){ newDeal(); }
 if(location.hash.indexOf("exp")>=0){ setTab("expenses"); }
 if(location.hash.indexOf("agents")>=0){ setTab("agents"); }
-if(location.hash.indexOf("chat")>=0){ openChat(); }
 </script>
 <script src="/nova-admins/agent.js" defer></script>
 </body>

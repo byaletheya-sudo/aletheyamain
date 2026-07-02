@@ -61,6 +61,13 @@
   .ned-body{padding:20px 26px 40px;flex:1;overflow:auto;cursor:text;}
   .ntitle{width:100%;background:transparent;border:none;outline:none;color:var(--na-fg);font-size:26px;font-weight:760;letter-spacing:-.02em;font-family:inherit;padding:0 0 10px;}
   .ntitle::placeholder{color:var(--na-muted-2);}
+  .nbadge{font-size:9.5px;font-weight:650;color:var(--na-muted);background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:5px;padding:1px 6px;margin-left:6px;flex:none;white-space:nowrap;}
+  .shr-menu{position:absolute;z-index:250;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:12px;padding:6px;box-shadow:0 20px 50px rgba(0,0,0,.5);width:190px;}
+  .shr-menu .hd{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--na-muted);padding:6px 8px 5px;}
+  .shr-item{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--na-fg);}
+  .shr-item:hover{background:var(--na-panel-2);}
+  .shr-av{width:22px;height:22px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+  .shr-item .chk{margin-left:auto;color:var(--na-green);opacity:0;font-weight:800;} .shr-item.on .chk{opacity:1;}
   .blk{display:flex;align-items:flex-start;gap:9px;padding:2px 0;}
   .blk-t{flex:1;outline:none;min-height:1.4em;word-break:break-word;white-space:pre-wrap;}
   .blk-t:empty:focus::before{content:attr(data-ph);color:var(--na-muted-2);}
@@ -124,6 +131,7 @@
 
 </div>
 <div id="slashMenu" class="slashmenu hide"></div>
+<div id="shareMenu" class="shr-menu hide"></div>
 <input type="file" id="imgFile" accept="image/*" class="hide" onchange="if(this.files[0])downscaleImg(this.files[0],addImage);this.value='';">
 
 
@@ -131,6 +139,14 @@
 /*NOVA_SEED*/
 const SEED=(typeof window!=="undefined"&&window.NOVA_SEED)||{};
 const NOTES=SEED.notes||[];
+const NOVA_USER=(window.NOVA_USER&&window.NOVA_USER.id)?window.NOVA_USER:{id:"edgar",name:"Edgar",role:"owner"};
+const ME=NOVA_USER.id;
+const TEAM=[{id:"edgar",name:"Edgar",color:"#3a8eef"},{id:"nema",name:"Nema",color:"#f472b6"},{id:"arvin",name:"Arvin",color:"#8a5cf0"}];
+function uName(id){ const u=TEAM.find(x=>x.id===id); return u?u.name:id; }
+function uColor(id){ const u=TEAM.find(x=>x.id===id); return u?u.color:"#3a8eef"; }
+// Legacy notes (pre-accounts) had no owner — make them Edgar's, visible to all, so nothing disappears.
+NOTES.forEach(n=>{ if(!n.owner){ n.owner="edgar"; n.sharedWith=TEAM.filter(u=>u.id!=="edgar").map(u=>u.id); } if(!Array.isArray(n.sharedWith)) n.sharedWith=[]; });
+function canSee(n){ return n.owner===ME || (n.sharedWith||[]).includes(ME); }
 const NOW=new Date(), _pad=n=>String(n).padStart(2,"0");
 const TODAY=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1)+"-"+_pad(NOW.getDate());
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
@@ -154,13 +170,15 @@ function fdate(d){ if(!d)return""; const t=new Date(d+"T12:00:00"); return t.toL
 function sorted(){ return NOTES.slice().sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updated||"").localeCompare(a.updated||"")); }
 function renderList(){
   const q=(document.getElementById("nSearch").value||"").toLowerCase().trim();
-  let list=sorted();
+  let list=sorted().filter(canSee);
   if(q) list=list.filter(n=>((n.title||"")+" "+(n.blocks||[]).map(b=>b.text||"").join(" ")).toLowerCase().includes(q));
-  document.getElementById("nList").innerHTML = list.length? list.map(n=>`
-    <div class="nrow ${n.id===curId?'on':''}" onclick="openNote(${n.id})">
-      <div class="rt">${n.pinned?'📌 ':''}<span>${esc(n.title)||'New note'}</span></div>
+  document.getElementById("nList").innerHTML = list.length? list.map(n=>{
+    const badge = n.owner!==ME ? `<span class="nbadge">from ${esc(uName(n.owner))}</span>`
+                : (n.sharedWith||[]).length ? `<span class="nbadge">shared · ${n.sharedWith.length}</span>` : "";
+    return `<div class="nrow ${n.id===curId?'on':''}" onclick="openNote(${n.id})">
+      <div class="rt">${n.pinned?'📌 ':''}<span>${esc(n.title)||'New note'}</span>${badge}</div>
       <div class="rs"><span class="dt">${fdate(n.updated||n.created)}</span><span class="sn">${esc(snippet(n))}</span></div>
-    </div>`).join("") : `<div class="nempty">${q?'No notes match.':'No notes yet — hit + to start one.'}</div>`;
+    </div>`;}).join("") : `<div class="nempty">${q?'No notes match.':'No notes yet — hit + to start one.'}</div>`;
 }
 
 // ---- editor ----
@@ -180,8 +198,11 @@ function renderEd(focusIdx,caretEnd){
       <button class="bt" onclick="setType('bullet')">• List</button>
       <button class="bt" onclick="setType('todo')">☑ To-do</button>
       <span class="sp"></span>
+      ${n.owner===ME
+        ? `<button class="bt" onclick="openShare(event)">👥 Share${(n.sharedWith||[]).length?' · '+n.sharedWith.length:''}</button>`
+        : `<span class="bt" style="cursor:default;opacity:.75">👥 From ${esc(uName(n.owner))}</span>`}
       <button class="bt" onclick="togglePin()">${n.pinned?'📌 Unpin':'📌 Pin'}</button>
-      <button class="bt warn" onclick="delNote()">Delete</button>
+      ${n.owner===ME?`<button class="bt warn" onclick="delNote()">Delete</button>`:''}
     </div>
     <div class="ned-body" onclick="if(event.target===this)addBlockEnd()"
       onpaste="onPaste(event)" ondragover="event.preventDefault();this.classList.add('dropping')" ondragleave="this.classList.remove('dropping')" ondrop="this.classList.remove('dropping');onDrop(event)">
@@ -282,18 +303,39 @@ function addBlockEnd(){ const n=cur(); if(!n)return; n.blocks.push({t:"p",text:"
 function togglePin(){ const n=cur(); n.pinned=!n.pinned; renderEd(); queueSave(); }
 function newNote(){
   const id=(NOTES.reduce((m,n)=>Math.max(m,n.id),0)||0)+1;
-  NOTES.unshift({id,title:"",blocks:[{t:"p",text:""}],pinned:false,created:TODAY,updated:TODAY});
+  NOTES.unshift({id,title:"",blocks:[{t:"p",text:""}],pinned:false,owner:ME,sharedWith:[],created:TODAY,updated:TODAY});
   saveRow({note:NOTES[0]}); openNote(id);
   setTimeout(()=>{const el=document.querySelector(".ntitle"); if(el)el.focus();},40);
 }
-function delNote(){ const n=cur(); if(!n)return; if(!confirm("Delete this note?"))return;
+function delNote(){ const n=cur(); if(!n)return; if(n.owner!==ME){ alert("Only the owner can delete this note."); return; } if(!confirm("Delete this note?"))return;
   const i=NOTES.findIndex(x=>x.id===n.id); NOTES.splice(i,1); saveRow({deleteNote:n.id}); backToList(); }
 
+// ---- sharing (owner shares a note with teammates; they can view + edit) ----
+function openShare(e){ e.stopPropagation(); const n=cur(); if(!n||n.owner!==ME)return;
+  const m=document.getElementById("shareMenu"), others=TEAM.filter(u=>u.id!==ME);
+  m.innerHTML=`<div class="hd">Share with</div>`+others.map(u=>{
+    const on=(n.sharedWith||[]).includes(u.id);
+    return `<div class="shr-item ${on?'on':''}" onclick="toggleShare('${u.id}')"><span class="shr-av" style="background:${u.color}">${u.name[0]}</span>${u.name}<span class="chk">✓</span></div>`;
+  }).join("");
+  const r=e.currentTarget.getBoundingClientRect();
+  m.style.top=(r.bottom+window.scrollY+6)+"px"; m.style.left=(Math.max(8,r.right+window.scrollX-190))+"px"; m.classList.remove("hide");
+}
+function closeShare(){ const m=document.getElementById("shareMenu"); if(m)m.classList.add("hide"); }
+function toggleShare(uid){ const n=cur(); if(!n||n.owner!==ME)return; n.sharedWith=n.sharedWith||[];
+  const i=n.sharedWith.indexOf(uid); if(i>=0)n.sharedWith.splice(i,1); else n.sharedWith.push(uid);
+  queueSave();
+  const others=TEAM.filter(u=>u.id!==ME);
+  document.querySelectorAll('#shareMenu .shr-item').forEach((el,idx)=>el.classList.toggle('on',(n.sharedWith||[]).includes(others[idx].id)));
+  const btn=document.querySelector('.ned-bar .bt[onclick^="openShare"]'); if(btn) btn.textContent='👥 Share'+(n.sharedWith.length?' · '+n.sharedWith.length:'');
+}
+
 // ---- boot ----
-document.addEventListener("click",e=>{ if(slashBlk!=null && !e.target.closest("#slashMenu") && !e.target.closest(".blk-t")) closeSlash(); });
+document.addEventListener("click",e=>{ if(slashBlk!=null && !e.target.closest("#slashMenu") && !e.target.closest(".blk-t")) closeSlash();
+  if(!e.target.closest("#shareMenu") && !e.target.closest('.bt[onclick^="openShare"]')) closeShare(); });
 renderList(); renderEd();
-if(NOTES.length && window.innerWidth>720){ openNote(sorted()[0].id); document.getElementById("nshell").classList.remove("editing"); }
-if(location.hash.indexOf("open")>=0 && NOTES.length){ openNote(sorted()[0].id); }
+const _visible=sorted().filter(canSee);
+if(_visible.length && window.innerWidth>720){ openNote(_visible[0].id); document.getElementById("nshell").classList.remove("editing"); }
+if(location.hash.indexOf("open")>=0 && _visible.length){ openNote(_visible[0].id); }
 </script>
 <script src="/nova-admins/agent.js" defer></script>
 </body>

@@ -7,6 +7,7 @@ import io
 import csv
 import json
 import hmac
+import hashlib
 import time
 import zipfile
 import secrets
@@ -78,6 +79,65 @@ ADMIN_ABSOLUTE_SECONDS = int(os.environ.get("NOVA_ADMIN_ABS_HOURS", "12")) * 360
 # Stricter throttle for the admin gate than the general site login.
 _ADMIN_MAX = 5
 _ADMIN_WINDOW = 600   # seconds
+
+# ---- Nova Admins user accounts (real per-user logins) ----
+# The owners. Names/roles are safe to keep here; password HASHES live in the
+# gitignored store under "users", so credentials never touch this public repo.
+NOVA_USERS = [
+    {"id": "edgar", "name": "Edgar", "role": "owner"},
+    {"id": "nema",  "name": "Nema",  "role": "owner"},
+    {"id": "arvin", "name": "Arvin", "role": "owner"},
+]
+NOVA_USER_IDS = {u["id"] for u in NOVA_USERS}
+NOVA_ACCOUNT_ADMIN = "edgar"   # only Edgar can set OTHER people's passwords
+
+
+def _hash_pw(pw):
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), bytes.fromhex(salt), 200_000).hex()
+    return "pbkdf2$200000$" + salt + "$" + dk
+
+
+def _check_pw(pw, stored):
+    try:
+        _a, iters, salt, dk = (stored or "").split("$")
+        calc = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), bytes.fromhex(salt), int(iters)).hex()
+        return hmac.compare_digest(calc, dk)
+    except Exception:
+        return False
+
+
+def _nova_roster():
+    """{id: record} merged from the store, always including the 3 owners."""
+    store = _nova_load()
+    by_id = {u.get("id"): dict(u) for u in store.get("users", [])
+             if isinstance(u, dict) and u.get("id") in NOVA_USER_IDS}
+    for r in NOVA_USERS:
+        rec = by_id.setdefault(r["id"], {"id": r["id"], "pass": None})
+        rec["name"], rec["role"] = r["name"], r["role"]
+    return by_id
+
+
+def _nova_set_password(uid, pw):
+    if uid not in NOVA_USER_IDS or not pw:
+        return False
+    with _NOVA_LOCK:
+        store = _nova_load()
+        users = store.setdefault("users", [])
+        rec = next((u for u in users if u.get("id") == uid), None)
+        if not rec:
+            base = next(r for r in NOVA_USERS if r["id"] == uid)
+            rec = {"id": uid, "name": base["name"], "role": base["role"]}
+            users.append(rec)
+        rec["pass"] = _hash_pw(pw)
+        _nova_write(store)
+    return True
+
+
+def _nova_current_user():
+    uid = session.get("nova_user")
+    r = next((x for x in NOVA_USERS if x["id"] == uid), None)
+    return {"id": r["id"], "name": r["name"], "role": r["role"]} if r else None
 
 
 def _audit(ev, **kw):
@@ -191,8 +251,13 @@ def toolbox_login():
     return toolbox_login_page()
 
 
-def nova_admin_login_page(message=""):
+def nova_admin_login_page(message="", sel="edgar"):
     msg = f'<p class="err">{message}</p>' if message else ""
+    colors = {"edgar": "#3a8eef", "nema": "#f472b6", "arvin": "#8a5cf0"}
+    pills = "".join(
+        f'<button type="button" class="who{" on" if u["id"]==sel else ""}" data-u="{u["id"]}" onclick="pick(this)">'
+        f'<span class="av" style="background:{colors.get(u["id"], "#3a8eef")}">{u["name"][0]}</span>{u["name"]}</button>'
+        for u in NOVA_USERS)
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nova Admins</title>
 <style>
@@ -200,14 +265,20 @@ def nova_admin_login_page(message=""):
   body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#05080d; color:#fff;
     min-height:100vh; display:flex; align-items:center; justify-content:center;
     background-image: radial-gradient(70% 50% at 50% 35%, rgba(52,211,153,.22), rgba(8,16,30,0) 70%); }}
-  .card {{ width:340px; max-width:90vw; background:#101319; border:1px solid #232733; border-radius:16px; padding:34px 28px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.5); }}
+  .card {{ width:360px; max-width:90vw; background:#101319; border:1px solid #232733; border-radius:16px; padding:32px 28px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.5); }}
   .brand {{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; margin-bottom:4px; }}
   .brand span {{ color:#34d399; }}
-  .sub {{ color:#6b7280; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; margin-bottom:24px; }}
+  .sub {{ color:#6b7280; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; margin-bottom:22px; }}
+  .who-row {{ display:flex; gap:8px; margin-bottom:16px; }}
+  .who {{ flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; padding:12px 4px; border-radius:12px;
+    border:1px solid #2a2f3a; background:#0a0d12; color:#8a94a3; font-size:.82rem; font-weight:600; cursor:pointer; transition:.13s; }}
+  .who:hover {{ color:#fff; border-color:#3a4150; }}
+  .who.on {{ color:#fff; border-color:#34d399; background:rgba(52,211,153,.1); }}
+  .who .av {{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:.95rem; }}
   input {{ width:100%; background:#0a0d12; border:1px solid #2a2f3a; border-radius:9px; padding:13px 15px; color:#fff; font-size:.95rem; outline:none; }}
   input:focus {{ border-color:#34d399; }}
-  button {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#1f9d6b; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
-  button:hover {{ background:#1b8a5e; }}
+  button.go {{ width:100%; margin-top:12px; padding:13px; border:none; border-radius:9px; background:#1f9d6b; color:#fff; font-weight:600; font-size:.95rem; cursor:pointer; }}
+  button.go:hover {{ background:#1b8a5e; }}
   .err {{ color:#ff6b6b; font-size:.82rem; margin-bottom:12px; }}
   .legal {{ margin-top:20px; padding-top:16px; border-top:1px solid #1c2029; font-size:.66rem; line-height:1.5; color:#5a6472; text-align:left; }}
   .legal b {{ color:#8a94a3; font-weight:700; }}
@@ -215,21 +286,24 @@ def nova_admin_login_page(message=""):
 <body>
   <form class="card" method="POST" action="/nova-admins-login">
     <div class="brand">Nova <span>Admins</span></div>
-    <div class="sub">Back office · Restricted</div>
+    <div class="sub">Back office · Sign in</div>
     {msg}
-    <input type="password" name="password" placeholder="Admin password" autofocus autocomplete="current-password">
-    <button type="submit">Enter</button>
+    <div class="who-row">{pills}</div>
+    <input type="hidden" name="user" id="userField" value="{sel}">
+    <input type="password" name="password" placeholder="Your password" autofocus autocomplete="current-password">
+    <button class="go" type="submit">Sign in</button>
     <p class="legal"><b>Confidential &amp; Proprietary.</b> Financial, commission, and client records belonging to <b>NovAuto</b>, for authorized administrators only. Unauthorized access, use, or disclosure is strictly prohibited and may result in legal action.</p>
   </form>
+  <script>
+    function pick(b){{ document.querySelectorAll('.who').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+      document.getElementById('userField').value=b.dataset.u; }}
+  </script>
 </body></html>"""
 
 
 @app.route("/nova-admins-login", methods=["GET", "POST"])
 def nova_admins_login():
     if request.method == "POST":
-        if not NOVA_ADMIN_PASSWORD:
-            _audit("admin_login_fail", reason="no_password_configured")
-            return nova_admin_login_page("Locked: NOVA_ADMIN_PASSWORD is not configured on the server."), 503
         ip = _client_ip() + ":na"
         cnt, t0 = _LOGIN_FAILS.get(ip, (0, time.time()))
         if time.time() - t0 > _ADMIN_WINDOW:
@@ -237,7 +311,17 @@ def nova_admins_login():
         if cnt >= _ADMIN_MAX:
             _audit("admin_login_lockout")
             return nova_admin_login_page("Too many attempts — wait a few minutes and try again."), 429
-        if hmac.compare_digest(request.form.get("password", ""), NOVA_ADMIN_PASSWORD):
+        uid = (request.form.get("user", "") or "").strip().lower()
+        pw = request.form.get("password", "")
+        roster = _nova_roster()
+        rec = roster.get(uid)
+        ok = False
+        if rec:
+            if rec.get("pass") and _check_pw(pw, rec["pass"]):
+                ok = True
+            elif uid == NOVA_ACCOUNT_ADMIN and NOVA_ADMIN_PASSWORD and hmac.compare_digest(pw, NOVA_ADMIN_PASSWORD):
+                ok = True   # Edgar bootstrap / recovery via the env password
+        if ok:
             was_site = session.get("ok")           # keep their Nova-workspace login alive
             was_tb = session.get("toolbox_ok")
             session.clear()                        # fresh session id (anti-fixation)
@@ -246,15 +330,19 @@ def nova_admins_login():
             if was_tb:
                 session["toolbox_ok"] = True
             session["admin_ok"] = True
+            session["nova_user"] = uid
+            session["nova_role"] = rec["role"]
             session["admin_at"] = time.time()      # absolute clock
             session["admin_seen"] = time.time()    # idle clock
             _LOGIN_FAILS.pop(ip, None)
-            _audit("admin_login_ok")
+            _audit("admin_login_ok", user=uid)
             return redirect("/nova-admins")
         _LOGIN_FAILS[ip] = (cnt + 1, t0)
-        _audit("admin_login_fail", attempt=cnt + 1)
+        _audit("admin_login_fail", user=uid, attempt=cnt + 1)
         time.sleep(0.3)                            # slow down guessing
-        return nova_admin_login_page("Incorrect password — try again."), 401
+        no_pw = bool(rec) and not rec.get("pass") and uid != NOVA_ACCOUNT_ADMIN
+        hint = "No password set for that account yet — ask Edgar to set it in Team." if no_pw else "Wrong password — try again."
+        return nova_admin_login_page(hint, sel=uid if uid in NOVA_USER_IDS else "edgar"), 401
     if session.get("admin_ok"):
         return redirect("/nova-admins")
     return nova_admin_login_page()
@@ -643,18 +731,23 @@ def nova_plate():
     return send_file(os.path.join(BASE_DIR, "nova-plate.png"))
 
 
+def _nova_public_store():
+    """The store as the browser may see it — password hashes stripped out."""
+    store = _nova_load()
+    if isinstance(store.get("users"), list):
+        store = dict(store)
+        store["users"] = [{k: v for k, v in u.items() if k != "pass"} for u in store["users"]]
+    return store
+
+
 def _nova_admin_serve(filename):
-    """Serve a Nova Admins tool page with the shared dataset injected from the
-    gitignored generated/nova_admins.json (kept out of this public repo)."""
+    """Serve a Nova Admins tool page with the shared dataset + the signed-in user
+    injected (password hashes stripped; the gitignored store stays out of git)."""
     html = open(os.path.join(BASE_DIR, filename), encoding="utf-8").read()
-    seed_path = os.path.join(GENERATED_DIR, "nova_admins.json")
-    if os.path.exists(seed_path):
-        try:
-            with open(seed_path, encoding="utf-8") as f:
-                html = html.replace("/*NOVA_SEED*/", "window.NOVA_SEED=" + f.read() + ";", 1)
-        except Exception:
-            pass
-    return html
+    seed = json.dumps(_nova_public_store())
+    user = _nova_current_user() or {}
+    inject = "window.NOVA_SEED=" + seed + ";window.NOVA_USER=" + json.dumps(user) + ";"
+    return html.replace("/*NOVA_SEED*/", inject, 1)
 
 
 # Nova Admins is a SUITE: each tool is its own page under /nova-admins/*
@@ -862,15 +955,50 @@ def _nova_write(data):
 
 @app.route("/nova-admins/data", methods=["GET"])
 def nova_admins_data():
-    """Serve the current shared dataset (agents/deals/expenses) for the live tool."""
-    path = NOVA_ADMIN_DB()
-    if os.path.exists(path):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return app.response_class(f.read(), mimetype="application/json")
-        except Exception:
-            pass
-    return jsonify({"agents": [], "deals": [], "expenses": []})
+    """Serve the current shared dataset for the live tool (password hashes stripped)."""
+    return jsonify(_nova_public_store())
+
+
+@app.route("/nova-admins/whoami", methods=["GET"])
+def nova_admins_whoami():
+    return jsonify(_nova_current_user() or {})
+
+
+@app.route("/nova-admins/users", methods=["GET"])
+def nova_admins_users():
+    """Team roster (names/roles/whether a password is set) — never the hashes."""
+    roster = _nova_roster()
+    return jsonify({
+        "users": [{"id": u["id"], "name": u["name"], "role": u["role"], "hasPass": bool(u.get("pass"))}
+                  for u in roster.values()],
+        "me": _nova_current_user(), "accountAdmin": NOVA_ACCOUNT_ADMIN,
+    })
+
+
+@app.route("/nova-admins/set-password", methods=["POST"])
+def nova_admins_set_password():
+    me = _nova_current_user()
+    if not me:
+        return jsonify({"error": "Not signed in."}), 403
+    body = request.json or {}
+    target = (body.get("user") or me["id"]).strip().lower()
+    pw = body.get("password") or ""
+    if len(pw) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+    if target != me["id"] and me["id"] != NOVA_ACCOUNT_ADMIN:
+        return jsonify({"error": "Only Edgar can set another person's password."}), 403
+    if not _nova_set_password(target, pw):
+        return jsonify({"error": "Unknown user."}), 400
+    _audit("set_password", by=me["id"], target=target)
+    return jsonify({"ok": True})
+
+
+@app.route("/nova-admins/logout")
+def nova_admins_logout():
+    for k in ("admin_ok", "nova_user", "nova_role", "admin_at", "admin_seen"):
+        session.pop(k, None)
+    _audit("admin_logout")
+    return redirect("/nova-admins-login")
 
 
 @app.route("/nova-admins/save", methods=["POST"])
@@ -883,11 +1011,13 @@ def nova_admins_save():
         return jsonify({"error": "Payload too large."}), 413
     try:
         with _NOVA_LOCK:
-            # tasks/notes survive an Import from an older export that lacks them
+            # tasks/notes/users survive an Import from an older export that lacks them.
+            # users (accounts + password hashes) are NEVER taken from the payload.
             existing = _nova_load()
             clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"],
                      "tasks": data.get("tasks", existing.get("tasks", [])),
-                     "notes": data.get("notes", existing.get("notes", []))}
+                     "notes": data.get("notes", existing.get("notes", [])),
+                     "users": existing.get("users", [])}
             _nova_write(clean)
         _audit("data_replace", deals=len(clean["deals"]), expenses=len(clean["expenses"]),
                tasks=len(clean["tasks"]), notes=len(clean["notes"]))
@@ -1056,9 +1186,10 @@ def _norm_assignees(data):
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeJason", "pay", "lead", "agentId", "notes", "override", "type", "term", "dealer"}
 
 
-def _nova_apply_actions(store, actions):
+def _nova_apply_actions(store, actions, user=None):
     """Execute the agent's confirmed actions against the store IN PLACE. Pure &
     testable — every op is allow-listed and returns a per-action result."""
+    uid = (user or {}).get("id") or "edgar"
     agents = store.get("agents", []) or []
     deals = store.setdefault("deals", [])
     tasks = store.setdefault("tasks", [])
@@ -1087,13 +1218,14 @@ def _nova_apply_actions(store, actions):
                      "assignees": _ids, "assignee": _ids[0] if _ids else "",
                      "due": data.get("due") or "", "notes": data.get("notes") or "",
                      "subtasks": [{"text": str(s), "done": False} for s in (data.get("subtasks") or [])],
-                     "labels": [str(x) for x in (data.get("labels") or [])][:3], "dealId": None, "created": today}
+                     "labels": [str(x) for x in (data.get("labels") or [])][:3], "dealId": None,
+                     "createdBy": uid, "created": today}
                 tasks.insert(0, t)
                 results.append({"op": op, "ok": True, "id": t["id"], "label": t["title"]})
             elif op == "create_note":
                 n = {"id": _nova_new_id(notes), "title": str(data.get("title") or "Untitled note"),
                      "blocks": [{"t": "p", "text": str(data.get("body") or "")}], "pinned": False,
-                     "created": today, "updated": today}
+                     "owner": uid, "sharedWith": [], "created": today, "updated": today}
                 notes.insert(0, n)
                 results.append({"op": op, "ok": True, "id": n["id"], "label": n["title"]})
             elif op == "create_deal":
@@ -1192,11 +1324,13 @@ def nova_admins_agent():
         return jsonify({"error": "Ask me something."}), 400
     today = (body.get("today") or time.strftime("%Y-%m-%d")).strip()
     page = (body.get("page") or "").strip()
+    me = _nova_current_user() or {"id": "edgar", "name": "Edgar"}
     with _NOVA_LOCK:
         store = _nova_load()
     snap = _nova_snapshot(store, today, text)
     sys = (
-        "You are the Nova Admins agent — a sharp, trusted back-office operator for Nova, a car brokerage. "
+        f"You are the Nova Admins agent — a sharp, trusted back-office operator for Nova, a car brokerage. "
+        f"You're talking to {me['name']} (id '{me['id']}') — when they say 'me'/'my'/'mine', that's '{me['id']}'. "
         "You are stickied on every admin page and see a LIVE snapshot of the business (headline metrics, agents "
         "and their split %, the most relevant deals, tasks, notes). Help from anywhere. Return STRICT JSON.\n"
         "Choose kind:\n"
@@ -1216,7 +1350,7 @@ def nova_admins_agent():
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
         " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
         " delete_task id=<taskId> data={}\n"
-        f"- Today is {today}; resolve relative dates to YYYY-MM-DD. assignees: nema/arvin/edgar (me=edgar).\n"
+        f"- Today is {today}; resolve relative dates to YYYY-MM-DD. assignees: nema/arvin/edgar ('me' = {me['id']}).\n"
         "- Match deals/tasks/agents by the ids in the snapshot. If no clearly-matching record exists for an update, "
         "return kind='answer' and say you couldn't find it — never guess an id.\n"
         "- Be decisive but safe: only propose what was clearly asked. Unused fields: navigate_page='', navigate_hash='', actions=[]."
@@ -1230,7 +1364,21 @@ def nova_admins_agent():
             response_format={"type": "json_schema", "json_schema": {"name": "agent", "strict": True, "schema": _AGENT_SCHEMA}},
         )
         out = json.loads(resp.choices[0].message.content)
-        _audit("agent_query", kind=out.get("kind"), page=page, acts=len(out.get("actions") or []))
+        # enrich proposed new deals with the live split so the confirm card shows the money math
+        if out.get("kind") == "act":
+            amap = {a.get("id"): a for a in store.get("agents", [])}
+            for a in out.get("actions") or []:
+                if a.get("op") == "create_deal":
+                    try:
+                        d = json.loads(a.get("data") or "{}")
+                        c = _nova_calc({"front": d.get("front"), "back": d.get("back"), "feeJason": d.get("feeJason"),
+                                        "feeReferral": d.get("feeReferral"), "pay": d.get("pay"), "agentId": d.get("agentId"),
+                                        "lead": d.get("lead"), "override": None}, amap)
+                        a["summary"] = (a.get("summary") or "New deal") + \
+                            f" — net ${round(c['net']):,} · agent ${round(c['agent']):,} · Nova ${round(c['nova']):,}"
+                    except Exception:
+                        pass
+        _audit("agent_query", kind=out.get("kind"), page=page, user=me["id"], acts=len(out.get("actions") or []))
         return jsonify(out)
     except Exception as e:
         return jsonify({"error": "Agent error — " + str(e)[:160]}), 500
@@ -1246,7 +1394,7 @@ def nova_admins_agent_apply():
     try:
         with _NOVA_LOCK:
             store = _nova_load()
-            results = _nova_apply_actions(store, actions)
+            results = _nova_apply_actions(store, actions, _nova_current_user())
             _nova_write(store)
         _audit("agent_apply", ops=",".join(r.get("op", "") for r in results),
                ok=sum(1 for r in results if r.get("ok")), fail=sum(1 for r in results if not r.get("ok")))
