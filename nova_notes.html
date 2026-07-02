@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Admins — Notes</title>
+<style>
+  :root{
+    --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
+    --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
+    --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-red:#f87171; --na-amber:#fbbf24;
+    --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--na-bg);color:var(--na-fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;font-size:13.5px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;}
+  .na-app{max-width:1320px;margin:0 auto;padding:26px 26px 60px;}
+
+  .na-eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-eyebrow b{color:var(--na-blue);}
+  .na-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:4px 0 18px;flex-wrap:wrap;}
+  .na-title{font-size:30px;font-weight:760;letter-spacing:-.02em;margin:2px 0 0;}
+  .na-right{display:flex;align-items:center;gap:9px;}
+  .suite-nav{display:inline-flex;gap:4px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:3px;margin-top:12px;}
+  .suite-nav a{text-decoration:none;color:var(--na-muted);font-size:12.5px;font-weight:650;padding:6px 13px;border-radius:8px;}
+  .suite-nav a.on{background:var(--na-panel-2);color:var(--na-fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}
+  .suite-nav a:not(.on):hover{color:var(--na-fg);}
+  .save-tag{font-size:11px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid var(--na-line);background:var(--na-panel);white-space:nowrap;}
+  .save-tag.ok{color:var(--na-green);border-color:rgba(52,211,153,.3);}
+  .save-tag.saving{color:var(--na-amber);border-color:rgba(251,191,36,.3);}
+  .save-tag.err{color:var(--na-red);border-color:rgba(248,113,113,.3);}
+  .na-btn{all:unset;cursor:pointer;background:var(--na-blue);color:#fff;border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:650;display:inline-flex;align-items:center;gap:6px;}
+  .na-btn.ghost{background:var(--na-panel);color:var(--na-fg);border:1px solid var(--na-line);}
+  .mini{font-size:10.5px;color:var(--na-muted-2);}
+  .hide{display:none;}
+
+  /* shell: sidebar + editor */
+  .nshell{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start;min-height:70vh;}
+  .nside{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;max-height:78vh;}
+  .nside-top{padding:12px;display:flex;gap:8px;border-bottom:1px solid var(--na-line);}
+  .nsearch{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;outline:none;min-width:0;}
+  .nsearch:focus{border-color:var(--na-line-2);}
+  .nside-list{overflow:auto;flex:1;}
+  .nrow{padding:11px 14px;border-bottom:1px solid var(--na-line);cursor:pointer;}
+  .nrow:hover{background:var(--na-panel-2);}
+  .nrow.on{background:var(--na-panel-2);box-shadow:inset 3px 0 0 var(--na-amber);}
+  .nrow .rt{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:6px;min-width:0;}
+  .nrow .rt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .nrow .rs{font-size:11.5px;color:var(--na-muted);margin-top:3px;display:flex;gap:8px;}
+  .nrow .rs .dt{font-family:var(--na-mono);color:var(--na-muted-2);flex:none;}
+  .nrow .rs .sn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .nempty{padding:26px 14px;text-align:center;color:var(--na-muted-2);font-size:12px;}
+
+  .ned{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;min-height:70vh;display:flex;flex-direction:column;}
+  .ned-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--na-line);flex-wrap:wrap;}
+  .bt{all:unset;cursor:pointer;padding:5px 10px;border-radius:8px;font-size:11.5px;font-weight:650;color:var(--na-muted);border:1px solid transparent;}
+  .bt:hover{background:var(--na-panel-2);color:var(--na-fg);}
+  .bt.warn{color:var(--na-red);}
+  .ned-bar .sp{flex:1;}
+  .ned-body{padding:20px 26px 40px;flex:1;overflow:auto;cursor:text;}
+  .ntitle{width:100%;background:transparent;border:none;outline:none;color:var(--na-fg);font-size:26px;font-weight:760;letter-spacing:-.02em;font-family:inherit;padding:0 0 10px;}
+  .ntitle::placeholder{color:var(--na-muted-2);}
+  .blk{display:flex;align-items:flex-start;gap:9px;padding:2px 0;}
+  .blk-t{flex:1;outline:none;min-height:1.4em;word-break:break-word;white-space:pre-wrap;}
+  .blk-t:empty::before{content:attr(data-ph);color:var(--na-muted-2);}
+  .blk.h1 .blk-t{font-size:20px;font-weight:720;letter-spacing:-.01em;margin-top:8px;}
+  .blk.h2 .blk-t{font-size:16px;font-weight:680;margin-top:5px;}
+  .blk.bullet::before{content:"•";color:var(--na-muted);margin-top:1px;flex:none;}
+  .blk.todo input[type=checkbox]{accent-color:var(--na-green);width:15px;height:15px;margin-top:3px;flex:none;cursor:pointer;}
+  .blk.todo.done .blk-t{text-decoration:line-through;color:var(--na-muted-2);}
+  .ned-hint{color:var(--na-muted-2);font-size:11px;padding:8px 26px 14px;border-top:1px solid var(--na-line);}
+  .ned-blank{flex:1;display:flex;align-items:center;justify-content:center;color:var(--na-muted-2);font-size:13px;}
+  .nback{display:none;}
+
+  @media (max-width:720px){
+    .na-app{padding:16px 14px 50px;}
+    .na-title{font-size:24px;}
+    .nshell{grid-template-columns:1fr;}
+    .nshell.editing .nside{display:none;}
+    .nshell:not(.editing) .ned{display:none;}
+    .nside{max-height:none;}
+    .nback{display:inline-flex;}
+    .ned-body{padding:16px 16px 30px;}
+    .ned-hint{padding:8px 16px 12px;}
+  }
+</style>
+</head>
+<body>
+<div class="na-app">
+
+  <div class="na-eyebrow">NOVA ADMINS · <b>byAletheya</b></div>
+  <div class="na-title-row">
+    <div>
+      <h1 class="na-title">Notes</h1>
+      <nav class="suite-nav">
+        <a href="/nova-admins">Deal Ledger</a>
+        <a href="/nova-admins/tasks">Tasks</a>
+        <a class="on" href="/nova-admins/notes">Notes</a>
+      </nav>
+    </div>
+    <div class="na-right"><span id="saveTag" class="save-tag hide"></span></div>
+  </div>
+
+  <div class="nshell" id="nshell">
+    <aside class="nside">
+      <div class="nside-top">
+        <input class="nsearch" id="nSearch" placeholder="Search notes…" oninput="renderList()">
+        <button class="na-btn" style="padding:8px 12px" onclick="newNote()">+</button>
+      </div>
+      <div class="nside-list" id="nList"></div>
+    </aside>
+    <section class="ned" id="nEd"></section>
+  </div>
+
+</div>
+
+<script>
+/*NOVA_SEED*/
+const SEED=(typeof window!=="undefined"&&window.NOVA_SEED)||{};
+const NOTES=SEED.notes||[];
+const NOW=new Date(), _pad=n=>String(n).padStart(2,"0");
+const TODAY=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1)+"-"+_pad(NOW.getDate());
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function markSaved(s,cls){ const el=document.getElementById("saveTag"); el.textContent=s; el.className="save-tag "+cls; }
+async function saveRow(payload){
+  if(location.protocol==="file:")return;
+  markSaved("Saving…","saving");
+  try{ const r=await fetch("/nova-admins/mutate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    markSaved(r.ok?"✓ Saved":"Save failed", r.ok?"ok":"err"); }
+  catch(e){ markSaved("Save failed — offline","err"); }
+}
+let _saveT=null;
+function queueSave(){ const n=cur(); if(!n)return; n.updated=TODAY; clearTimeout(_saveT); _saveT=setTimeout(()=>saveRow({note:n}),700); renderList(); }
+
+let curId=null;
+function cur(){ return NOTES.find(n=>n.id===curId); }
+function snippet(n){ const b=(n.blocks||[]).find(x=>(x.text||"").trim()); return b?b.text.slice(0,60):"No additional text"; }
+function fdate(d){ if(!d)return""; const t=new Date(d+"T12:00:00"); return t.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+
+// ---- sidebar ----
+function sorted(){ return NOTES.slice().sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updated||"").localeCompare(a.updated||"")); }
+function renderList(){
+  const q=(document.getElementById("nSearch").value||"").toLowerCase().trim();
+  let list=sorted();
+  if(q) list=list.filter(n=>((n.title||"")+" "+(n.blocks||[]).map(b=>b.text||"").join(" ")).toLowerCase().includes(q));
+  document.getElementById("nList").innerHTML = list.length? list.map(n=>`
+    <div class="nrow ${n.id===curId?'on':''}" onclick="openNote(${n.id})">
+      <div class="rt">${n.pinned?'📌 ':''}<span>${esc(n.title)||'New note'}</span></div>
+      <div class="rs"><span class="dt">${fdate(n.updated||n.created)}</span><span class="sn">${esc(snippet(n))}</span></div>
+    </div>`).join("") : `<div class="nempty">${q?'No notes match.':'No notes yet — hit + to start one.'}</div>`;
+}
+
+// ---- editor ----
+const PH={p:"Type “/” style shortcuts: “# ” heading · “- ” list · “[] ” to-do",h1:"Heading",h2:"Heading",bullet:"List item",todo:"To-do"};
+function openNote(id){ curId=id; renderList(); renderEd(); document.getElementById("nshell").classList.add("editing"); }
+function backToList(){ curId=null; document.getElementById("nshell").classList.remove("editing"); renderList(); renderEd(); }
+function renderEd(focusIdx,caretEnd){
+  const el=document.getElementById("nEd"), n=cur();
+  if(!n){ el.innerHTML=`<div class="ned-blank">Pick a note — or start a new one.</div>`; return; }
+  el.innerHTML=`
+    <div class="ned-bar">
+      <button class="bt nback" onclick="backToList()">‹ Notes</button>
+      <button class="bt" onclick="setType('p')">Aa Text</button>
+      <button class="bt" onclick="setType('h1')">H1</button>
+      <button class="bt" onclick="setType('h2')">H2</button>
+      <button class="bt" onclick="setType('bullet')">• List</button>
+      <button class="bt" onclick="setType('todo')">☑ To-do</button>
+      <span class="sp"></span>
+      <button class="bt" onclick="togglePin()">${n.pinned?'📌 Unpin':'📌 Pin'}</button>
+      <button class="bt warn" onclick="delNote()">Delete</button>
+    </div>
+    <div class="ned-body" onclick="if(event.target===this)addBlockEnd()">
+      <input class="ntitle" placeholder="Title" value="${esc(n.title)}" oninput="cur().title=this.value;queueSave()"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();focusBlk(0);}">
+      <div id="blocks">${n.blocks.map((b,i)=>blkHtml(b,i)).join("")}</div>
+    </div>
+    <div class="ned-hint">Enter = new line · “# ” heading · “## ” subheading · “- ” bullet · “[] ” to-do · Backspace on empty removes</div>`;
+  if(focusIdx!=null) focusBlk(focusIdx,caretEnd);
+}
+function blkHtml(b,i){
+  return `<div class="blk ${b.t} ${b.t==='todo'&&b.done?'done':''}" data-i="${i}">`
+    + (b.t==='todo'?`<input type="checkbox" ${b.done?'checked':''} onchange="tickTodo(${i},this.checked)">`:"")
+    + `<div class="blk-t" contenteditable="true" data-ph="${PH[b.t]||''}" data-i="${i}"
+        oninput="onBlkInput(${i},this)" onkeydown="onBlkKey(event,${i},this)" onfocus="curBlk=${i}">${esc(b.text)}</div></div>`;
+}
+let curBlk=0;
+function focusBlk(i,caretEnd=true){
+  const el=document.querySelector(`.blk-t[data-i="${i}"]`); if(!el)return;
+  el.focus();
+  if(caretEnd){ const r=document.createRange(); r.selectNodeContents(el); r.collapse(false);
+    const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+}
+function onBlkInput(i,el){
+  const n=cur(), b=n.blocks[i], t=el.textContent;
+  // markdown shortcuts
+  const conv=[["# ","h1"],["## ","h2"],["- ","bullet"],["* ","bullet"],["[] ","todo"],["[ ] ","todo"]];
+  for(const [pre,type] of conv){
+    if(t.startsWith(pre)&&b.t==="p"){ b.t=type; b.text=t.slice(pre.length); if(type==="todo")b.done=false; renderEd(i); queueSave(); return; }
+  }
+  b.text=t; queueSave();
+}
+function onBlkKey(e,i,el){
+  const n=cur();
+  if(e.key==="Enter"){ e.preventDefault();
+    const t=n.blocks[i].t, keep=(t==="bullet"||t==="todo")&&el.textContent.trim();
+    n.blocks.splice(i+1,0,{t:keep?t:"p",text:"",...(keep&&t==="todo"?{done:false}:{})});
+    renderEd(i+1); queueSave(); return; }
+  if(e.key==="Backspace"&&!el.textContent){ e.preventDefault();
+    if(n.blocks[i].t!=="p"){ n.blocks[i].t="p"; renderEd(i); queueSave(); return; }   // demote first
+    if(n.blocks.length>1){ n.blocks.splice(i,1); renderEd(Math.max(0,i-1)); queueSave(); } return; }
+  if(e.key==="ArrowUp"&&i>0&&getSelection().anchorOffset===0){ e.preventDefault(); focusBlk(i-1); }
+  if(e.key==="ArrowDown"&&i<n.blocks.length-1){ const s=getSelection();
+    if(s.anchorOffset===(el.textContent||"").length){ e.preventDefault(); focusBlk(i+1); } }
+}
+function tickTodo(i,val){ const n=cur(); n.blocks[i].done=val; renderEd(); queueSave(); }
+function setType(t){ const n=cur(); if(!n)return; const b=n.blocks[curBlk]; if(!b)return;
+  b.t=t; if(t==="todo"&&b.done===undefined)b.done=false; renderEd(curBlk); queueSave(); }
+function addBlockEnd(){ const n=cur(); if(!n)return; n.blocks.push({t:"p",text:""}); renderEd(n.blocks.length-1); queueSave(); }
+function togglePin(){ const n=cur(); n.pinned=!n.pinned; renderEd(); queueSave(); }
+function newNote(){
+  const id=(NOTES.reduce((m,n)=>Math.max(m,n.id),0)||0)+1;
+  NOTES.unshift({id,title:"",blocks:[{t:"p",text:""}],pinned:false,created:TODAY,updated:TODAY});
+  saveRow({note:NOTES[0]}); openNote(id);
+  setTimeout(()=>{const el=document.querySelector(".ntitle"); if(el)el.focus();},40);
+}
+function delNote(){ const n=cur(); if(!n)return; if(!confirm("Delete this note?"))return;
+  const i=NOTES.findIndex(x=>x.id===n.id); NOTES.splice(i,1); saveRow({deleteNote:n.id}); backToList(); }
+
+// ---- boot ----
+renderList(); renderEd();
+if(NOTES.length && window.innerWidth>720){ openNote(sorted()[0].id); document.getElementById("nshell").classList.remove("editing"); }
+if(location.hash.indexOf("open")>=0 && NOTES.length){ openNote(sorted()[0].id); }
+</script>
+</body>
+</html>

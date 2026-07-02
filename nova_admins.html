@@ -309,6 +309,7 @@
       <nav class="suite-nav">
         <a class="on" href="/nova-admins">Deal Ledger</a>
         <a href="/nova-admins/tasks">Tasks</a>
+        <a href="/nova-admins/notes">Notes</a>
       </nav>
     </div>
     <div class="na-right">
@@ -757,12 +758,12 @@ async function saveDataNow(){
   markSaved("Saving…","saving");
   try{
     const r=await fetch("/nova-admins/save",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES})});
+      body:JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[]})});
     markSaved(r.ok?"✓ Saved":"Save failed","" + (r.ok?"ok":"err"));
   }catch(e){ markSaved("Save failed — offline","err"); }
 }
 function exportData(){
-  const blob=new Blob([JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES},null,1)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[]},null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="nova_admins_backup.json"; a.click();
 }
 async function importData(input){
@@ -774,6 +775,8 @@ async function importData(input){
   if(Array.isArray(data.agents)&&data.agents.length){ AGENTS.length=0; AGENTS.push(...data.agents); }
   EXPENSES.length=0; EXPENSES.push(...(data.expenses||[]));
   DEALS.forEach(d=>{ d.feeJason=+d.feeJason||0; d.feeReferral=+d.feeReferral||0; });
+  if(Array.isArray(data.tasks)) SEED.tasks=data.tasks;   // ride along if the backup has them
+  if(Array.isArray(data.notes)) SEED.notes=data.notes;
   openRow=null; renderAll(); saveDataNow();
 }
 function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}

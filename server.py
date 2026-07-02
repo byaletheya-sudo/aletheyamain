@@ -601,6 +601,69 @@ def nova_admins_tasks_page():
     return _nova_admin_serve("nova_tasks.html")
 
 
+@app.route("/nova-admins/notes")
+def nova_admins_notes_page():
+    """Tool 3: Notion-style notes."""
+    return _nova_admin_serve("nova_notes.html")
+
+
+@app.route("/nova-admins/parse-task", methods=["POST"])
+def nova_admins_parse_task():
+    """Turn natural language into one or more structured tasks (title, subtasks,
+    assignee, due date, priority, labels, notes)."""
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return jsonify({"error": "OPENAI_API_KEY not configured on the server."}), 500
+    body = request.json or {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Say what needs doing."}), 400
+    today = (body.get("today") or "").strip()
+    task_schema = {
+        "type": "object", "additionalProperties": False,
+        "required": ["title", "status", "priority", "assignee", "due", "labels", "notes", "subtasks"],
+        "properties": {
+            "title": {"type": "string"},
+            "status": {"type": "string", "enum": ["backlog", "todo", "inprogress", "done", ""]},
+            "priority": {"type": "string", "enum": ["urgent", "high", "medium", "low", "none", ""]},
+            "assignee": {"type": "string", "enum": ["nema", "arvin", "edgar", ""]},
+            "due": {"type": "string"},
+            "labels": {"type": "array", "items": {"type": "string"}},
+            "notes": {"type": "string"},
+            "subtasks": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+    schema = {
+        "type": "object", "additionalProperties": False,
+        "required": ["ok", "summary", "tasks"],
+        "properties": {"ok": {"type": "boolean"}, "summary": {"type": "string"},
+                       "tasks": {"type": "array", "items": task_schema}},
+    }
+    sys = (
+        "You convert natural language into structured to-do tasks for Nova's back-office task board. "
+        "Output STRICT JSON. Rules:\n"
+        f"- Today is {today or 'unknown'} — resolve relative dates ('tomorrow', 'Friday', 'end of month', 'in 2 weeks') "
+        "to YYYY-MM-DD in `due`; '' if no date mentioned.\n"
+        "- One message may contain SEVERAL tasks — split them; but an enumeration of steps under one goal is ONE task "
+        "with `subtasks` (short imperative strings).\n"
+        "- title: short imperative ('Pay agents for June'). Put extra context/details in `notes`.\n"
+        "- assignee: nema / arvin / edgar when a name (or 'me' = edgar) is mentioned, else ''.\n"
+        "- priority: only if urgency is expressed ('asap'/'urgent' -> urgent; 'important' -> high; 'whenever/low prio' -> low), else ''.\n"
+        "- status: 'todo' unless they say it's already started ('inprogress'), an idea/someday ('backlog'), or done.\n"
+        "- labels: 1-2 short category tags ONLY if obvious (Payroll, Collections, Deals, Follow-up, Ops, Automation, Finance).\n"
+        "- ok=false only if the message clearly isn't a task. summary = one short confirmation sentence."
+    )
+    try:
+        client = OpenAI(api_key=API_KEY)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": sys}, {"role": "user", "content": text}],
+            response_format={"type": "json_schema", "json_schema": {"name": "tasks", "strict": True, "schema": schema}},
+        )
+        return jsonify(json.loads(resp.choices[0].message.content))
+    except Exception as e:
+        return jsonify({"error": "Couldn't parse that — " + str(e)[:160]}), 500
+
+
 @app.route("/nova-admins/parse", methods=["POST"])
 def nova_admins_parse():
     """Turn a natural-language / pasted deal into one structured Nova Admins deal."""
@@ -745,12 +808,15 @@ def nova_admins_save():
     data = request.get_json(silent=True) or {}
     if not all(isinstance(data.get(k), list) for k in ("agents", "deals", "expenses")):
         return jsonify({"error": "Expected agents, deals and expenses arrays."}), 400
-    clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"],
-             "tasks": data.get("tasks", [])}
-    if len(json.dumps(clean)) > 12_000_000:
+    if len(json.dumps(data)) > 12_000_000:
         return jsonify({"error": "Payload too large."}), 413
     try:
         with _NOVA_LOCK:
+            # tasks/notes survive an Import from an older export that lacks them
+            existing = _nova_load()
+            clean = {"agents": data["agents"], "deals": data["deals"], "expenses": data["expenses"],
+                     "tasks": data.get("tasks", existing.get("tasks", [])),
+                     "notes": data.get("notes", existing.get("notes", []))}
             _nova_write(clean)
         return jsonify({"ok": True, "deals": len(clean["deals"]), "expenses": len(clean["expenses"])})
     except Exception as e:
@@ -765,7 +831,7 @@ def nova_admins_mutate():
     try:
         with _NOVA_LOCK:
             data = _nova_load()
-            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense"), ("tasks", "task")):
+            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense"), ("tasks", "task"), ("notes", "note")):
                 item = body.get(key)
                 if isinstance(item, dict):
                     arr = data.setdefault(coll, [])
