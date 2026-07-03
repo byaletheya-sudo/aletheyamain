@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { useGame } from '../store/gameStore.js'
+import { FoodArt } from '../art/foodArt.jsx'
 
 export default function FoodItem({ item }) {
   const addItem = useGame((s) => s.addItem)
@@ -13,9 +14,7 @@ export default function FoodItem({ item }) {
       transition={{ type: 'spring', stiffness: 500, damping: 20 }}
     >
       <span className="food-pan">
-        <span className="food-emoji" role="img" aria-label={item.name}>
-          {item.emoji}
-        </span>
+        <FoodArt id={item.id} title={item.name} className="food-art" />
       </span>
       <span className="food-name">{item.name}</span>
       {item.size > 0 && (

@@ -4,6 +4,7 @@ import { useGame } from '../store/gameStore.js'
 import { scorePlate } from '../data/archetypes.js'
 import { PlateGraphic, BowlGraphic } from './Plate.jsx'
 import ShareButtons from './ShareCard.jsx'
+import { FoodArt } from '../art/foodArt.jsx'
 import { sound } from '../sound.js'
 
 const BOOTHS = [
@@ -108,11 +109,7 @@ function Reveal() {
           </div>
           <div className="reveal-extras">
             {dessertBowl.length > 0 && <BowlGraphic items={dessertBowl} className="reveal-bowl" />}
-            {drink && (
-              <span className="reveal-drink" title={drink.name}>
-                {drink.emoji}
-              </span>
-            )}
+            {drink && <FoodArt id={drink.id} title={drink.name} className="reveal-drink" />}
           </div>
         </div>
       </div>

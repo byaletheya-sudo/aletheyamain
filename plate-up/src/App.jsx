@@ -5,6 +5,31 @@ import Entrance from './components/Entrance.jsx'
 import TrayPicker from './components/TrayPicker.jsx'
 import StationWalk from './components/StationWalk.jsx'
 import TableReveal from './components/TableReveal.jsx'
+import { FoodArt } from './art/foodArt.jsx'
+import { MENU } from './data/menu.js'
+
+// dev review sheet for the Phase 4 art — open the app at #gallery
+function ArtGallery() {
+  const ids = [
+    ...MENU.map((m) => ({ id: m.id, name: m.name })),
+    { id: 'soft-serve-vanilla', name: 'Soft Serve (V)' },
+    { id: 'soft-serve-chocolate', name: 'Soft Serve (C)' },
+    { id: 'soft-serve-swirl', name: 'Soft Serve (S)' },
+  ]
+  return (
+    <div className="art-gallery">
+      <h1>FOOD ART — ALL {ids.length}</h1>
+      <div className="art-gallery-grid">
+        {ids.map(({ id, name }) => (
+          <div key={id} className="art-cell">
+            <FoodArt id={id} title={name} />
+            <small>{name}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function MomOverlay() {
   const momMoment = useGame((s) => s.momMoment)
@@ -90,6 +115,7 @@ function SoundToggle() {
 
 export default function App() {
   const phase = useGame((s) => s.phase)
+  if (window.location.hash === '#gallery') return <ArtGallery />
   return (
     <div className="app">
       <SoundToggle />

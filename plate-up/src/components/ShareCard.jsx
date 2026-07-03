@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { PlateGraphic } from './Plate.jsx'
+import { FoodArt } from '../art/foodArt.jsx'
 
 // Offscreen, fixed-size cards (1080×1920 story / 1080×1080 square)
 // exported with html-to-image. This is the growth mechanic.
@@ -23,9 +24,13 @@ function CardContent({ format, result }) {
         {(dessertBowl.length > 0 || drink) && (
           <div className="share-extras">
             {dessertBowl.length > 0 && (
-              <span className="share-bowl">{dessertBowl.map((d, i) => <em key={i}>{d.emoji}</em>)}</span>
+              <span className="share-bowl">
+                {dessertBowl.map((d, i) => (
+                  <FoodArt key={i} id={d.id} title={d.name} className="share-extra-art" />
+                ))}
+              </span>
             )}
-            {drink && <span className="share-drink">{drink.emoji}</span>}
+            {drink && <FoodArt id={drink.id} title={drink.name} className="share-extra-art" />}
           </div>
         )}
       </div>

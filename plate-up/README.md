@@ -39,6 +39,8 @@ src/
   data/archetypes.js    # scoring: archetypes + Buffet IQ
   store/gameStore.js    # Zustand game state
   sound.js              # tiny WebAudio synth (off by default)
+  art/foodArt.jsx       # layered-SVG illustration for every item
+                        # (open the app at #gallery to review the full sheet)
   components/           # Entrance, TrayPicker, StationWalk, Station, FoodItem,
                         # Plate (dock + plate render), SoftServeMachine,
                         # TableReveal, ShareCard
@@ -54,6 +56,7 @@ Stack: Vite + React 18, Zustand, framer-motion, html-to-image. Plain CSS.
 - ✅ Phase 2 — archetypes, Buffet IQ, share-card export
 - ✅ Phase 3 — soft serve mini-game, animations, sneeze guard, tray rail,
   mom-voice moment, sound toggle
-- ⬜ Phase 4 — SVG art upgrade (emoji fallback in place)
+- ✅ Phase 4 — layered SVG food art for all 71 items (90s menu-board
+  sticker style; emoji remains only as a fallback for unknown ids)
 - ⬜ Phase 5 — Capacitor / App Store wrap (on hold until Edgar says go;
   parody-safe naming already in place)

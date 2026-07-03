@@ -1,13 +1,14 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '../store/gameStore.js'
 import { TRAY_COLORS, BOWL_CAPACITY } from '../data/menu.js'
+import { FoodArt } from '../art/foodArt.jsx'
 
 // Deterministic golden-angle spiral so items settle into plate
 // zones the same way every render (dock, table, share card).
 export function layoutPositions(n) {
   const GOLDEN = 2.399963
   return Array.from({ length: n }).map((_, i) => {
-    const r = n === 1 ? 0 : 34 * Math.sqrt((i + 0.6) / n)
+    const r = n === 1 ? 0 : 30 * Math.sqrt((i + 0.6) / n)
     const a = i * GOLDEN
     return { left: 50 + r * Math.cos(a), top: 50 + r * Math.sin(a) }
   })
@@ -20,15 +21,14 @@ export function PlateGraphic({ items, className = '', onRemove, animate = true }
       <div className="plate-rim" />
       {items.map((item, i) => {
         const pos = positions[i]
+        const em = 1.7 + item.size * 0.5 // art size scales with plate-space cost
         const inner = (
-          <span
-            className="plate-item-emoji"
-            style={{ fontSize: `${0.9 + item.size * 0.28}em` }}
-            role="img"
-            aria-label={item.name}
-          >
-            {item.emoji}
-          </span>
+          <FoodArt
+            id={item.id}
+            title={item.name}
+            className="plate-item-art"
+            style={{ width: `${em}em`, height: `${em}em` }}
+          />
         )
         const style = { left: `${pos.left}%`, top: `${pos.top}%` }
         // positioning lives on the outer span so framer's transform
@@ -73,7 +73,7 @@ export function BowlGraphic({ items, className = '', onRemove }) {
           title={onRemove ? `Remove ${item.name}` : item.name}
           disabled={!onRemove}
         >
-          {item.emoji}
+          <FoodArt id={item.id} title={item.name} className="bowl-item-art" />
         </motion.button>
       ))}
       {items.length === 0 && <span className="bowl-empty-hint">🥣</span>}
@@ -159,7 +159,7 @@ export default function PlateDock() {
                 onClick={() => removeItem('drink')}
                 title={`Remove ${drink.name}`}
               >
-                {drink.emoji}
+                <FoodArt id={drink.id} title={drink.name} className="dock-drink-art" />
               </button>
             ) : (
               <span className="dock-drink empty">🫗</span>
