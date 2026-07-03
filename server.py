@@ -390,8 +390,8 @@ def unlock():
 
 
 # Paths anyone can reach without logging in: the public byAletheya home page,
-# the login screen, and the brand asset the home page shows.
-PUBLIC_PATHS = ("/", "/login", "/logo.png")
+# the login screen, the brand asset the home page shows, and public event pages.
+PUBLIC_PATHS = ("/", "/login", "/logo.png", "/odyssey")
 
 @app.before_request
 def require_login():
@@ -697,6 +697,12 @@ def car_slug(vehicle, bodystyle, color):
 @app.route("/")
 def home():
     return send_file(os.path.join(BASE_DIR, "home.html"))
+
+
+# Public event landing page: 2000 — A Rave Odyssey (Jubiland, 21+).
+@app.route("/odyssey")
+def odyssey():
+    return send_file(os.path.join(BASE_DIR, "odyssey.html"))
 
 
 # Each tool has its own clean URL. They all serve the same single-page app; the

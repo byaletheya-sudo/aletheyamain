@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>2000: A Rave Odyssey — Jubiland · 21+</title>
+<meta name="description" content="The future called. It's throwing a party. An upscale Y2K rave at Jubiland — chrome, bass & icy-blue bumper-car pods. One night only. 21+." />
+<meta property="og:title" content="2000: A Rave Odyssey — Jubiland · 21+" />
+<meta property="og:description" content="The future called. It's throwing a party. Chrome. Bass. Bumper cars. Fri Jul 24 · North Hollywood." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Zen+Dots&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   2000: A RAVE ODYSSEY — ported from the Campaign Kit
+   Frost Chrome base + Blow-Up / Win98 playful register.
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ice-200: #bfe4ff; --ice-300: #8fd0ff; --ice-400: #58b6ff; --ice-600: #1d6ff0;
+  --mag: #ff2fb0; --mag-hi: #ff6fd0; --mag-lo: #b30f74; --frost: #eaf3ff;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: #07070d; color: var(--frost);
+  font-family: 'Chakra Petch', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--mag); color: #fff; }
+a { text-decoration: none; color: inherit; }
+
+/* ---------- backgrounds ---------- */
+.bg-frost { background: radial-gradient(130% 82% at 50% -8%, #1a2c4c 0%, #0b1730 46%, #060a18 100%); }
+.bg-blow  { background: radial-gradient(120% 92% at 68% 8%, #23204f 0%, #120b30 52%, #06060f 100%); }
+.bg-flat  { background: radial-gradient(120% 70% at 50% 0%, #14243f 0%, #0a1326 55%, #05060f 100%); }
+
+/* ---------- type treatments ---------- */
+.chrome {
+  font-family: 'Michroma', sans-serif;
+  background: linear-gradient(180deg,#ffffff 0%,#eaf4ff 12%,#bcd6ee 34%,#7f9bb8 50%,#5b7ba0 51%,#adcbe6 66%,#ffffff 82%,#8fb1cf 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.chrome-mag {
+  font-family: 'Michroma', sans-serif;
+  background: linear-gradient(180deg,#ffe6f5 0%,#ff9bd8 30%,#ff2fb0 52%,#b30f74 53%,#ff6fd0 74%,#ffd6ef 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.bubble {
+  font-family: 'Zen Dots', sans-serif;
+  background: radial-gradient(circle at 42% 26%, #ffe0f4 0%, #ff6fd0 30%, #ff2fb0 62%, #b30f74 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  filter: drop-shadow(3px 4px 0 rgba(0,0,0,.28));
+}
+.kick {
+  font-weight: 700; text-transform: uppercase; color: var(--ice-300);
+  letter-spacing: .36em; font-size: 14px;
+}
+
+/* ---------- decor ---------- */
+.scan {
+  position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen; opacity: .5;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px);
+}
+.spk {
+  position: absolute; width: var(--s,22px); height: var(--s,22px);
+  background: conic-gradient(from 0deg, transparent 0 10%, #fff 12% 13%, transparent 15% 35%, #fff 37% 38%, transparent 40% 60%, #fff 62% 63%, transparent 65% 85%, #fff 87% 88%, transparent 90%);
+  -webkit-mask: radial-gradient(closest-side,#000 0 55%, transparent 60%);
+  mask: radial-gradient(closest-side,#000 0 55%, transparent 60%);
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%,100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50% { opacity: .35; transform: scale(.8) rotate(22deg); }
+}
+.mball {
+  position: absolute; left: 50%; transform: translateX(-50%); border-radius: 50%;
+  background-image: radial-gradient(circle at 35% 30%, rgba(255,255,255,.9) 0%, transparent 26%),
+    repeating-conic-gradient(from 0deg, #dfeeff 0deg 12deg, #8ba7c4 12deg 24deg);
+  box-shadow: 0 0 60px rgba(143,208,255,.55), inset -10px -14px 30px rgba(0,0,0,.4);
+}
+.blob-cyan {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff 0%, #8fd0ff 26%, #1d6ff0 70%, #0b3aa0 100%);
+  box-shadow: inset -18px -24px 48px rgba(0,0,0,.35), 0 20px 60px rgba(29,111,240,.4);
+}
+.blob-mag {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff 0%, #ff9bd8 24%, #ff2fb0 62%, #a80f6e 100%);
+  box-shadow: inset -16px -22px 44px rgba(0,0,0,.35), 0 20px 60px rgba(255,47,176,.4);
+}
+.starburst {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #fff 0 6%, transparent 7%),
+    conic-gradient(var(--mag) 0 12.5%, var(--ice-300) 12.5% 25%, var(--mag) 25% 37.5%, var(--ice-300) 37.5% 50%, var(--mag) 50% 62.5%, var(--ice-300) 62.5% 75%, var(--mag) 75% 87.5%, var(--ice-300) 87.5% 100%);
+}
+.glass {
+  background: rgba(150,200,255,.10);
+  border: 1px solid rgba(190,224,255,.34);
+  backdrop-filter: blur(6px); border-radius: 12px;
+}
+
+/* ---------- win98 ---------- */
+.win { background: #c3c7cb; border: 2px solid; border-color: #fff #808088 #808088 #fff; box-shadow: 2px 2px 0 #000; }
+.win-tb {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(90deg,#00007b,#1a86d8); color: #fff;
+  padding: 4px 5px; font-weight: 700; font-size: 15px;
+}
+.win-tb .btns { display: flex; gap: 3px; }
+.win-tb .btns b {
+  width: 20px; height: 18px; background: #c3c7cb; border: 2px solid;
+  border-color: #fff #808088 #808088 #fff; color: #000; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; font-family: sans-serif;
+}
+
+/* ---------- CTAs ---------- */
+.cta {
+  display: inline-block; background: linear-gradient(90deg,var(--mag),var(--mag-lo));
+  color: #fff; border-radius: 60px; font-family: 'Michroma', sans-serif;
+  letter-spacing: .05em; text-align: center;
+  box-shadow: 0 0 40px rgba(255,47,176,.5);
+  transition: transform .2s ease, box-shadow .2s ease;
+  padding: 20px 48px; font-size: 18px; cursor: pointer;
+}
+.cta:hover { transform: translateY(-2px); box-shadow: 0 0 60px rgba(255,47,176,.75); }
+.cta-blow {
+  display: inline-block; background: linear-gradient(90deg,#1d6ff0,#ff2fb0);
+  color: #fff; border-radius: 50px; font-family: 'Zen Dots', sans-serif;
+  text-align: center; box-shadow: 6px 6px 0 rgba(0,0,0,.4);
+  transition: transform .15s ease, box-shadow .15s ease;
+  padding: 20px 44px; font-size: 20px; cursor: pointer;
+}
+.cta-blow:hover { transform: translate(2px,2px); box-shadow: 3px 3px 0 rgba(0,0,0,.4); }
+
+/* ---------- layout ---------- */
+section, footer { position: relative; overflow: hidden; padding: 96px 24px; }
+.wrap { position: relative; z-index: 10; max-width: 760px; margin: 0 auto; text-align: center; }
+.wrap-l { text-align: left; }
+.sub { font-weight: 600; font-size: clamp(16px, 2.4vw, 21px); color: #cfe4ff; line-height: 1.5; }
+.micro { font-weight: 700; letter-spacing: .18em; font-size: 12px; color: #8fb1cf; text-transform: uppercase; }
+
+/* reveal-on-scroll */
+.rv { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+.rv.in { opacity: 1; transform: none; }
+
+/* ---------- hero ---------- */
+.hero { min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 120px 24px 80px; }
+.hero .mball { top: 24px; width: 64px; height: 64px; }
+.hero h1 { font-size: clamp(56px, 22vw, 230px); line-height: .86; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); margin-top: 16px; }
+.hero .subtitle { font-size: clamp(20px, 5vw, 46px); letter-spacing: .1em; }
+.hero .tagline { margin-top: 28px; font-size: clamp(18px, 3vw, 24px); }
+.cbb { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 11px; font-weight: 600; letter-spacing: .26em; color: #9fc4ee; text-transform: uppercase; }
+.cbb span.d { color: var(--mag); }
+.datepill { display: inline-block; margin-top: 36px; padding: 16px 24px; font-family: 'Michroma', sans-serif; font-size: clamp(12px, 2.4vw, 18px); color: #fff; letter-spacing: .04em; }
+.datepill .pink { color: var(--mag-hi); }
+.datepill .venue { display: block; margin-top: 6px; font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 11px; letter-spacing: .2em; color: #9fc4ee; }
+.hero-cta { margin-top: 36px; }
+.countwrap { margin-top: 48px; }
+.countwrap .lbl { color: var(--mag-hi); letter-spacing: .3em; font-size: 12px; margin-bottom: 16px; }
+.count { display: flex; justify-content: center; gap: clamp(14px, 4vw, 32px); }
+.count .unit { text-align: center; }
+.count .n { font-size: clamp(34px, 8vw, 60px); line-height: 1; font-variant-numeric: tabular-nums; }
+.count .u { margin-top: 8px; font-size: 10px; letter-spacing: .3em; }
+.handle { position: absolute; bottom: 20px; left: 0; right: 0; text-align: center;
+  font-weight: 700; letter-spacing: .24em; font-size: 12px; color: #8fb1cf; text-transform: uppercase; }
+
+/* ---------- urgency ---------- */
+.winwrap { max-width: 640px; margin: 0 auto; position: relative; z-index: 10; }
+.winbody { background: #0a0f22; padding: 48px 28px; text-align: center; }
+.winbody h2 { font-size: clamp(40px, 9vw, 84px); line-height: .9; margin-top: 16px; }
+.winbody .lead { margin-top: 24px; }
+
+/* ---------- headings ---------- */
+.h2 { font-size: clamp(34px, 7vw, 64px); line-height: 1.02; margin-top: 20px; }
+
+/* ---------- glass bullet list ---------- */
+.bullets { margin-top: 48px; display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.bullets .b { padding: 20px 26px; font-weight: 600; font-size: clamp(16px, 2.6vw, 21px); }
+.bullets .b .d { color: var(--mag); }
+
+/* ---------- pods ---------- */
+.pod { position: relative; width: min(360px, 78vw); height: min(200px, 43vw); margin: 36px auto 32px; }
+.pod .shell { position: absolute; inset: 0; border-radius: 50% 50% 44% 44% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg,#eaf6ff 0%, #a9c9e6 42%, #5b7ba0 60%, #cfe2f3 100%);
+  box-shadow: 0 0 50px rgba(143,208,255,.5), inset 0 -18px 30px rgba(0,0,0,.35); }
+.pod .base { position: absolute; left: 16px; right: 16px; bottom: -16px; height: 40px; border-radius: 24px;
+  background: linear-gradient(90deg,#0b3aa0,#1d6ff0,#8fd0ff); box-shadow: 0 0 30px rgba(29,111,240,.7); }
+.pod .tag { position: absolute; left: 50%; top: 22%; transform: translateX(-50%);
+  font-family: 'Zen Dots', sans-serif; font-size: clamp(18px, 4vw, 26px); color: #0b1730; }
+.podhead { font-family: 'Zen Dots', sans-serif; font-size: clamp(40px, 9vw, 78px); line-height: .9; }
+.vidph { margin-top: 48px; aspect-ratio: 16/9; border-style: dashed; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px; }
+.vidph .play { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,47,176,.9);
+  display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff;
+  box-shadow: 0 0 40px rgba(255,47,176,.6); }
+.vidph .t1 { font-family: 'Michroma', sans-serif; font-size: 13px; letter-spacing: .2em; color: #bfe4ff; }
+
+/* ---------- gallery ---------- */
+.grid { margin-top: 48px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); gap: 24px; } }
+.tile { aspect-ratio: 4/5; border-style: dashed; position: relative; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px; padding: 16px; text-align: center; }
+.tile .e { font-size: clamp(32px, 6vw, 48px); }
+.tile .t { font-family: 'Michroma', sans-serif; font-size: clamp(10px, 1.8vw, 14px); letter-spacing: .14em; color: #fff; text-transform: uppercase; }
+.tile .s { font-size: clamp(9px, 1.6vw, 12px); font-weight: 600; letter-spacing: .16em; color: #8fb1cf; text-transform: uppercase; }
+.tile .ph { position: absolute; bottom: 12px; left: 0; right: 0; font-size: 9px; font-weight: 700;
+  letter-spacing: .2em; color: #5d78a0; text-transform: uppercase; }
+
+/* ---------- dress code ---------- */
+.dress h2 { font-size: clamp(48px, 11vw, 96px); line-height: 1; margin-top: 24px; }
+.chips { margin-top: 48px; display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.chips .c { padding: 16px 24px; font-weight: 600; font-size: clamp(16px, 3vw, 24px); }
+.chips .c .d { color: var(--mag); }
+
+/* ---------- lineup ---------- */
+.rows { margin-top: 48px; border-top: 1px solid rgba(143,208,255,.3); }
+.row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  padding: 24px 4px; border-bottom: 1px solid rgba(143,208,255,.18); }
+.row .n { font-family: 'Michroma', sans-serif; font-size: clamp(18px, 4vw, 30px); color: #fff; }
+.row .t { flex-shrink: 0; font-weight: 600; font-size: clamp(13px, 2vw, 16px); color: #9fc4ee; }
+.row.feat .t { color: var(--mag-hi); font-weight: 700; }
+.setpill { display: inline-block; margin-top: 40px; padding: 16px 24px; font-weight: 700; font-size: 13px;
+  letter-spacing: .16em; color: #bfe4ff; text-transform: uppercase; }
+
+/* ---------- tickets ---------- */
+.tix { margin-top: 48px; display: flex; flex-direction: column; gap: 20px; }
+.tier { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px dashed rgba(191,228,255,.5); border-radius: 16px; padding: 24px;
+  background: rgba(255,255,255,.06); text-align: left; transition: background .2s ease; }
+.tier:hover { background: rgba(255,255,255,.1); }
+.tier.feat { border-color: rgba(255,111,208,.7); background: rgba(255,47,176,.08); }
+.tier.feat:hover { background: rgba(255,47,176,.14); }
+.tier .name { font-family: 'Michroma', sans-serif; font-size: clamp(16px, 3vw, 24px); color: #fff;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tier .badge { background: var(--mag); color: #fff; font-family: 'Chakra Petch', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; padding: 4px 8px; border-radius: 4px; }
+.tier .desc { margin-top: 4px; font-weight: 600; font-size: clamp(13px, 2vw, 16px); color: #9fc4ee; }
+.tier .note { margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .14em; color: #8fb1cf; text-transform: uppercase; }
+.tier.feat .note { color: var(--mag-hi); }
+.tier .price { flex-shrink: 0; text-align: right; }
+.tier .was { font-weight: 600; font-size: 15px; color: #8fb1cf; text-decoration: line-through; }
+.tier .now { font-size: clamp(28px, 5vw, 38px); }
+
+/* ---------- FAQ ---------- */
+.faq { margin-top: 48px; display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.q { overflow: hidden; }
+.q button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 24px; background: none; border: none; color: #fff; cursor: pointer;
+  font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: clamp(15px, 2.4vw, 18px); text-align: left; }
+.q .plus { flex-shrink: 0; font-size: 20px; color: var(--mag-hi); transition: transform .2s ease; }
+.q.open .plus { transform: rotate(45deg); }
+.q .a { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+.q.open .a { max-height: 300px; }
+.q .a p { padding: 0 24px 24px; font-weight: 500; font-size: clamp(13px, 2vw, 16px); line-height: 1.6; color: #bfe4ff; }
+
+/* ---------- footer ---------- */
+footer { padding-bottom: 140px; text-align: center; }
+footer .starburst { bottom: -40px; left: -40px; width: 130px; height: 130px; opacity: .9; }
+footer .big { font-size: clamp(72px, 18vw, 120px); line-height: .86; margin-top: 20px; }
+footer .zen { font-family: 'Zen Dots', sans-serif; font-size: clamp(18px, 3vw, 24px); color: #bfe4ff;
+  margin-top: 12px; text-shadow: 0 0 18px rgba(88,182,255,.7); }
+footer .line { margin-top: 32px; }
+
+/* ---------- sticky CTA ---------- */
+#sticky {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+  transform: translateY(110%); transition: transform .35s ease;
+  border-top: 1px solid rgba(143,208,255,.25);
+  background: rgba(10,14,26,.92); backdrop-filter: blur(10px);
+}
+#sticky.show { transform: none; }
+#sticky .inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center;
+  justify-content: space-between; gap: 16px; padding: 12px 16px; }
+#sticky .t1 { font-family: 'Michroma', sans-serif; font-size: 12px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sticky .t2 { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: #8fb1cf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sticky .cta { flex-shrink: 0; padding: 12px 24px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<section class="bg-frost hero">
+  <div class="scan"></div>
+  <div class="mball"></div>
+  <span class="spk" style="left:12%; top:22%; --s:30px;"></span>
+  <span class="spk" style="right:14%; top:30%; --s:20px;"></span>
+  <span class="spk" style="left:20%; bottom:18%; --s:16px;"></span>
+  <span class="spk" style="right:22%; bottom:26%; --s:26px;"></span>
+
+  <div class="wrap" style="max-width:900px;">
+    <div class="kick rv">Jubiland Presents · 21+</div>
+    <h1 class="chrome rv">2000</h1>
+    <div class="chrome-mag subtitle rv">A RAVE ODYSSEY</div>
+    <p class="sub tagline rv">The future called.<br />It's throwing a party.</p>
+    <div class="cbb rv"><span>CHROME</span><span class="d">◆</span><span>BASS</span><span class="d">◆</span><span>BUMPER CARS</span></div>
+    <div class="rv">
+      <div class="glass datepill">
+        <span class="js-datelabel">FRI · JUL 24</span> · <span class="pink js-doors">DOORS 8 PM</span>
+        <span class="venue js-venue">JUBILAND · NORTH HOLLYWOOD</span>
+      </div>
+    </div>
+    <div class="hero-cta rv">
+      <a class="cta js-tickets" href="#" target="_blank" rel="noopener noreferrer">GET TICKETS →</a>
+      <div class="micro" style="margin-top:14px;">ON EVENTBRITE · LIMITED CAPACITY</div>
+    </div>
+    <div class="countwrap rv">
+      <div class="kick lbl">The future arrives in</div>
+      <div class="count" id="count">
+        <div class="unit"><div class="bubble n" id="cd-d">--</div><div class="kick u">DAYS</div></div>
+        <div class="unit"><div class="bubble n" id="cd-h">--</div><div class="kick u">HRS</div></div>
+        <div class="unit"><div class="bubble n" id="cd-m">--</div><div class="kick u">MIN</div></div>
+        <div class="unit"><div class="bubble n" id="cd-s">--</div><div class="kick u">SEC</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="handle js-handle">@JUBILANDPLAY · NORTH HOLLYWOOD</div>
+</section>
+
+<!-- ================= URGENCY ================= -->
+<section class="bg-flat">
+  <div class="scan"></div>
+  <div class="winwrap rv">
+    <div class="win">
+      <div class="win-tb"><span>⚠ earlybird.exe</span><div class="btns"><b>_</b><b>□</b><b>✕</b></div></div>
+      <div class="winbody">
+        <div class="kick" style="color:var(--mag-hi); letter-spacing:.3em;">Selling fast</div>
+        <h2 class="chrome">EARLY BIRD<br />ENDS SOON</h2>
+        <p class="sub lead" id="urgency-copy"></p>
+        <div style="margin-top:36px;"><a class="cta js-tickets" href="#" target="_blank" rel="noopener noreferrer">LOCK IN EARLY BIRD →</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONCEPT ================= -->
+<section class="bg-flat">
+  <div class="scan"></div>
+  <div class="wrap">
+    <div class="rv">
+      <div class="kick">The concept</div>
+      <h2 class="chrome h2">NOT A THEME PARTY.<br />A TIME MACHINE.</h2>
+      <p class="sub" style="margin-top:28px; max-width:600px; margin-left:auto; margin-right:auto;">
+        The year is 2000 and the future looks like frosted plastic and chrome.
+        We're rebuilding that fantasy for one night — mylar, mirror balls,
+        inflatable everything. Y2K club, not theme-park throwback.
+      </p>
+    </div>
+    <div class="bullets">
+      <div class="glass b rv"><span class="d">◆</span>&nbsp; 2000s trance + one nostalgia drop</div>
+      <div class="glass b rv"><span class="d">◆</span>&nbsp; Icy-blue bumper-car pods</div>
+      <div class="glass b rv"><span class="d">◆</span>&nbsp; Dress like it's 1999</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BUMPER PODS ================= -->
+<section class="bg-blow">
+  <div class="blob-cyan" style="left:-64px; top:80px; width:200px; height:200px;"></div>
+  <div class="blob-mag" style="right:-40px; bottom:130px; width:150px; height:150px;"></div>
+  <span class="spk" style="left:10%; top:8%; --s:34px;"></span>
+  <span class="spk" style="right:12%; top:40%; --s:22px;"></span>
+  <div class="wrap">
+    <div class="rv">
+      <div class="kick" style="color:var(--mag-hi); letter-spacing:.3em;">The signature moment</div>
+      <div class="pod">
+        <div class="shell"></div>
+        <div class="base"></div>
+        <div class="tag">POD 01</div>
+      </div>
+      <h2 class="bubble podhead">CHROME.<br />BASS.<br />BUMPER CARS.</h2>
+      <p class="sub" style="margin-top:28px; color:#bfe4ff;">
+        Icy-blue pods. Timed sessions between DJ peaks. 🪩<br />
+        The ride no other party in town has.
+      </p>
+    </div>
+    <div class="glass vidph rv">
+      <div class="play">▶</div>
+      <div class="t1">HERO CLIP · UV POD RUN</div>
+      <div class="micro">video placeholder — drop the pod footage here</div>
+    </div>
+    <div class="rv" style="margin-top:40px;">
+      <a class="cta-blow js-tickets" href="#" target="_blank" rel="noopener noreferrer">RIDE THE PODS →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GALLERY ================= -->
+<section class="bg-frost">
+  <div class="scan"></div>
+  <span class="spk" style="right:8%; top:10%; --s:26px;"></span>
+  <div class="wrap" style="max-width:960px;">
+    <div class="rv">
+      <div class="kick">This is Jubiland after dark</div>
+      <h2 class="chrome h2">PROOF OF FUN</h2>
+      <p class="sub" style="margin-top:20px; max-width:480px; margin-left:auto; margin-right:auto;">
+        The room shoots itself. Here's what your camera roll looks like the morning after.
+      </p>
+    </div>
+    <div class="grid" id="gallery"></div>
+  </div>
+</section>
+
+<!-- ================= DRESS CODE ================= -->
+<section class="bg-frost dress">
+  <div class="scan"></div>
+  <span class="spk" style="right:12%; top:14%; --s:30px;"></span>
+  <span class="spk" style="left:10%; bottom:20%; --s:20px;"></span>
+  <div class="wrap" style="max-width:640px;">
+    <div class="rv">
+      <div class="kick" style="color:var(--mag-hi); letter-spacing:.3em; font-size:17px;">The dress code is</div>
+      <h2 class="chrome">DRESS<br />LIKE IT'S<br />1999</h2>
+    </div>
+    <div class="chips">
+      <div class="glass c rv"><span class="d">✦</span>&nbsp; Low-rise everything</div>
+      <div class="glass c rv"><span class="d">✦</span>&nbsp; Metallics &amp; mesh</div>
+      <div class="glass c rv"><span class="d">✦</span>&nbsp; Tinted shades</div>
+      <div class="glass c rv"><span class="d">✦</span>&nbsp; Frosted tips + butterfly clips 🦋</div>
+    </div>
+    <p class="micro rv" style="margin-top:36px; color:#9fc4ee;">The fit is part of the ticket. Commit.</p>
+  </div>
+</section>
+
+<!-- ================= LINEUP ================= -->
+<section class="bg-frost">
+  <div class="scan"></div>
+  <div class="wrap wrap-l" style="max-width:760px;">
+    <div class="rv">
+      <div class="kick" style="letter-spacing:.4em;">The night · 21+</div>
+      <h2 class="chrome h2" style="font-size:clamp(40px,9vw,72px);">THE<br />LINEUP</h2>
+    </div>
+    <div class="rows" id="lineup"></div>
+    <div class="rv" style="text-align:center;">
+      <span class="glass setpill">2000s trance · progressive house · one peak-time drop</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TICKETS ================= -->
+<section class="bg-frost" id="tickets">
+  <div class="scan"></div>
+  <div class="mball" style="top:48px; width:72px; height:72px;"></div>
+  <div class="wrap" style="max-width:760px; padding-top:96px;">
+    <div class="rv">
+      <div class="kick">Limited capacity · 21+</div>
+      <h2 class="chrome" style="font-size:clamp(44px,10vw,96px); line-height:.92; margin-top:20px;">TICKETS<br />ARE LIVE</h2>
+      <p class="sub" style="margin-top:28px;">One night only.<br />Once they're gone, they're gone.</p>
+    </div>
+    <div class="tix" id="tiers"></div>
+    <div class="rv" style="margin-top:44px;">
+      <a class="cta js-tickets" href="#" target="_blank" rel="noopener noreferrer">GET TICKETS ON EVENTBRITE →</a>
+      <div class="micro" style="margin-top:16px;">21+ · VALID ID REQUIRED · JUBILAND · NORTH HOLLYWOOD</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="bg-flat">
+  <div class="scan"></div>
+  <div class="wrap" style="max-width:640px;">
+    <div class="rv">
+      <div class="kick">Before you ask</div>
+      <h2 class="chrome h2" style="font-size:clamp(34px,7vw,60px);">THE FINE PRINT</h2>
+    </div>
+    <div class="faq" id="faq"></div>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer class="bg-blow">
+  <div class="starburst"></div>
+  <span class="spk" style="right:14%; top:18%; --s:30px;"></span>
+  <div class="wrap" style="max-width:640px;">
+    <div class="rv">
+      <div class="kick" style="color:var(--mag-hi); letter-spacing:.28em; font-size:12px;">✦ Jubiland after dark · 21+ ✦</div>
+      <div class="bubble big">2000</div>
+      <div class="zen">A Rave Odyssey</div>
+      <p class="sub line">Don't get left in the past.</p>
+      <div style="margin-top:32px;"><a class="cta-blow js-tickets" href="#" target="_blank" rel="noopener noreferrer">GET TICKETS</a></div>
+      <div class="micro line" style="color:#bfe4ff;"><span class="js-datelabel">FRI · JUL 24</span> · <span class="js-doors">DOORS 8 PM</span> · <span class="js-venue">JUBILAND · NORTH HOLLYWOOD</span></div>
+      <div class="micro" style="margin-top:12px;">@JUBILANDPLAY 🪩</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= STICKY CTA ================= -->
+<div id="sticky">
+  <div class="inner">
+    <div style="min-width:0;">
+      <div class="t1">2000: A RAVE ODYSSEY</div>
+      <div class="t2"><span class="js-datelabel">FRI · JUL 24</span> · <span class="js-venue">JUBILAND · NORTH HOLLYWOOD</span> · 21+</div>
+    </div>
+    <a class="cta js-tickets" href="#" target="_blank" rel="noopener noreferrer">GET TICKETS →</a>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   EVENT CONFIG — everything on the page reads from here.
+   ============================================================ */
+var RAVE = {
+  eventbriteUrl: "https://www.eventbrite.com/e/PLACEHOLDER",   // TODO: real Eventbrite link
+  eventDateISO: "2026-07-24T20:00:00-07:00",
+  dateLabel: "FRI · JUL 24",
+  doorsLabel: "DOORS 8 PM",
+  venue: "JUBILAND · NORTH HOLLYWOOD",
+  // urgency levers — update as sales progress
+  earlyBirdRemaining: 50,
+  earlyBirdTotal: 50,
+  ebPrice: "$35",
+  gaPrice: "$45",
+  lineup: [
+    { name: "DOORS + FREE PLAY", time: "8 PM", feat: false },
+    { name: "[DJ NAME] LIVE", time: "10 PM", feat: false },
+    { name: "THE 2000 REWIND", time: "12 AM", feat: true }
+  ],
+  tiers: [
+    { name: "EARLY BIRD", desc: "First 50 tickets only", note: "Then prices jump", price: "$35", was: "$45", feat: true },
+    { name: "GENERAL ADMISSION", desc: "Entry + open floor", note: "Full access all night", price: "$45", was: null, feat: false },
+    { name: "GROUP OF 4", desc: "4 tickets · $40 each", note: "Bring the crew · save $20", price: "$160", was: "$180", feat: false }
+  ],
+  gallery: [
+    { e: "🚗", t: "UV Pod Shots", s: "The hero clip" },
+    { e: "👗", t: "Entrance Line Fits", s: "Dress-code arrivals" },
+    { e: "🪩", t: "The 2000 Rewind", s: "Peak-time crowd" },
+    { e: "✨", t: "Mirror-Ball Floor", s: "Chrome bounce" },
+    { e: "🛋️", t: "Blow-Up Lounge", s: "Inflatable everything" },
+    { e: "💠", t: "Laser Peak", s: "The big moment" }
+  ],
+  faq: [
+    { q: "Is this really 21+?",
+      a: "Yes — valid ID required at the door, no exceptions. This is Jubiland after dark, not the family rink." },
+    { q: "Where is it and where do I park?",
+      a: "Jubiland, North Hollywood. Free lot on site plus street parking nearby." },
+    { q: "What time do doors open?",
+      a: "Doors at 8 PM with bumper cars on free play, photo booth rolling, and the warm-up set spinning. The 2000 Rewind — every song that defined the millennium — hits at midnight. You don't want to be in line for it." },
+    { q: "Is the dress code enforced?",
+      a: "It's not mandatory, but it's the whole point. Dress like it's 1999 — low-rise, metallics, tinted shades. The room shoots itself when everyone commits." },
+    { q: "How do the bumper cars work?",
+      a: "Free play from 8–10 PM while the floor warms up, then timed sessions between DJ peaks the rest of the night." }
+  ]
+};
+
+/* ---------- wire config into the page ---------- */
+document.querySelectorAll(".js-tickets").forEach(function (a) { a.href = RAVE.eventbriteUrl; });
+document.querySelectorAll(".js-datelabel").forEach(function (el) { el.textContent = RAVE.dateLabel; });
+document.querySelectorAll(".js-doors").forEach(function (el) { el.textContent = RAVE.doorsLabel; });
+document.querySelectorAll(".js-venue").forEach(function (el) { el.textContent = RAVE.venue; });
+
+/* urgency copy */
+(function () {
+  var el = document.getElementById("urgency-copy");
+  if (RAVE.earlyBirdRemaining < RAVE.earlyBirdTotal) {
+    el.innerHTML = 'Only <span style="color:var(--mag-hi);">' + RAVE.earlyBirdRemaining +
+      "</span> of the first " + RAVE.earlyBirdTotal + " tickets left at " + RAVE.ebPrice +
+      ".<br />Don't get left in the past.";
+  } else {
+    el.innerHTML = "Only the first " + RAVE.earlyBirdTotal + ' tickets get the <span style="color:var(--mag-hi);">' +
+      RAVE.ebPrice + "</span> price — then it's " + RAVE.gaPrice + ".<br />Don't get left in the past.";
+  }
+})();
+
+/* lineup rows */
+document.getElementById("lineup").innerHTML = RAVE.lineup.map(function (act) {
+  return '<div class="row rv' + (act.feat ? " feat" : "") + '">' +
+    '<span class="n' + (act.feat ? " chrome-mag" : "") + '">' + act.name + "</span>" +
+    '<span class="t">' + act.time + "</span></div>";
+}).join("");
+
+/* ticket tiers */
+document.getElementById("tiers").innerHTML = RAVE.tiers.map(function (t) {
+  return '<a class="tier rv' + (t.feat ? " feat" : "") + '" href="' + RAVE.eventbriteUrl + '" target="_blank" rel="noopener noreferrer">' +
+    "<div>" +
+      '<div class="name">' + t.name + (t.feat ? '<span class="badge">BEST DEAL</span>' : "") + "</div>" +
+      '<div class="desc">' + t.desc + "</div>" +
+      '<div class="note">' + t.note + "</div>" +
+    "</div>" +
+    '<div class="price">' + (t.was ? '<div class="was">' + t.was + "</div>" : "") +
+      '<div class="chrome-mag now">' + t.price + "</div></div></a>";
+}).join("");
+
+/* gallery tiles */
+document.getElementById("gallery").innerHTML = RAVE.gallery.map(function (g) {
+  return '<div class="glass tile rv">' +
+    '<div class="e">' + g.e + "</div>" +
+    '<div class="t">' + g.t + "</div>" +
+    '<div class="s">' + g.s + "</div>" +
+    '<div class="ph">photo / video placeholder</div></div>';
+}).join("");
+
+/* FAQ accordion */
+document.getElementById("faq").innerHTML = RAVE.faq.map(function (item, i) {
+  return '<div class="glass q rv' + (i === 0 ? " open" : "") + '">' +
+    "<button aria-expanded=\"" + (i === 0) + "\">" +
+      "<span>" + item.q + "</span><span class=\"plus\">+</span></button>" +
+    '<div class="a"><p>' + item.a + "</p></div></div>";
+}).join("");
+document.querySelectorAll(".q button").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var q = btn.parentElement, was = q.classList.contains("open");
+    document.querySelectorAll(".q").forEach(function (x) {
+      x.classList.remove("open");
+      x.querySelector("button").setAttribute("aria-expanded", "false");
+    });
+    if (!was) { q.classList.add("open"); btn.setAttribute("aria-expanded", "true"); }
+  });
+});
+
+/* countdown */
+(function () {
+  var target = new Date(RAVE.eventDateISO).getTime();
+  var pad = function (n) { return String(n).padStart(2, "0"); };
+  function tick() {
+    var diff = target - Date.now();
+    if (diff <= 0) {
+      document.getElementById("count").innerHTML =
+        '<div class="zen" style="font-family:\'Zen Dots\',sans-serif; font-size:22px; color:#bfe4ff;">IT\'S HAPPENING. SEE YOU ON THE FLOOR. 🪩</div>';
+      clearInterval(iv);
+      return;
+    }
+    document.getElementById("cd-d").textContent = pad(Math.floor(diff / 864e5));
+    document.getElementById("cd-h").textContent = pad(Math.floor(diff / 36e5) % 24);
+    document.getElementById("cd-m").textContent = pad(Math.floor(diff / 6e4) % 60);
+    document.getElementById("cd-s").textContent = pad(Math.floor(diff / 1e3) % 60);
+  }
+  var iv = setInterval(tick, 1000);
+  tick();
+})();
+
+/* sticky CTA after the hero */
+(function () {
+  var bar = document.getElementById("sticky");
+  function onScroll() {
+    bar.classList.toggle("show", window.scrollY > window.innerHeight * 0.85);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+})();
+
+/* reveal on scroll */
+(function () {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+    });
+  }, { rootMargin: "0px 0px -60px 0px" });
+  document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
+})();
+</script>
+</body>
+</html>
