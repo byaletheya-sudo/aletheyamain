@@ -191,6 +191,23 @@
   .fieldgrp .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
   .tog{cursor:pointer;user-select:none;}
   .del-btn{margin-left:auto;background:rgba(248,113,113,.12);color:var(--na-red);border:none;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:650;cursor:pointer;}
+  /* agent edit modal */
+  .agm-scrim{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(3px);z-index:120;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .agm{width:100%;max-width:420px;background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden;}
+  .agm-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--na-line);}
+  .agm-name{flex:1;background:transparent;border:none;color:var(--na-fg);font-size:17px;font-weight:680;outline:none;font-family:inherit;}
+  .agm-name::placeholder{color:var(--na-muted-2);}
+  .agm-x{all:unset;cursor:pointer;color:var(--na-muted);font-size:15px;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .agm-x:hover{background:var(--na-panel-2);color:var(--na-fg);}
+  .agm-body{padding:16px 18px;}
+  .agm-hint{font-size:12px;color:var(--na-muted);line-height:1.5;margin-bottom:14px;}
+  .agm-pcts{display:flex;flex-direction:column;gap:10px;}
+  .agm-pct{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;color:var(--na-fg);}
+  .agm-in{display:inline-flex;align-items:center;gap:5px;color:var(--na-muted);font-size:12px;}
+  .agm-in input{width:66px;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:9px;padding:8px 10px;font-size:14px;font-weight:650;text-align:right;outline:none;font-family:inherit;}
+  .agm-in input:focus{border-color:var(--na-blue);}
+  .agm-foot{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-top:1px solid var(--na-line);}
+  .agm-foot .del-btn{margin-left:0;}
   .ovr-note{font-family:inherit !important;color:var(--na-muted-2);font-size:10.5px;}
   /* open-row emphasis + detail banner */
   .na-tbl tr.drow.open{background:var(--na-panel-2);box-shadow:inset 3px 0 0 var(--na-blue);}
@@ -389,7 +406,7 @@
   <div id="view-agents" class="hide">
     <div class="na-filters">
       <div class="na-spacer"></div>
-      <button class="na-btn">+ Add Agent</button>
+      <button class="na-btn" onclick="newAgent()">+ Add Agent</button>
     </div>
     <div class="na-agents" id="agentsBody"></div>
   </div>
@@ -430,6 +447,23 @@
     </div>
   </div>
 
+</div>
+
+<!-- AGENT EDIT MODAL -->
+<div class="agm-scrim hide" id="agScrim" onclick="if(event.target===this)closeAgent()">
+  <div class="agm">
+    <div class="agm-head"><input class="agm-name" id="agmName" placeholder="Agent name" onkeydown="if(event.key==='Enter')saveAgentModal()">
+      <button class="agm-x" onclick="closeAgent()">✕</button></div>
+    <div class="agm-body">
+      <div class="agm-hint">The % of each deal's net pool this agent keeps, by lead source. Nova leads usually pay the agent less.</div>
+      <div class="agm-pcts">
+        <label class="agm-pct"><span>Own lead</span><span class="agm-in"><input type="number" id="agmOwn" min="0" max="100" step="1">%</span></label>
+        <label class="agm-pct"><span>Nova lead</span><span class="agm-in"><input type="number" id="agmNova" min="0" max="100" step="1">%</span></label>
+        <label class="agm-pct"><span>Referral</span><span class="agm-in"><input type="number" id="agmRef" min="0" max="100" step="1">%</span></label>
+      </div>
+    </div>
+    <div class="agm-foot"><button class="del-btn" id="agmDel" onclick="deleteAgent()">Delete agent</button><button class="na-btn" onclick="saveAgentModal()">Save</button></div>
+  </div>
 </div>
 
 <script>
@@ -715,7 +749,7 @@ function renderAgents(){
     return `<div class="acard">
       <div class="ah"><div><div class="aname"><span class="dot" style="background:${aColor(ag.id)}"></span> ${ag.name}</div>
         <div class="ameta">${ds.length} deals · ${fmt(prod)} · ${range.label}</div></div>
-        <button class="na-btn ghost" style="font-size:11px;padding:6px 10px;">Edit</button></div>
+        <button class="na-btn ghost" style="font-size:11px;padding:6px 10px;" onclick="editAgent('${ag.id}')">Edit</button></div>
       <div class="a-stats">
         <div class="ast"><span>MTD earned</span><b>${fmt(mtdE)}</b></div>
         <div class="ast"><span>YTD earned</span><b class="pos">${fmt(ytdE)}</b></div>
@@ -734,6 +768,39 @@ function renderAgents(){
       <div class="a-foot"><span>Nova earned from ${ag.name.split(" ")[0]} · YTD</span><b class="pos">${fmt(ytdNova)}</b></div>
     </div>`;
   }).join("");
+}
+
+// ---- agent CRUD (name + per-lead split %) ----
+let _agEdit=null;
+function _agOpen(){ document.getElementById("agScrim").classList.remove("hide"); setTimeout(()=>document.getElementById("agmName").focus(),30); }
+function editAgent(id){ const ag=A(id); if(!ag)return; _agEdit=id;
+  document.getElementById("agmName").value=ag.name||"";
+  document.getElementById("agmOwn").value=ag.pct?.own??0;
+  document.getElementById("agmNova").value=ag.pct?.nova??0;
+  document.getElementById("agmRef").value=ag.pct?.referral??0;
+  document.getElementById("agmDel").style.display=""; _agOpen();
+}
+function newAgent(){ _agEdit=null;
+  document.getElementById("agmName").value="";
+  document.getElementById("agmOwn").value=70; document.getElementById("agmNova").value=50; document.getElementById("agmRef").value=70;
+  document.getElementById("agmDel").style.display="none"; _agOpen();
+}
+function closeAgent(){ document.getElementById("agScrim").classList.add("hide"); _agEdit=null; }
+function saveAgentModal(){
+  const name=document.getElementById("agmName").value.trim(); if(!name){ document.getElementById("agmName").focus(); return; }
+  const clamp=v=>{const n=Math.round(parseFloat(v)); return isNaN(n)?0:Math.max(0,Math.min(100,n));};
+  const pct={own:clamp(document.getElementById("agmOwn").value), nova:clamp(document.getElementById("agmNova").value), referral:clamp(document.getElementById("agmRef").value)};
+  if(_agEdit){ const ag=A(_agEdit); if(ag){ ag.name=name; ag.pct=pct; saveRow({agent:ag}); } }
+  else { let base=name.toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,24)||"agent", id=base, n=1;
+    while(AGENTS.some(a=>a.id===id)) id=base+(++n);
+    const ag={id,name,pct}; AGENTS.push(ag); saveRow({agent:ag}); }
+  closeAgent(); renderAll();
+}
+function deleteAgent(){ if(!_agEdit)return; const ag=A(_agEdit); if(!ag)return;
+  const dc=DEALS.filter(d=>d.agentId===_agEdit).length;
+  if(!confirm(dc>0?`${ag.name} has ${dc} deal(s) — they'll stay but show as unassigned. Delete ${ag.name}?`:`Delete ${ag.name}?`))return;
+  const i=AGENTS.findIndex(a=>a.id===_agEdit); if(i>=0)AGENTS.splice(i,1);
+  saveRow({deleteAgent:_agEdit}); closeAgent(); renderAll();
 }
 
 // ---- RENDER: Expenses ----
