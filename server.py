@@ -136,6 +136,11 @@ def _nova_set_password(uid, pw):
 
 def _nova_current_user():
     uid = session.get("nova_user")
+    # Legacy sessions (created before per-user logins) carry admin_ok but no identity.
+    # They were authenticated with the master admin password — Edgar's bootstrap
+    # credential — so treat them as Edgar instead of locking him out of Team/agent.
+    if not uid and session.get("admin_ok"):
+        uid = NOVA_ACCOUNT_ADMIN
     r = next((x for x in NOVA_USERS if x["id"] == uid), None)
     return {"id": r["id"], "name": r["name"], "role": r["role"]} if r else None
 

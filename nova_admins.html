@@ -241,9 +241,14 @@
   /* smart layer: projection, chips, insight cards */
   .dh-proj{margin-top:9px;padding-top:9px;border-top:1px solid var(--na-line);font-size:12px;color:var(--na-muted);}
   .dh-proj b{color:var(--na-fg);font-family:var(--na-mono);}
-  .dash-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
-  .chip{font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);}
   .dash-insights{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .ins.click{cursor:pointer;transition:border-color .12s, transform .12s;}
+  .ins.click:hover{border-color:var(--na-line-2);transform:translateY(-1px);}
+  .ins-go{color:var(--na-blue-soft);font-weight:650;opacity:0;transition:opacity .12s;}
+  .ins.click:hover .ins-go{opacity:1;}
+  .dash-sec{display:flex;align-items:baseline;gap:10px;margin:4px 2px 12px;}
+  .dash-sec h3{margin:0;font-size:14px;font-weight:700;}
+  .dash-sec .dash-scope{margin-left:auto;}
   .ins{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:14px 15px;position:relative;overflow:hidden;}
   .ins::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;}
   .ins.green::after{background:var(--na-green);} .ins.amber::after{background:var(--na-amber);} .ins.blue::after{background:var(--na-blue);} .ins.purple::after{background:var(--na-purple);}
@@ -356,11 +361,12 @@
   <div id="view-dashboard">
     <div class="dash-heroes" id="dashHeroes"></div>
     <div class="dash-stats" id="dashStats"></div>
-    <div class="dash-chips" id="dashChips"></div>
     <div class="dash-insights" id="dashInsights"></div>
     <div class="panel" style="margin-bottom:16px;"><h3>Profit by month <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
+    <div class="dash-sec"><h3>Breakdowns</h3><span class="mini">models · brands · leads · profit per car</span>
+      <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></div>
     <div class="na-two">
-      <div class="panel"><h3>Top models <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></h3><div id="dashModels"></div></div>
+      <div class="panel"><h3>Top models</h3><div id="dashModels"></div></div>
       <div class="panel"><h3>Top brands</h3><div id="dashBrands"></div></div>
     </div>
     <div class="na-two" style="margin-top:16px;">
@@ -552,8 +558,10 @@ function filteredDeals(){
         fs=document.getElementById("fStatus").value, q=document.getElementById("fSearch").value.toLowerCase().trim();
   if(fa!=="all") ds=ds.filter(d=>d.agentId===fa);
   if(fl!=="all") ds=ds.filter(d=>d.lead===fl);
-  if(fs==="owed") ds=ds.filter(d=>collStatus(d)!=="g");
-  if(fs==="unpaid") ds=ds.filter(d=>paidStatus(d)!=="g");
+  // 'a'|'r' = a real side is outstanding; excludes 'n' drafts with no amounts, so
+  // these lists match the dashboard's To-collect / Owed-to-agents counts exactly.
+  if(fs==="owed") ds=ds.filter(d=>["a","r"].includes(collStatus(d)));
+  if(fs==="unpaid") ds=ds.filter(d=>["a","r"].includes(paidStatus(d)));
   if(fs==="done") ds=ds.filter(d=>collStatus(d)==="g" && paidStatus(d)==="g");
   if(q) ds=ds.filter(d=>(`${d.client} ${d.vin} ${d.year} ${d.make} ${d.model} ${d.dealer}`).toLowerCase().includes(q));
   return ds;
@@ -907,23 +915,16 @@ function renderDashboard(){
   const adSpend=EXPENSES.filter(e=>e.date.startsWith(CUR_YEAR)&&/ad ?spend|meta|yelp|ads/i.test((e.cat||'')+' '+(e.desc||''))).reduce((s,e)=>s+e.amt,0);
   let novaLeadProfit=0; ytd.ds.filter(d=>d.lead==="nova").forEach(d=>novaLeadProfit+=calc(d).novaCut);
   const roas=adSpend?novaLeadProfit/adSpend:0;
+  // top agent this month — the one chip fact that wasn't already on a card
+  const topAg=AGENTS.map(a=>{let e=0,n=0;DEALS.filter(d=>d.agentId===a.id&&d.date.startsWith(CUR_MONTH)).forEach(d=>{e+=calc(d).agentCut;n++;});return{a,e,n};}).sort((x,y)=>y.e-x.e)[0];
   document.getElementById("dashInsights").innerHTML=[
-    {l:monthDone?monName+' · final':'On pace · '+monName, v:fmt(proj), s:vsTxt||'projected net', a:'green'},
-    {l:'To collect', v:fmt(toCollect), s:collN+' deals · owed to Nova', a:'amber'},
-    {l:'Owed to agents', v:fmt(oweAg), s:oweN+' deals to pay out', a:'blue'},
+    topAg&&topAg.e>0
+      ? {l:'Top agent · '+monName, v:topAg.a.name.split(' ')[0], s:fmt(topAg.e)+' earned · '+topAg.n+' deal'+(topAg.n>1?'s':''), a:'green'}
+      : {l:'Top agent · '+monName, v:'—', s:'no deals yet this month', a:'green'},
+    {l:'To collect', v:fmt(toCollect), s:collN+' deals · owed to Nova', a:'amber', go:'owed'},
+    {l:'Owed to agents', v:fmt(oweAg), s:oweN+' deals to pay out', a:'blue', go:'unpaid'},
     {l:'Nova-lead ROAS · YTD', v:(roas?roas.toFixed(1):'0')+'×', s:fmt(adSpend)+' ads → '+fmt(novaLeadProfit)+' profit', a:'purple'},
-  ].map(x=>`<div class="ins ${x.a}"><div class="ins-l">${x.l}</div><div class="ins-v">${x.v}</div><div class="ins-s">${x.s}</div></div>`).join("");
-  // ---- momentum chips ----
-  const topAg=AGENTS.map(a=>{let e=0;DEALS.filter(d=>d.agentId===a.id&&d.date.startsWith(CUR_MONTH)).forEach(d=>e+=calc(d).agentCut);return{a,e};}).sort((x,y)=>y.e-x.e)[0];
-  const attachPct=ytd.count?Math.round(attach/ytd.count*100):0, chips=[];
-  if(!monthDone) chips.push(`📈 On pace for ${fmt(proj)} this month${vsTxt?' — '+vsTxt:''}`);
-  else if(lmNet) chips.push(`${proj>=lmNet?'🔥':'📉'} ${monName} ${proj>=lmNet?'beat':'trailed'} ${lmName} by ${fmt(Math.abs(proj-lmNet))}`);
-  if(topAg&&topAg.e>0) chips.push(`🏆 ${topAg.a.name.split(' ')[0]} leads ${monName} — ${fmt(topAg.e)}`);
-  if(toCollect>500) chips.push(`💰 ${fmt(toCollect)} still to collect · ${collN} deals`);
-  if(oweAg>500) chips.push(`💸 ${fmt(oweAg)} owed out to agents`);
-  if(roas>0) chips.push(`📊 Nova-lead ads returning ${roas.toFixed(1)}× YTD`);
-  if(attachPct<15) chips.push(`⚠️ Warranty attach ${attachPct}% — pitch it more`);
-  document.getElementById("dashChips").innerHTML=chips.slice(0,5).map(c=>`<span class="chip">${c}</span>`).join("");
+  ].map(x=>`<div class="ins ${x.a}${x.go?' click':''}"${x.go?` onclick="dashGo('${x.go}')" title="Open these deals in the ledger"`:''}><div class="ins-l">${x.l}</div><div class="ins-v">${x.v}</div><div class="ins-s">${x.s}${x.go?' <span class="ins-go">view →</span>':''}</div></div>`).join("");
   // ---- rolling last-6-months chart ----
   const months=[]; for(let i=5;i>=0;i--){const d=new Date(NOW.getFullYear(),NOW.getMonth()-i,1);months.push(d.getFullYear()+"-"+_pad(d.getMonth()+1));}
   const nets=months.map(monthNet); const mx=Math.max(...nets,1);
@@ -977,6 +978,15 @@ function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forE
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
 function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; lgReset(); renderAll(); }
+// dashboard "To collect" / "Owed to agents" → the ledger, pre-filtered to those deals.
+// Those card totals are ALL-TIME, so widen the range to match — the list equals the number you clicked.
+function dashGo(status){
+  range=presetRange("all"); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range));
+  ["fAgent","fLead"].forEach(i=>document.getElementById(i).value="all");
+  document.getElementById("fSearch").value="";
+  document.getElementById("fStatus").value=status;
+  openRow=null; lgReset(); setTab("ledger"); renderAll();
+}
 function applyCustom(){ const f=document.getElementById("ppFrom").value, t=document.getElementById("ppTo").value; if(!f||!t)return;
   range={from:f,to:t,label:f+" → "+t}; document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; renderAll(); }
 function togglePP(e){ e.stopPropagation(); document.getElementById("periodMenu").classList.toggle("hide"); }
