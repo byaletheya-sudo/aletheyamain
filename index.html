@@ -4500,6 +4500,10 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     dh_glue(s).split(/[^a-z0-9]+/).forEach(t => {
       if (!t || DH_TOK_NOISE.has(t) || (t.length === 1 && /[a-z]/.test(t))) return;
       out.add(DH_TRIM_ALIAS[t] || t);   // expand trim abbreviations so the hub's "PREM"/"LUX" match the site's "Premium"/"Luxury"
+      // BMW/MB drive-prefixed engine badges: also emit the bare engine so the site's
+      // "sDrive40i"/"xDrive50e" reduces to "40i"/"50e" and binds to a hub "X5 40i"
+      // (otherwise the base RWD trim ties its siblings and gets orphaned as "missing").
+      const em = t.match(/^[xse]drive(\d[a-z0-9]*)$/); if (em) out.add(em[1]);
     });
     return out;
   }
