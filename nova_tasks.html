@@ -30,7 +30,7 @@
   .na-sel,.na-in{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);
     border-radius:10px;padding:8px 11px;font-size:12.5px;font-family:inherit;outline:none;}
   .na-sel:focus,.na-in:focus{border-color:var(--na-line-2);}
-  input.na-in[type=date]{font-family:var(--na-mono);font-size:11px;color-scheme:dark;padding:6px 8px;}
+  input.na-in[type=date]{font-family:var(--na-mono);font-size:11px;padding:6px 8px;}
   textarea.na-ed{width:100%;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:12.5px;outline:none;resize:vertical;}
   textarea.na-ed:focus{border-color:var(--na-blue);}
   .na-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
@@ -72,7 +72,7 @@
   .tcard-title{font-size:13px;font-weight:550;line-height:1.35;margin-bottom:9px;}
   .tcard-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--na-muted);}
   .tdue{font-family:var(--na-mono);} .tdue.over{color:var(--na-red);font-weight:650;}
-  .tsub{font-family:var(--na-mono);} .tlink{color:#76b4ff;} .tsp{flex:1;}
+  .tsub{font-family:var(--na-mono);} .tlink{color:var(--na-blue-soft);} .tsp{flex:1;}
   .tavatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex:none;}
   .tavatar.none{background:var(--na-panel);border:1px dashed var(--na-line-2);color:var(--na-muted-2);}
   .tavstack{display:inline-flex;flex:none;}
@@ -88,7 +88,7 @@
 
   /* list + agenda rows */
   .tlist{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;overflow:hidden;}
-  .lgroup{display:flex;align-items:center;gap:8px;padding:9px 14px;background:#13151c;border-bottom:1px solid var(--na-line);font-size:11.5px;font-weight:700;}
+  .lgroup{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--na-inset);border-bottom:1px solid var(--na-line);font-size:11.5px;font-weight:700;}
   .lgroup .tcol-n{margin-left:2px;}
   .lrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--na-line);cursor:pointer;}
   .lrow:hover{background:var(--na-panel-2);}
@@ -102,7 +102,7 @@
   .ttablewrap{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
   table.ttbl{width:100%;border-collapse:collapse;min-width:760px;}
   .ttbl th{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;text-align:left;
-    padding:11px 13px;border-bottom:1px solid var(--na-line);background:#13151c;white-space:nowrap;cursor:pointer;user-select:none;}
+    padding:11px 13px;border-bottom:1px solid var(--na-line);background:var(--na-inset);white-space:nowrap;cursor:pointer;user-select:none;}
   .ttbl th:hover{color:var(--na-fg);}
   .ttbl th .arr{font-size:9px;margin-left:4px;color:var(--na-blue);}
   .ttbl td{padding:10px 13px;border-bottom:1px solid var(--na-line);font-size:12.5px;vertical-align:middle;white-space:nowrap;}
@@ -124,7 +124,7 @@
   .tcal-cell.dim{opacity:.42;}
   .tcal-cell.today{border-color:rgba(58,142,239,.55);box-shadow:0 0 0 1px rgba(58,142,239,.35) inset;}
   .tcal-d{font-family:var(--na-mono);font-size:11px;color:var(--na-muted);margin-bottom:5px;}
-  .tcal-cell.today .tcal-d{color:#76b4ff;font-weight:700;}
+  .tcal-cell.today .tcal-d{color:var(--na-blue-soft);font-weight:700;}
   .tcal-chip{display:block;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:5px;background:var(--na-panel-2);border-left:2px solid;
     margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .tcal-chip.done{opacity:.45;text-decoration:line-through;}
@@ -133,9 +133,9 @@
   /* agenda */
   .tagenda{display:flex;flex-direction:column;gap:12px;max-width:860px;}
   .ag-day{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;overflow:hidden;}
-  .ag-h{display:flex;align-items:baseline;gap:9px;padding:10px 14px;background:#13151c;border-bottom:1px solid var(--na-line);}
+  .ag-h{display:flex;align-items:baseline;gap:9px;padding:10px 14px;background:var(--na-inset);border-bottom:1px solid var(--na-line);}
   .ag-h .d{font-size:13px;font-weight:700;} .ag-h .sub{font-size:11px;color:var(--na-muted-2);font-family:var(--na-mono);}
-  .ag-day.today .ag-h .d{color:#76b4ff;}
+  .ag-day.today .ag-h .d{color:var(--na-blue-soft);}
   .ag-day.overdue .ag-h .d{color:var(--na-red);}
 
 
@@ -165,9 +165,9 @@
   .tm-typetoggle .tt{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px;border-radius:9px;font-size:12.5px;font-weight:650;color:var(--na-muted);background:var(--na-panel);border:1px solid var(--na-line);transition:.12s;}
   .tm-typetoggle .tt:hover{color:var(--na-fg);}
   .tm-typetoggle .tt.on{color:var(--na-fg);background:rgba(58,142,239,.12);border-color:var(--na-blue);}
-  .tm-reptag{font-size:10.5px;font-weight:700;color:#76b4ff;background:rgba(58,142,239,.12);border-radius:6px;padding:2px 8px;}
-  .trep{color:#76b4ff;font-weight:700;}
-  .tev-time{font-family:var(--na-mono);font-size:10.5px;font-weight:700;color:#76b4ff;background:rgba(58,142,239,.12);border-radius:5px;padding:1px 6px;}
+  .tm-reptag{font-size:10.5px;font-weight:700;color:var(--na-blue-soft);background:rgba(58,142,239,.12);border-radius:6px;padding:2px 8px;}
+  .trep{color:var(--na-blue-soft);font-weight:700;}
+  .tev-time{font-family:var(--na-mono);font-size:10.5px;font-weight:700;color:var(--na-blue-soft);background:rgba(58,142,239,.12);border-radius:5px;padding:1px 6px;}
   .tcal-chip.ev{border-left-width:3px;font-weight:600;}
   .tcal-chip.ev b{color:var(--na-fg);font-variant-numeric:tabular-nums;}
   .tm-asg{align-items:flex-start;}
@@ -185,7 +185,7 @@
   .tm-dealcard{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--na-panel-2);border:1px solid var(--na-line);
     border-radius:11px;padding:10px 12px;font-size:12.5px;color:var(--na-fg);}
   .tm-dealcard:hover{border-color:var(--na-line-2);}
-  .tm-dealgo{margin-left:auto;font-size:11px;color:#76b4ff;}
+  .tm-dealgo{margin-left:auto;font-size:11px;color:var(--na-blue-soft);}
   .hide{display:none;}
 
   /* mobile */
@@ -509,7 +509,7 @@ function renderTaskModal(){
       <button class="tt ${isEv?'on':''}" onclick="setItemType(${t.id},'event')">🗓 Event</button>
     </div>
     <div class="tm-tags">
-      ${isEv?`<span class="tdue" style="color:#76b4ff">🗓 ${t.due?fmtDue(t.due):'no date'}${t.time?' · '+fmtTime(t.time):''}</span>`
+      ${isEv?`<span class="tdue" style="color:var(--na-blue-soft)">🗓 ${t.due?fmtDue(t.due):'no date'}${t.time?' · '+fmtTime(t.time):''}</span>`
             :`<span class="stpill ${t.status||'backlog'}">${stName(t.status||'backlog')}</span>`}
       <span class="tm-priotag" style="color:${p.c}">${p.l}</span>
       <span id="tmAvatars">${avatars(t)}</span>

@@ -484,17 +484,24 @@ os.makedirs(GENERATED_DIR, exist_ok=True)
 
 
 def load_api_key():
-    # Prefer an environment variable (used in deployment); fall back to a local .env file.
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if key:
-        return key
+    # Prefer an environment variable (used in deployment). Accept the common names so
+    # the key that's ALREADY configured on the host is found regardless of what it was
+    # called (Railway setups have used API_KEY as well as OPENAI_API_KEY).
+    for name in ("OPENAI_API_KEY", "API_KEY", "OPENAI_KEY", "OPEN_AI_API_KEY"):
+        key = os.environ.get(name, "").strip()
+        if key:
+            if name != "OPENAI_API_KEY":
+                print(f"[ai] using the OpenAI key from ${name}")
+            return key
     env_path = os.path.join(BASE_DIR, ".env")
     if os.path.exists(env_path):
         with open(env_path) as f:
             for line in f:
-                line = line.strip()
-                if line.startswith("OPENAI_API_KEY="):
-                    return line.split("=", 1)[1].strip()
+                m = re.match(r"\s*(?:OPENAI_API_KEY|API_KEY|OPENAI_KEY)\s*=\s*(.+)", line)
+                if m:
+                    return m.group(1).strip()
+    print("[ai] no OpenAI key found — AI features (Ask Nova, parsers) are off until "
+          "OPENAI_API_KEY is set in the host env.")
     return ""
 
 

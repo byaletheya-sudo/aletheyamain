@@ -1,8 +1,30 @@
-/* Nova Admins · shared design tokens — loaded once, cached, used across suite pages. */
+/* Nova Admins · shared design tokens — loaded once, cached, used across suite pages.
+   Themes: dark is the base (:root); light overrides via html[data-theme="light"],
+   which nova_common.js sets from the user's choice (dark / light / auto). */
 :root{
+  color-scheme:dark;
   --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
   --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
   --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-green-bg:rgba(52,211,153,.13);
   --na-red:#f87171; --na-red-bg:rgba(248,113,113,.13); --na-amber:#fbbf24; --na-amber-bg:rgba(251,191,36,.13);
+  --na-blue-soft:#76b4ff;   /* link/accent blue — readable on dark, swapped for light */
+  --na-inset:#13151c;       /* table/list headers — a touch darker than the panel */
   --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
 }
+html[data-theme="light"]{
+  color-scheme:light;
+  --na-bg:#f2f3f7; --na-panel:#ffffff; --na-panel-2:#eceef3; --na-line:rgba(18,26,44,.09);
+  --na-line-2:rgba(18,26,44,.18); --na-fg:#1b2231; --na-muted:#5c6373; --na-muted-2:#9096a4;
+  --na-blue:#2f7fe0; --na-purple:#7a4fe0; --na-green:#0e9f6e; --na-green-bg:rgba(14,159,110,.12);
+  --na-red:#d94848; --na-red-bg:rgba(217,72,72,.10); --na-amber:#b7791f; --na-amber-bg:rgba(183,121,31,.12);
+  --na-blue-soft:#2467c2;
+  --na-inset:#e8eaf0;
+}
+/* per-page accents that need more ink on white */
+html[data-theme="light"] .tlabel{color:#6d3fd4;background:rgba(122,79,224,.12);}
+html[data-theme="light"] .nbadge{color:#4a5162;}
+/* the dark/light/auto switcher (injected into .na-right by nova_common.js) */
+.na-thseg{display:inline-flex;gap:2px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:2px;flex:none;}
+.na-thseg button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;font-size:11px;font-weight:650;color:var(--na-muted);line-height:1.2;}
+.na-thseg button:hover{color:var(--na-fg);}
+.na-thseg button.on{background:var(--na-panel-2);color:var(--na-fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}

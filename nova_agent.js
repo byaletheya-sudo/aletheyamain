@@ -26,7 +26,7 @@
     --c-mut:var(--na-muted,#8a91a1);--c-blue:var(--na-blue,#3a8eef);--c-green:var(--na-green,#34d399);--c-red:var(--na-red,#f87171);}
   .nva-launch{position:fixed;right:20px;bottom:20px;z-index:2147483000;display:flex;align-items:center;gap:10px;
     padding:9px 15px 9px 10px;border-radius:999px;cursor:pointer;border:1px solid var(--c-line2);
-    background:linear-gradient(180deg,rgba(30,33,44,.96),rgba(17,18,25,.96));backdrop-filter:blur(8px);
+    background:var(--c-panel);backdrop-filter:blur(8px);
     box-shadow:0 12px 34px rgba(0,0,0,.5);color:var(--c-fg);font:600 12.5px/1 -apple-system,system-ui,sans-serif;
     transition:transform .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent;}
   .nva-launch:hover{transform:translateY(-2px);box-shadow:0 16px 40px rgba(0,0,0,.6);}
@@ -53,7 +53,7 @@
   .nva-scrim.show{display:flex;animation:nvaFade .2s ease;}
   @keyframes nvaFade{from{opacity:0}to{opacity:1}}
   .nva-panel{position:relative;width:100%;max-width:560px;max-height:88vh;overflow:auto;text-align:center;
-    background:linear-gradient(180deg,var(--c-panel),#111219);border:1px solid var(--c-line2);border-radius:24px;
+    background:linear-gradient(180deg,var(--c-panel),var(--c-bg));border:1px solid var(--c-line2);border-radius:24px;
     box-shadow:0 40px 110px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.04);padding:28px 24px 18px;
     animation:nvaRise .28s cubic-bezier(.2,.9,.25,1);}
   .nva-panel::-webkit-scrollbar{width:0;}
@@ -101,7 +101,7 @@
   @keyframes nvaMic{0%,100%{opacity:1}50%{opacity:.45}}
   .nva-send{cursor:pointer;border:none;border-radius:12px;padding:12px 16px;font-size:15px;line-height:1;background:var(--c-blue);color:#fff;flex:none;}
   /* account chip (bottom-left) + menu + password modal */
-  .nva-acct{position:fixed;left:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;padding:6px 13px 6px 6px;border-radius:999px;cursor:pointer;border:1px solid var(--c-line2);background:linear-gradient(180deg,rgba(30,33,44,.96),rgba(17,18,25,.96));backdrop-filter:blur(8px);box-shadow:0 12px 30px rgba(0,0,0,.4);color:var(--c-fg);font:600 12.5px/1 -apple-system,system-ui,sans-serif;transition:transform .15s;}
+  .nva-acct{position:fixed;left:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;padding:6px 13px 6px 6px;border-radius:999px;cursor:pointer;border:1px solid var(--c-line2);background:var(--c-panel);backdrop-filter:blur(8px);box-shadow:0 12px 30px rgba(0,0,0,.4);color:var(--c-fg);font:600 12.5px/1 -apple-system,system-ui,sans-serif;transition:transform .15s;}
   .nva-acct:hover{transform:translateY(-2px);}
   .nva-acct .av{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;}
   @media(max-width:600px){.nva-acct .nm{display:none;}.nva-acct{padding:6px;left:14px;bottom:14px;}}
