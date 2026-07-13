@@ -871,17 +871,18 @@ def nova_admins_parse():
     schema = {
         "type": "object", "additionalProperties": False,
         "required": ["client", "year", "make", "model", "vin", "dealer", "type", "term", "agentId",
-                     "lead", "front", "back", "feeReferral", "feeProgram", "pay", "payBack", "wOffered", "wSold",
+                     "lead", "source", "front", "back", "feeReferral", "feeProgram", "pay", "payBack", "wOffered", "wSold",
                      "fColl", "bColl", "aPaidF", "aPaidFd", "aPaidB", "aPaidBd", "date", "notes", "ok", "summary"],
         "properties": {
             "client": {"type": "string"}, "year": {"type": "string"}, "make": {"type": "string"},
             "model": {"type": "string"}, "vin": {"type": "string"}, "dealer": {"type": "string"},
             "type": {"type": "string", "enum": ["Lease", "Buy", ""]}, "term": {"type": "string"},
             "agentId": {"type": "string"}, "lead": {"type": "string", "enum": ["own", "nova", "referral", ""]},
+            "source": {"type": "string", "enum": ["FB", "IG", "Google", "Yelp", "Referral", "Repeat", "Walk-in", "Website", "Other", ""]},
             "front": {"type": "number"}, "back": {"type": "number"},
             "feeReferral": {"type": "number"}, "feeProgram": {"type": "number"},
             "pay": {"type": "string", "enum": ["Stripe", "Zelle", "Cash", "Check", ""]},
-            "payBack": {"type": "string", "enum": ["Stripe", "Zelle", "Cash", "Check", ""]},
+            "payBack": {"type": "string", "enum": ["Zelle", "Check", "ACH", "Wire", "Cash", ""]},
             "wOffered": {"type": "boolean"}, "wSold": {"type": "boolean"},
             "fColl": {"type": "boolean"}, "bColl": {"type": "boolean"},
             "aPaidF": {"type": "boolean"}, "aPaidFd": {"type": "string"},
@@ -896,15 +897,18 @@ def nova_admins_parse():
         f"- Today is {today or 'unknown'}; dates are YYYY-MM-DD. If no deal date is given, use today.\n"
         "- client: customer name as 'First L.' (first name + last initial).\n"
         f"- agentId: match the salesperson to ONE of these agents and output its id (or '' if unknown): {agent_list}\n"
-        "- lead: 'own' = agent's own lead/Agent-sourced; 'nova' = Nova Lead (FB/IG ads); 'referral' = referral.\n"
+        "- lead: 'own' = agent's own lead/Agent-sourced; 'nova' = Nova Lead (Nova paid for it); 'referral' = referral. This sets the agent split.\n"
+        "- source = acquisition CHANNEL for metrics (separate from lead/split): 'FB' or 'IG' (Meta ads), 'Google', 'Yelp', "
+        "'Referral', 'Repeat', 'Walk-in', 'Website', 'Other'; '' if unknown. A Nova lead is usually FB or IG.\n"
         "- type: Lease or Buy. term = months (string).\n"
         "- front = front gross (client/broker fee), back = back gross (dealer reserve). Numbers only — no $ or commas.\n"
         "- feeProgram = a program fee if stated. NEVER include an Envy fee anywhere — Envy (20% of back) is computed "
         "automatically by the ledger.\n"
         "- feeProgram = a program fee OR a fee shared with Jason (Jason is part of Program now). feeReferral = a referral/shared fee OR a generic 'fees shared' "
         "lump. Do NOT include Stripe processing (its 3% is auto-computed from the payment method).\n"
-        "- pay = how the FRONT was charged; payBack = how the BACK was charged (Stripe/Zelle/Cash/Check, '' if n/a). "
-        "Stripe's 3% applies to whichever side used Stripe — set payBack='Stripe' for a back-end-only Stripe deal.\n"
+        "- pay = how the FRONT was charged (Stripe/Zelle/Cash/Check). Stripe is a FRONT-END client card charge and its 3% "
+        "is auto-computed. payBack = how the BACK (dealer paying Nova) was paid (Check/ACH/Wire/Zelle/Cash), '' if no back end. "
+        "The back end is NEVER Stripe.\n"
         "- wOffered/wSold = was warranty offered / sold.\n"
         "- fColl/bColl = was the front (client) / back (dealer) money collected by Nova. aPaidF/aPaidB = was the agent "
         "paid their front/back share (aPaidFd/aPaidBd = those pay dates if stated).\n"
@@ -1104,15 +1108,13 @@ def _n_num(x):
 
 
 def _nova_fee_stripe(d):
-    """Mirror the client feeStripe(): 3% on whichever side was charged via Stripe
-    (front via `pay`, back via `payBack`), so back-end-only Stripe deals still get
-    their fee. A stored total > 0 overrides."""
+    """Mirror the client feeStripe(): 3% of the FRONT when it was charged via Stripe.
+    Stripe is a front-end (client card) charge only — the back end is the dealer
+    paying Nova (Check/ACH/Wire/Zelle), never Stripe. A stored total > 0 overrides."""
     v = d.get("feeStripe")
     if v not in (None, "") and _n_num(v) > 0:
         return _n_num(v)
-    f = round(_n_num(d.get("front")) * 0.03) if d.get("pay") == "Stripe" else 0.0
-    b = round(_n_num(d.get("back")) * 0.03) if d.get("payBack") == "Stripe" else 0.0
-    return f + b
+    return round(_n_num(d.get("front")) * 0.03) if d.get("pay") == "Stripe" else 0.0
 
 
 _NOVA_ENVY_START = "2026-07-01"   # envy applies to deals dated here onward (Edgar, July 12 2026)
@@ -1262,7 +1264,7 @@ def _norm_assignees(data):
         if a in _ASSIGNEE_IDS and a not in out:
             out.append(a)
     return out
-_ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "agentId",
+_ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "source", "agentId",
                  "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
 
 
@@ -1317,6 +1319,7 @@ def _nova_apply_actions(store, actions, user=None):
                      "vin": "", "dealer": data.get("dealer") or "", "type": data.get("type") if data.get("type") in ("Lease", "Buy") else "Lease",
                      "term": data.get("term") or "", "agentId": aid,
                      "lead": data.get("lead") if data.get("lead") in ("own", "nova", "referral") else "own",
+                     "source": data.get("source") if data.get("source") in ("FB", "IG", "Google", "Yelp", "Referral", "Repeat", "Walk-in", "Website", "Other") else "",
                      "wOffered": False, "wSold": bool(data.get("wSold")), "front": _n_num(data.get("front")), "back": _n_num(data.get("back")),
                      "feeReferral": _n_num(data.get("feeReferral")),
                      "feeProgram": _n_num(data.get("feeProgram")),
@@ -1324,7 +1327,7 @@ def _nova_apply_actions(store, actions, user=None):
                      "feeEnvy": _n_num(data.get("feeEnvy")) if _n_num(data.get("feeEnvy")) > 0 else "",
                      "override": None,
                      "pay": data.get("pay") if data.get("pay") in ("Stripe", "Zelle", "Cash", "Check") else "Stripe",
-                     "payBack": data.get("payBack") if data.get("payBack") in ("Stripe", "Zelle", "Cash", "Check") else "",
+                     "payBack": data.get("payBack") if data.get("payBack") in ("Zelle", "Check", "ACH", "Wire", "Cash") else "",
                      "fColl": False, "bColl": False, "aPaidF": False, "aPaidFd": "", "aPaidB": False, "aPaidBd": "",
                      "progPaid": False, "progPaidD": "", "refPaid": False, "refPaidD": "", "envyColl": False, "envyCollD": "",
                      "notes": data.get("notes") or ""}
@@ -1433,11 +1436,11 @@ def nova_admins_agent():
         " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), repeat(none|daily|weekdays|weekly|biweekly|monthly), labels[], notes, subtasks[]}"
         " — for a calendar EVENT (a meeting/appointment) add type='event' and time='HH:MM' (24h); events show on the calendar.\n"
         " create_note data={title, body}\n"
-        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral), front, back, feeReferral, feeProgram, pay(front method: Stripe|Zelle|Cash|Check), payBack(back method, '' if n/a), notes}"
-        " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself.\n"
+        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral, sets the split), source(channel for metrics: FB|IG|Google|Yelp|Referral|Repeat|Walk-in|Website|Other, '' if unknown), front, back, feeReferral, feeProgram, pay(FRONT method: Stripe|Zelle|Cash|Check), payBack(BACK method — dealer pays Nova: Check|ACH|Wire|Zelle|Cash, never Stripe, '' if no back), notes}"
+        " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself. Stripe's 3% is auto on the FRONT only.\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
-        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|agentId|notes|override|progPaid|refPaid|envyColl}"
+        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|refPaid|envyColl}"
         " — Envy (20% of back) is INCOME Envy pays to Nova, not a cost. progPaid/refPaid = a shared fee was paid out; "
         "envyColl = the Envy fee was collected/received from Envy.\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"

@@ -123,6 +123,7 @@
   .rem-add{display:flex;align-items:center;gap:7px;margin-top:7px;padding-top:8px;border-top:1px dashed var(--na-line);}
   .rem-addbtn{all:unset;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--na-blue-soft);padding:5px 10px;border:1px solid var(--na-line-2);border-radius:8px;flex:none;}
   .rem-addbtn:hover{background:var(--na-panel-2);}
+  .src-tag{font-size:9.5px;color:var(--na-muted-2);margin-top:3px;letter-spacing:.02em;}
   /* ledger-row bell */
   .rembell{font-size:10.5px;opacity:.5;filter:grayscale(.4);white-space:nowrap;}
   .rembell.due{opacity:1;filter:none;}
@@ -402,16 +403,17 @@
     <div class="dash-insights" id="dashInsights"></div>
     <div id="dashReminders"></div>
     <div class="panel" style="margin-bottom:16px;"><h3>Profit by month <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
-    <div class="dash-sec"><h3>Breakdowns</h3><span class="mini">models · brands · leads · profit per car</span>
+    <div class="dash-sec"><h3>Breakdowns</h3><span class="mini">models · brands · channel · leads · profit per car</span>
       <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></div>
     <div class="na-two">
       <div class="panel"><h3>Top models</h3><div id="dashModels"></div></div>
       <div class="panel"><h3>Top brands</h3><div id="dashBrands"></div></div>
     </div>
     <div class="na-two" style="margin-top:16px;">
-      <div class="panel"><h3>Lead source mix</h3><div id="dashLeads"></div></div>
-      <div class="panel"><h3>Most profitable / car</h3><div id="dashProfit"></div></div>
+      <div class="panel"><h3>Channel mix <span class="mini">where deals come from</span></h3><div id="dashSource"></div></div>
+      <div class="panel"><h3>Lead source mix <span class="mini">sets the split</span></h3><div id="dashLeads"></div></div>
     </div>
+    <div class="panel" style="margin-top:16px;"><h3>Most profitable / car</h3><div id="dashProfit"></div></div>
   </div>
 
   <!-- LEDGER -->
@@ -544,13 +546,12 @@ DEALS.forEach(d=>{ d.feeProgram = (+d.feeProgram||0) + (+d.feeJason||0); d.feeJa
 // zero it out on a Stripe deal — even when "the client covered the fee", we still
 // pay ~3% processing on the charge, so the auto 3% of front applies.
 // 3% processing on WHATEVER side was charged via Stripe — front, back, or both.
-// So a back-end-only deal charged on Stripe still gets its 3%. A manual total > 0
-// overrides. payBack is optional (blank = the back wasn't a Stripe charge).
+// Stripe is a FRONT-END charge only — the client pays their front on a card. The
+// back end is the dealer paying Nova (Check/ACH/Wire/Zelle), never Stripe. So the
+// 3% processing fee is 3% of the front when pay==="Stripe". A manual total > 0 overrides.
 function feeStripe(d){ const v=d.feeStripe;
   if(v!==undefined && v!==null && v!=="" && (+v||0)>0) return +v;
-  const f = d.pay==="Stripe"     ? Math.round((+d.front||0)*0.03) : 0;
-  const b = d.payBack==="Stripe" ? Math.round((+d.back ||0)*0.03) : 0;
-  return f + b; }
+  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }
 // Envy: automatic 20% of the back end when a back exists. Applies to every deal
 // dated ENVY_START or later (Edgar: retroactive for July 2026 + everything
 // forward) — date-based so it survives Imports. A typed number overrides; deals
@@ -594,6 +595,11 @@ function paidStatus(d){ // money OUT to agent
   if(!sides.length) return "n"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";
 }
 const leadLabel = {own:"Own", nova:"Nova", referral:"Referral"};
+// Acquisition channel — metrics only, independent of the pay split (a Nova lead pays
+// the same whether it came from FB or IG). Lets us see where deals actually come from.
+const SOURCES = ["FB","IG","Google","Yelp","Referral","Repeat","Walk-in","Website","Other"];
+const sourceLabel = {FB:"Facebook",IG:"Instagram",Google:"Google",Yelp:"Yelp",Referral:"Referral",Repeat:"Repeat client","Walk-in":"Walk-in",Website:"Website",Other:"Other"};
+function srcLabel(s){ return sourceLabel[s]||s||"Untracked"; }
 const statText = {g:"Paid", a:"Partial", r:"Owed"};
 
 // ---- STATE ----
@@ -670,7 +676,7 @@ function renderLedger(){
       <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
       <td><div class="veh">${d.client}${remBadge(d)}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
       <td><span class="agentchip"><span class="dot" style="background:${aColor(ag.id)}"></span>${ag.name.split(" ")[0]}</span></td>
-      <td><span class="lead ${d.lead}">${leadLabel[d.lead]}</span></td>
+      <td><span class="lead ${d.lead}">${leadLabel[d.lead]}</span>${d.source?`<div class="src-tag">${srcLabel(d.source)}</div>`:''}</td>
       <td class="num money">${fmt(c.netPool)}</td>
       <td class="num money">${fmt(c.agentCut)}${c.overridden?'<span class="ov-flag">OVR</span>':''}</td>
       <td class="num money pos">${fmt(c.novaCut)}</td>
@@ -709,7 +715,7 @@ function detailRow(d){
       <div class="ledger-line head"><span>Side</span><span>Gross</span><span>Net (− fees)</span><span>Agent ${c.pct}%${c.overridden?' · OVR':''}</span></div>
       <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
       <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
-      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!==''&&(+d.feeStripe||0)>0)?'manual':((d.pay==='Stripe'&&d.payBack==='Stripe')?'auto · 3% front + back':d.pay==='Stripe'?'auto · 3% of front':d.payBack==='Stripe'?'auto · 3% of back':'— Stripe only')}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!==''&&(+d.feeStripe||0)>0)?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— front Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Stripe + Referral + Program</span><span></span></div>
@@ -724,10 +730,11 @@ function detailRow(d){
       <div class="mrow"><span class="ml">VIN</span><input class="na-in" style="width:200px;font-family:var(--na-mono)" value="${d.vin}" onchange="${E}'vin',this.value)"></div>
       <div class="mrow"><span class="ml">Dealership</span><input class="na-in" style="width:210px" value="${d.dealer}" onchange="${E}'dealer',this.value)"></div>
       <div class="mrow"><span class="ml">Type / Term</span><span><select class="na-in" onchange="${E}'type',this.value)">${opt(['Lease','Buy'],d.type)}</select> <input class="na-in num" style="width:54px" value="${d.term}" onchange="${E}'term',this.value,1)"> mo</span></div>
-      <div class="mrow"><span class="ml">Lead source</span><select class="na-in" onchange="${E}'lead',this.value)">${leadOpts(d.lead)}</select></div>
+      <div class="mrow"><span class="ml">Lead source</span><select class="na-in" onchange="${E}'lead',this.value)">${leadOpts(d.lead)}</select> <span class="mini">sets the split</span></div>
+      <div class="mrow"><span class="ml">Channel</span><select class="na-in" onchange="${E}'source',this.value)"><option value="" ${!d.source?'selected':''}>— untracked</option>${opt(SOURCES,d.source)}</select> <span class="mini">where it came from · metrics</span></div>
       <div class="mrow"><span class="ml">Warranty</span><span><span class="stat tog ${d.wOffered?'g':'r'}" onclick="${T}'wOffered')">${d.wOffered?'● Offered':'○ Offered'}</span> <span class="stat tog ${d.wSold?'g':'r'}" onclick="${T}'wSold')">${d.wSold?'● Sold':'○ Sold'}</span></span></div>
       <div class="mrow"><span class="ml">Payment · front</span><select class="na-in" onchange="${E}'pay',this.value)">${opt(['Stripe','Zelle','Cash','Check'],d.pay)}</select></div>
-      <div class="mrow"><span class="ml">Payment · back</span><select class="na-in" onchange="${E}'payBack',this.value)"><option value="" ${!d.payBack?'selected':''}>— none / n/a</option>${opt(['Stripe','Zelle','Cash','Check'],d.payBack)}</select></div>
+      <div class="mrow"><span class="ml">Payment · back</span><select class="na-in" onchange="${E}'payBack',this.value)"><option value="" ${!d.payBack?'selected':''}>— none / n/a</option>${opt(['Check','ACH','Wire','Zelle','Cash'],d.payBack)}</select> <span class="mini">dealer pays Nova · no Stripe</span></div>
       <div class="pay-grid">
         <div class="pay-card"><div class="pc-t">Money in — Nova</div>
           <div class="toggle"><span>Front collected</span><span class="stat tog ${d.fColl?'g':'r'}" onclick="${T}'fColl')">${d.fColl?'● Yes':'○ No'}</span></div>
@@ -840,7 +847,7 @@ function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.fin
 function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
-    type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
+    type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own", source:"",
     wOffered:false, wSold:false, front:0, back:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe", payBack:"",
     progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyColl:false, envyCollD:"",
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"", reminders:[]});
@@ -1110,10 +1117,12 @@ function renderDashboard(){
   const scope=profitFor(dashScope).ds;
   const models=leaderboard(scope.filter(d=>(`${d.make||''}${d.model||''}`).trim()),d=>`${d.make} ${d.model}`.trim()),
         brands=leaderboard(scope.filter(d=>(d.make||'').trim()),d=>d.make), leads=leaderboard(scope,d=>leadLabel[d.lead]);
-  const mM=models[0]?models[0][1].units:1, bM=brands[0]?brands[0][1].units:1, lM=leads[0]?leads[0][1].units:1;
+  const sources=leaderboard(scope.filter(d=>(d.source||'').trim()),d=>srcLabel(d.source));
+  const mM=models[0]?models[0][1].units:1, bM=brands[0]?brands[0][1].units:1, lM=leads[0]?leads[0][1].units:1, sM=sources[0]?sources[0][1].units:1;
   const none='<p class="mini">No deals in range.</p>';
   document.getElementById("dashModels").innerHTML = models.length? lbHtml(models,mM,v=>`<b>${v.units}</b> car${v.units>1?'s':''} · ${fmt(v.profit)}`):none;
   document.getElementById("dashBrands").innerHTML = brands.length? lbHtml(brands,bM,v=>`<b>${v.units}</b> · ${fmt(v.profit)}`):none;
+  document.getElementById("dashSource").innerHTML = sources.length? lbHtml(sources,sM,v=>`<b>${v.units}</b> · ${fmt(v.profit)} profit`):'<p class="mini">No channel tagged yet — set it on a deal (Channel field).</p>';
   document.getElementById("dashLeads").innerHTML  = leads.length?  lbHtml(leads,lM,v=>`<b>${v.units}</b> · ${fmt(v.profit)} profit`):none;
   const prof=models.map(([n,v])=>[n,{units:v.units,avg:v.profit/v.units}]).sort((a,b)=>b[1].avg-a[1].avg);
   const pM=prof[0]?prof[0][1].avg:1;
