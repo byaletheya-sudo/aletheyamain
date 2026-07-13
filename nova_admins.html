@@ -501,9 +501,14 @@ DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||
 // Stripe: a stored fee > 0 wins (imported/manual). But a stored 0/blank does NOT
 // zero it out on a Stripe deal — even when "the client covered the fee", we still
 // pay ~3% processing on the charge, so the auto 3% of front applies.
+// 3% processing on WHATEVER side was charged via Stripe — front, back, or both.
+// So a back-end-only deal charged on Stripe still gets its 3%. A manual total > 0
+// overrides. payBack is optional (blank = the back wasn't a Stripe charge).
 function feeStripe(d){ const v=d.feeStripe;
   if(v!==undefined && v!==null && v!=="" && (+v||0)>0) return +v;
-  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : (+v||0); }
+  const f = d.pay==="Stripe"     ? Math.round((+d.front||0)*0.03) : 0;
+  const b = d.payBack==="Stripe" ? Math.round((+d.back ||0)*0.03) : 0;
+  return f + b; }
 // Envy: automatic 20% of the back end when a back exists. Applies to every deal
 // dated ENVY_START or later (Edgar: retroactive for July 2026 + everything
 // forward) — date-based so it survives Imports. A typed number overrides; deals
@@ -663,7 +668,7 @@ function detailRow(d){
       <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
       <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
       <div class="ledger-line"><span class="lab">Fees · Jason</span><span><input class="na-in num" value="${+d.feeJason||0}" onchange="${E}'feeJason',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!=='')?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— Stripe only')}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!==''&&(+d.feeStripe||0)>0)?'manual':((d.pay==='Stripe'&&d.payBack==='Stripe')?'auto · 3% front + back':d.pay==='Stripe'?'auto · 3% of front':d.payBack==='Stripe'?'auto · 3% of back':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program</span><span></span></div>
@@ -680,7 +685,8 @@ function detailRow(d){
       <div class="mrow"><span class="ml">Type / Term</span><span><select class="na-in" onchange="${E}'type',this.value)">${opt(['Lease','Buy'],d.type)}</select> <input class="na-in num" style="width:54px" value="${d.term}" onchange="${E}'term',this.value,1)"> mo</span></div>
       <div class="mrow"><span class="ml">Lead source</span><select class="na-in" onchange="${E}'lead',this.value)">${leadOpts(d.lead)}</select></div>
       <div class="mrow"><span class="ml">Warranty</span><span><span class="stat tog ${d.wOffered?'g':'r'}" onclick="${T}'wOffered')">${d.wOffered?'● Offered':'○ Offered'}</span> <span class="stat tog ${d.wSold?'g':'r'}" onclick="${T}'wSold')">${d.wSold?'● Sold':'○ Sold'}</span></span></div>
-      <div class="mrow"><span class="ml">Payment</span><select class="na-in" onchange="${E}'pay',this.value)">${opt(['Stripe','Zelle','Cash','Check'],d.pay)}</select></div>
+      <div class="mrow"><span class="ml">Payment · front</span><select class="na-in" onchange="${E}'pay',this.value)">${opt(['Stripe','Zelle','Cash','Check'],d.pay)}</select></div>
+      <div class="mrow"><span class="ml">Payment · back</span><select class="na-in" onchange="${E}'payBack',this.value)"><option value="" ${!d.payBack?'selected':''}>— none / n/a</option>${opt(['Stripe','Zelle','Cash','Check'],d.payBack)}</select></div>
       <div class="pay-grid">
         <div class="pay-card"><div class="pc-t">Money in — Nova</div>
           <div class="toggle"><span>Front collected</span><span class="stat tog ${d.fColl?'g':'r'}" onclick="${T}'fColl')">${d.fColl?'● Yes':'○ No'}</span></div>
@@ -728,7 +734,7 @@ function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
-    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe",
+    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe", payBack:"",
     progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyColl:false, envyCollD:"",
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
   // make the new row visible no matter the current view/filters
