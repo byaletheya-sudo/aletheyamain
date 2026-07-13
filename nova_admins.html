@@ -504,12 +504,15 @@ DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||
 function feeStripe(d){ const v=d.feeStripe;
   if(v!==undefined && v!==null && v!=="" && (+v||0)>0) return +v;
   return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : (+v||0); }
-// Envy: automatic 20% of the back end when a back exists. Auto applies to deals
-// created with the field (new deals); a typed number overrides; legacy deals
-// without the field stay at 0 so historical, reconciled months don't shift.
+// Envy: automatic 20% of the back end when a back exists. Applies to every deal
+// dated ENVY_START or later (Edgar: retroactive for July 2026 + everything
+// forward) — date-based so it survives Imports. A typed number overrides; deals
+// before the start date stay at 0 so reconciled history (Jan–Jun) doesn't shift.
+const ENVY_START="2026-07-01";
+function envyEligible(d){ return ("feeEnvy" in d) || (d.date||"")>=ENVY_START; }
 function feeEnvy(d){
-  if(!("feeEnvy" in d)) return 0;                                   // legacy deal — untouched
-  if(d.feeEnvy!=="" && d.feeEnvy!==null && d.feeEnvy!==undefined) return +d.feeEnvy||0;  // manual override
+  if(("feeEnvy" in d) && d.feeEnvy!=="" && d.feeEnvy!==null && d.feeEnvy!==undefined) return +d.feeEnvy||0;  // manual override
+  if(!envyEligible(d)) return 0;                                    // pre-July legacy — untouched
   return (+d.back||0)>0 ? Math.round((+d.back)*0.20) : 0; }         // auto · 20% of back
 function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0) + feeEnvy(d); }
 function calc(d){
@@ -657,7 +660,7 @@ function detailRow(d){
       <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!=='')?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees · Envy</span><span><input class="na-in num" placeholder="${('feeEnvy' in d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(!('feeEnvy' in d)||d.feeEnvy===''||d.feeEnvy==null)?'':(+d.feeEnvy||0)}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${!('feeEnvy' in d)?(c.feeEnvy?'':'off · type $ to add'):(d.feeEnvy!==''&&d.feeEnvy!=null?'manual':((+d.back||0)>0?'auto · 20% of back':'auto — no back end'))}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Envy</span><span><input class="na-in num" placeholder="${envyEligible(d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?(+d.feeEnvy||0):''}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?'manual':(envyEligible(d)?((+d.back||0)>0?'auto · 20% of back':'auto — no back end'):'off (pre-July) · type $ to add')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program + Envy</span><span></span></div>
       <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
       <div class="ledger-line" style="border-bottom:none"><span class="lab">Override agent&nbsp;$</span><span><input class="na-in num" placeholder="auto" value="${d.override??''}" onchange="${E}'override',this.value)"></span><span class="ovr-note">${d.override!=null?'manual — overrides '+c.pct+'%':'blank = '+c.pct+'% auto'}</span><span></span></div>

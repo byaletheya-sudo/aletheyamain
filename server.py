@@ -1110,14 +1110,19 @@ def _nova_fee_stripe(d):
     return round(_n_num(d.get("front")) * 0.03) if d.get("pay") == "Stripe" else _n_num(v)
 
 
+_NOVA_ENVY_START = "2026-07-01"   # envy applies to deals dated here onward (Edgar, July 12 2026)
+
+
 def _nova_fee_envy(d):
-    """Mirror the client feeEnvy(): auto 20% of back for deals created with the
-    field (blank = auto, number = manual); legacy deals without the key stay 0."""
-    if "feeEnvy" not in d:
-        return 0.0
+    """Mirror the client feeEnvy(): auto 20% of back for every deal dated
+    _NOVA_ENVY_START or later (or carrying the field); a stored number is a
+    manual override; deals before the start date stay 0."""
+    has = "feeEnvy" in d
     v = d.get("feeEnvy")
-    if v not in (None, ""):
+    if has and v not in (None, ""):
         return _n_num(v)
+    if not has and str(d.get("date") or "") < _NOVA_ENVY_START:
+        return 0.0
     back = _n_num(d.get("back"))
     return round(back * 0.20) if back > 0 else 0.0
 
