@@ -106,6 +106,44 @@
   .notes-box{background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--na-fg);grid-column:1/-1;white-space:pre-wrap;}
   .notes-box .nl{color:var(--na-muted-2);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:5px;}
 
+  /* reminders — per-deal follow-ups */
+  .rem-card{grid-column:1/-1;background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:9px 11px;margin-top:8px;}
+  .rem-card .pc-t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+  .rem-ct{font-size:9.5px;color:var(--na-amber);background:var(--na-amber-bg);border-radius:999px;padding:1px 7px;letter-spacing:0;text-transform:none;font-weight:700;}
+  .rem-row{display:flex;align-items:center;gap:7px;padding:3px 0;}
+  .rem-row.done .rem-note{color:var(--na-muted-2);text-decoration:line-through;}
+  .rem-row.due .rem-note{color:var(--na-amber);}
+  .rem-ck{cursor:pointer;width:18px;height:18px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--na-line-2);border-radius:6px;font-size:11px;color:var(--na-muted);}
+  .rem-ck.on{background:var(--na-green-bg);border-color:transparent;color:var(--na-green);}
+  .rem-date{width:132px;flex:none;}
+  .rem-note{flex:1;min-width:0;}
+  .rem-x{cursor:pointer;color:var(--na-muted-2);font-size:12px;padding:0 3px;flex:none;}
+  .rem-x:hover{color:var(--na-red);}
+  .rem-empty{font-size:11.5px;color:var(--na-muted-2);padding:2px 0 4px;}
+  .rem-add{display:flex;align-items:center;gap:7px;margin-top:7px;padding-top:8px;border-top:1px dashed var(--na-line);}
+  .rem-addbtn{all:unset;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--na-blue-soft);padding:5px 10px;border:1px solid var(--na-line-2);border-radius:8px;flex:none;}
+  .rem-addbtn:hover{background:var(--na-panel-2);}
+  /* ledger-row bell */
+  .rembell{font-size:10.5px;opacity:.5;filter:grayscale(.4);white-space:nowrap;}
+  .rembell.due{opacity:1;filter:none;}
+  /* dashboard reminders panel */
+  .drem-panel{margin-bottom:16px;}
+  .drem-panel h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .drem-badge{font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;letter-spacing:.02em;}
+  .drem-badge.od{color:var(--na-red);background:var(--na-red-bg);}
+  .drem-badge.td{color:var(--na-amber);background:var(--na-amber-bg);}
+  .drem-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+  .drem{display:grid;grid-template-columns:82px 1fr auto;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--na-line);border-radius:10px;background:var(--na-panel);cursor:pointer;transition:border-color .12s;}
+  .drem:hover{border-color:var(--na-line-2);}
+  .drem.od{border-left:3px solid var(--na-red);}
+  .drem.td{border-left:3px solid var(--na-amber);}
+  .drem.up{border-left:3px solid var(--na-line-2);}
+  .drem-d{font-size:11px;font-weight:800;color:var(--na-muted);}
+  .drem.od .drem-d{color:var(--na-red);}
+  .drem.td .drem-d{color:var(--na-amber);}
+  .drem-t{font-size:12.5px;color:var(--na-fg);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .drem-c{font-size:11px;color:var(--na-muted-2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
   /* agents */
   .na-agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;}
   .acard{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;padding:16px 17px;}
@@ -362,6 +400,7 @@
     <div class="dash-heroes" id="dashHeroes"></div>
     <div class="dash-stats" id="dashStats"></div>
     <div class="dash-insights" id="dashInsights"></div>
+    <div id="dashReminders"></div>
     <div class="panel" style="margin-bottom:16px;"><h3>Profit by month <span class="mini">Nova true net, after expenses</span></h3><div class="mchart" id="dashChart"></div></div>
     <div class="dash-sec"><h3>Breakdowns</h3><span class="mini">models · brands · leads · profit per car</span>
       <div class="dash-scope" id="dashScope"><button data-s="mtd">MTD</button><button data-s="ytd" class="on">YTD</button></div></div>
@@ -495,7 +534,10 @@ const DEALS = SEED.deals || [];
 const EXPENSES = SEED.expenses || [];
 
 // Fees shared = 3 buckets: Jason (manual) + Stripe (auto, 3% of front, Stripe only) + Referral (manual).
-DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; d.feeProgram = +d.feeProgram||0; });   // feeEnvy deliberately NOT coerced — missing key = legacy 0, "" = auto
+// Jason is no longer its own bucket — fold any Jason fee into Program (one "Program"
+// line). Idempotent (feeJason zeroed), so the total is unchanged. feeEnvy deliberately
+// NOT coerced — missing key = legacy 0, "" = auto.
+DEALS.forEach(d=>{ d.feeProgram = (+d.feeProgram||0) + (+d.feeJason||0); d.feeJason = 0; d.feeReferral = +d.feeReferral||0; });
 
 // ---- ENGINE ----
 // Stripe: a stored fee > 0 wins (imported/manual). But a stored 0/blank does NOT
@@ -522,7 +564,7 @@ function feeEnvy(d){
 // Shared fees = costs Nova PAYS OUT that reduce the split pool. Envy is NOT here —
 // it's income Envy pays TO Nova (added to Nova's take below), so it never touches
 // the agent's split.
-function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0); }
+function feesTotal(d){ return feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0); }
 function calc(d){
   const combined = (+d.front||0) + (+d.back||0);
   const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
@@ -626,7 +668,7 @@ function renderLedger(){
     const c=calc(d), ag=A(d.agentId), cs=collStatus(d), ps=paidStatus(d);
     return `<tr class="drow${openRow===d.id?' open':''}" onclick="toggleRow(${d.id})">
       <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
-      <td><div class="veh">${d.client}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
+      <td><div class="veh">${d.client}${remBadge(d)}</div><div class="sub">${d.year} ${d.make} ${d.model}</div></td>
       <td><span class="agentchip"><span class="dot" style="background:${aColor(ag.id)}"></span>${ag.name.split(" ")[0]}</span></td>
       <td><span class="lead ${d.lead}">${leadLabel[d.lead]}</span></td>
       <td class="num money">${fmt(c.netPool)}</td>
@@ -667,11 +709,10 @@ function detailRow(d){
       <div class="ledger-line head"><span>Side</span><span>Gross</span><span>Net (− fees)</span><span>Agent ${c.pct}%${c.overridden?' · OVR':''}</span></div>
       <div class="ledger-line"><span class="lab">Front (client)</span><span><input class="na-in num" value="${d.front}" onchange="${E}'front',this.value,1)"></span><span>${fmt(c.frontNet)}</span><span>${fmt(c.agentFront)}</span></div>
       <div class="ledger-line"><span class="lab">Back (dealer)</span><span><input class="na-in num" value="${d.back}" onchange="${E}'back',this.value,1)"></span><span>${fmt(c.backNet)}</span><span>${fmt(c.agentBack)}</span></div>
-      <div class="ledger-line"><span class="lab">Fees · Jason</span><span><input class="na-in num" value="${+d.feeJason||0}" onchange="${E}'feeJason',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!==''&&(+d.feeStripe||0)>0)?'manual':((d.pay==='Stripe'&&d.payBack==='Stripe')?'auto · 3% front + back':d.pay==='Stripe'?'auto · 3% of front':d.payBack==='Stripe'?'auto · 3% of back':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Stripe + Referral + Program</span><span></span></div>
       <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaPool)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
       <div class="ledger-line"><span class="lab" style="color:var(--na-green)">＋ Envy income</span><span><input class="na-in num" placeholder="${envyEligible(d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?(+d.feeEnvy||0):''}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?'manual · paid to Nova':(envyEligible(d)?((+d.back||0)>0?'auto · 20% of back → Nova':'auto — no back end'):'off (pre-July) · type $ to add')}</span><span class="pos">${c.feeEnvy>0?'+'+fmt(c.feeEnvy):''}</span></div>
       <div class="ledger-line total"><span class="lab">Nova total</span><span></span><span class="pos">${fmt(c.novaCut)}</span><span class="ovr-note">pool + Envy</span></div>
@@ -707,6 +748,7 @@ function detailRow(d){
           ${d.refPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.refPaidD||''}" onchange="${E}'refPaidD',this.value)"></div>`:''}`:''}
         </div>`:''}
       </div>
+      ${remCard(d)}
     </div>
     </div></td></tr>`;
 }
@@ -729,14 +771,79 @@ function toggleField(id, field){
   if(field==='envyColl') d.envyCollD=d.envyColl?TODAY:'';
   scheduleRender(); saveDeal(id);
 }
+// ---- Reminders: lightweight per-deal follow-ups. Persist on the deal (no money impact). ----
+function dReminders(d){ return Array.isArray(d.reminders)?d.reminders:[]; }
+function dRemActive(d){ return dReminders(d).filter(r=>r&&!r.done); }
+function dRemDue(d){ return dRemActive(d).filter(r=>r.date&&r.date<=TODAY).sort((a,b)=>a.date<b.date?-1:1)[0]||null; }
+function dRemNext(d){ return dRemActive(d).filter(r=>r.date).sort((a,b)=>a.date<b.date?-1:1)[0]||null; }
+function _remId(){ let m=0; DEALS.forEach(d=>dReminders(d).forEach(r=>{ if(+r.id>m)m=+r.id; })); return m+1; }
+function addReminder(id){
+  const d=DEALS.find(x=>x.id===id); if(!d)return;
+  const dEl=document.getElementById('remD-'+id), nEl=document.getElementById('remN-'+id);
+  const date=(dEl&&dEl.value)||'', note=((nEl&&nEl.value)||'').trim();
+  if(!date&&!note)return;
+  d.reminders=dReminders(d).concat([{id:_remId(), date:date||TODAY, note, done:false}]);
+  saveDeal(id); scheduleRender();
+}
+function remSet(id,rid,field,val){ const d=DEALS.find(x=>x.id===id); if(!d)return; const r=dReminders(d).find(x=>x.id===rid); if(!r)return; r[field]=val; saveDeal(id); scheduleRender(); }
+function remToggle(id,rid){ const d=DEALS.find(x=>x.id===id); if(!d)return; const r=dReminders(d).find(x=>x.id===rid); if(!r)return; r.done=!r.done; saveDeal(id); scheduleRender(); }
+function remDel(id,rid){ const d=DEALS.find(x=>x.id===id); if(!d)return; d.reminders=dReminders(d).filter(x=>x.id!==rid); saveDeal(id); scheduleRender(); }
+function remWhen(date){
+  if(!date) return '';
+  const a=new Date(date+"T00:00:00"), b=new Date(TODAY+"T00:00:00");
+  const diff=Math.round((a-b)/86400000);
+  if(diff<0) return Math.abs(diff)+'d ago';
+  if(diff===0) return 'Today';
+  if(diff===1) return 'Tomorrow';
+  if(diff<=14) return 'in '+diff+'d';
+  return date.slice(5);
+}
+function remCard(d){
+  const rs=dReminders(d).slice().sort((a,b)=>((a.done?1:0)-(b.done?1:0))||((a.date||'')<(b.date||'')?-1:1));
+  const rows=rs.map(r=>{
+    const due=!r.done&&r.date&&r.date<=TODAY;
+    return `<div class="rem-row${r.done?' done':''}${due?' due':''}">
+      <span class="rem-ck ${r.done?'on':''}" onclick="remToggle(${d.id},${r.id})" title="${r.done?'Mark active':'Mark done'}">${r.done?'✓':'○'}</span>
+      <input class="na-in rem-date" type="date" value="${r.date||''}" onchange="remSet(${d.id},${r.id},'date',this.value)">
+      <input class="na-in rem-note" value="${esc(r.note||'')}" placeholder="Reminder…" onchange="remSet(${d.id},${r.id},'note',this.value)">
+      <span class="rem-x" onclick="remDel(${d.id},${r.id})" title="Delete reminder">✕</span>
+    </div>`;
+  }).join('');
+  const open=dRemActive(d).length;
+  return `<div class="rem-card">
+    <div class="pc-t">🔔 Reminders${open?`<span class="rem-ct">${open} open</span>`:''}</div>
+    ${rows||'<div class="rem-empty">No reminders yet — add a follow-up below.</div>'}
+    <div class="rem-add">
+      <input class="na-in rem-date" type="date" id="remD-${d.id}">
+      <input class="na-in rem-note" id="remN-${d.id}" placeholder="Follow up, chase back-end, delivery date…" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminder(${d.id});}">
+      <button class="rem-addbtn" onclick="addReminder(${d.id})">+ Add</button>
+    </div>
+  </div>`;
+}
+function remBadge(d){
+  const due=dRemDue(d);
+  if(due) return ` <span class="rembell due" title="Due ${due.date} — ${esc(due.note||'Reminder')}">🔔</span>`;
+  const nx=dRemNext(d);
+  if(nx) return ` <span class="rembell" title="${nx.date} — ${esc(nx.note||'Reminder')}">🔔</span>`;
+  return '';
+}
+function openDealFromDash(id){
+  const d=DEALS.find(x=>x.id===id); if(!d)return;
+  setTab("ledger");
+  range=presetRange("all"); document.getElementById("periodLabel").textContent=range.label;
+  ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all");
+  document.getElementById("fSearch").value="";
+  openRow=id; renderAll();
+  setTimeout(()=>{ const el=document.getElementById("det-"+id); if(el)el.scrollIntoView({block:"center"}); }, 40);
+}
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); deleteDealRemote(id); }
 function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
-    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe", payBack:"",
+    wOffered:false, wSold:false, front:0, back:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe", payBack:"",
     progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyColl:false, envyCollD:"",
-    fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
+    fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"", reminders:[]});
   // make the new row visible no matter the current view/filters
   setTab("ledger");
   range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
@@ -772,7 +879,7 @@ async function importData(input){
   DEALS.length=0; DEALS.push(...data.deals);
   if(Array.isArray(data.agents)&&data.agents.length){ AGENTS.length=0; AGENTS.push(...data.agents); }
   EXPENSES.length=0; EXPENSES.push(...(data.expenses||[]));
-  DEALS.forEach(d=>{ d.feeJason=+d.feeJason||0; d.feeReferral=+d.feeReferral||0; d.feeProgram=+d.feeProgram||0; });
+  DEALS.forEach(d=>{ d.feeProgram=(+d.feeProgram||0)+(+d.feeJason||0); d.feeJason=0; d.feeReferral=+d.feeReferral||0; });
   if(Array.isArray(data.tasks)) SEED.tasks=data.tasks;   // ride along if the backup has them
   if(Array.isArray(data.notes)) SEED.notes=data.notes;
   openRow=null; renderAll(); saveDataNow();
@@ -970,6 +1077,30 @@ function renderDashboard(){
     {l:'Owed to agents', v:fmt(oweAg), s:oweN+' deals to pay out', a:'blue', go:'unpaid'},
     {l:'Nova-lead ROAS · YTD', v:(roas?roas.toFixed(1):'0')+'×', s:fmt(adSpend)+' ads → '+fmt(novaLeadProfit)+' profit', a:'purple'},
   ].map(x=>`<div class="ins ${x.a}${x.go?' click':''}"${x.go?` onclick="dashGo('${x.go}')" title="Open these deals in the ledger"`:''}><div class="ins-l">${x.l}</div><div class="ins-v">${x.v}</div><div class="ins-s">${x.s}${x.go?' <span class="ins-go">view →</span>':''}</div></div>`).join("");
+  // ---- reminders needing attention (overdue + today + upcoming 14 days) ----
+  const allRem=[]; DEALS.forEach(d=>dRemActive(d).forEach(r=>{ if(r.date) allRem.push({d,r}); }));
+  const _in14=new Date(NOW); _in14.setDate(_in14.getDate()+14);
+  const in14=_in14.getFullYear()+"-"+_pad(_in14.getMonth()+1)+"-"+_pad(_in14.getDate());
+  const rOver=allRem.filter(x=>x.r.date<TODAY).sort((a,b)=>a.r.date<b.r.date?-1:1);
+  const rTod=allRem.filter(x=>x.r.date===TODAY);
+  const rSoon=allRem.filter(x=>x.r.date>TODAY&&x.r.date<=in14).sort((a,b)=>a.r.date<b.r.date?-1:1);
+  const remEl=document.getElementById("dashReminders");
+  if(!rOver.length&&!rTod.length&&!rSoon.length){ remEl.innerHTML=""; }
+  else {
+    const item=(x,cls)=>`<div class="drem ${cls}" onclick="openDealFromDash(${x.d.id})" title="Open this deal">
+      <span class="drem-d">${remWhen(x.r.date)}</span>
+      <span class="drem-t">${esc(x.r.note||'Follow up')}</span>
+      <span class="drem-c">${esc(x.d.client||'—')}${[x.d.year,x.d.make,x.d.model].filter(Boolean).length?' · '+esc([x.d.year,x.d.make,x.d.model].filter(Boolean).join(' ')):''}</span></div>`;
+    remEl.innerHTML=`<div class="panel drem-panel"><h3>🔔 Reminders`
+      +(rOver.length?`<span class="drem-badge od">${rOver.length} overdue</span>`:'')
+      +(rTod.length?`<span class="drem-badge td">${rTod.length} today</span>`:'')
+      +(rSoon.length?`<span class="mini">${rSoon.length} upcoming</span>`:'')
+      +`</h3><div class="drem-list">`
+      +rOver.map(x=>item(x,'od')).join('')
+      +rTod.map(x=>item(x,'td')).join('')
+      +rSoon.slice(0,6).map(x=>item(x,'up')).join('')
+      +`</div></div>`;
+  }
   // ---- rolling last-6-months chart ----
   const months=[]; for(let i=5;i>=0;i--){const d=new Date(NOW.getFullYear(),NOW.getMonth()-i,1);months.push(d.getFullYear()+"-"+_pad(d.getMonth()+1));}
   const nets=months.map(monthNet); const mx=Math.max(...nets,1);
@@ -994,19 +1125,19 @@ function renderDashboard(){
 // ---- WIRING ----
 function renderFees(){
   const ds=DEALS.filter(inPeriod);
-  let jason=0, stripe=0, ref=0, prog=0; const rows=[];
-  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, p=+d.feeProgram||0, tot=j+s+r+p;
-    jason+=j; stripe+=s; ref+=r; prog+=p; if(tot>0) rows.push({d,j,s,r,p,tot}); });
-  const total=jason+stripe+ref+prog;
+  let stripe=0, ref=0, prog=0; const rows=[];
+  ds.forEach(d=>{ const s=feeStripe(d), r=+d.feeReferral||0, p=+d.feeProgram||0, tot=s+r+p;
+    stripe+=s; ref+=r; prog+=p; if(tot>0) rows.push({d,s,r,p,tot}); });
+  const total=stripe+ref+prog;
   document.getElementById("feesPeriod").textContent="· "+range.label;
   document.getElementById("feesStrip").innerHTML=[
-    {l:"Jason",v:jason,c:"#b79bff"},{l:"Stripe · 3%",v:stripe,c:"var(--na-blue-soft)"},
-    {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Program",v:prog,c:"var(--na-fg)"},
+    {l:"Stripe · 3%",v:stripe,c:"var(--na-blue-soft)"},
+    {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Program",v:prog,c:"#b79bff"},
     {l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
   ].map(x=>`<div class="feebox ${x.hero?'hero':''}"><div class="fb-l">${x.l}</div><div class="fb-v" style="color:${x.c}">${fmt(x.v)}</div></div>`).join("");
   document.getElementById("feesList").innerHTML = rows.length ? rows.sort((a,b)=>a.d.date<b.d.date?1:-1).map(r=>`
     <div class="exp-line"><span>${r.d.date.slice(5)} · ${r.d.client||'—'} <span class="mini">${[r.d.year,r.d.make,r.d.model].filter(Boolean).join(' ')}</span></span>
-      <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',
+      <span class="money">${[r.s?'Stripe '+fmt(r.s):'',
         r.r?'Ref '+fmt(r.r)+(r.d.refPaid?' ✓':''):'',
         r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';

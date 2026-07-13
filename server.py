@@ -871,7 +871,7 @@ def nova_admins_parse():
     schema = {
         "type": "object", "additionalProperties": False,
         "required": ["client", "year", "make", "model", "vin", "dealer", "type", "term", "agentId",
-                     "lead", "front", "back", "feeJason", "feeReferral", "feeProgram", "pay", "payBack", "wOffered", "wSold",
+                     "lead", "front", "back", "feeReferral", "feeProgram", "pay", "payBack", "wOffered", "wSold",
                      "fColl", "bColl", "aPaidF", "aPaidFd", "aPaidB", "aPaidBd", "date", "notes", "ok", "summary"],
         "properties": {
             "client": {"type": "string"}, "year": {"type": "string"}, "make": {"type": "string"},
@@ -879,7 +879,7 @@ def nova_admins_parse():
             "type": {"type": "string", "enum": ["Lease", "Buy", ""]}, "term": {"type": "string"},
             "agentId": {"type": "string"}, "lead": {"type": "string", "enum": ["own", "nova", "referral", ""]},
             "front": {"type": "number"}, "back": {"type": "number"},
-            "feeJason": {"type": "number"}, "feeReferral": {"type": "number"}, "feeProgram": {"type": "number"},
+            "feeReferral": {"type": "number"}, "feeProgram": {"type": "number"},
             "pay": {"type": "string", "enum": ["Stripe", "Zelle", "Cash", "Check", ""]},
             "payBack": {"type": "string", "enum": ["Stripe", "Zelle", "Cash", "Check", ""]},
             "wOffered": {"type": "boolean"}, "wSold": {"type": "boolean"},
@@ -901,7 +901,7 @@ def nova_admins_parse():
         "- front = front gross (client/broker fee), back = back gross (dealer reserve). Numbers only — no $ or commas.\n"
         "- feeProgram = a program fee if stated. NEVER include an Envy fee anywhere — Envy (20% of back) is computed "
         "automatically by the ledger.\n"
-        "- feeJason = fee shared with Jason if stated; feeReferral = a referral/shared fee OR a generic 'fees shared' "
+        "- feeProgram = a program fee OR a fee shared with Jason (Jason is part of Program now). feeReferral = a referral/shared fee OR a generic 'fees shared' "
         "lump. Do NOT include Stripe processing (its 3% is auto-computed from the payment method).\n"
         "- pay = how the FRONT was charged; payBack = how the BACK was charged (Stripe/Zelle/Cash/Check, '' if n/a). "
         "Stripe's 3% applies to whichever side used Stripe — set payBack='Stripe' for a back-end-only Stripe deal.\n"
@@ -1137,6 +1137,8 @@ def _nova_calc(d, amap):
     (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
     front, back = _n_num(d.get("front")), _n_num(d.get("back"))
     # Envy is NOT a shared fee — it's income Envy pays TO Nova (added to nova below).
+    # feeJason is legacy (Jason folded into Program) — still summed so old, un-re-saved
+    # deals reconcile; new deals carry it in feeProgram.
     fees = (_n_num(d.get("feeJason")) + _nova_fee_stripe(d) + _n_num(d.get("feeReferral"))
             + _n_num(d.get("feeProgram")))
     combined = front + back
@@ -1260,7 +1262,7 @@ def _norm_assignees(data):
         if a in _ASSIGNEE_IDS and a not in out:
             out.append(a)
     return out
-_ALLOWED_DEAL = {"front", "back", "feeReferral", "feeJason", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "agentId",
+_ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "agentId",
                  "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
 
 
@@ -1316,7 +1318,7 @@ def _nova_apply_actions(store, actions, user=None):
                      "term": data.get("term") or "", "agentId": aid,
                      "lead": data.get("lead") if data.get("lead") in ("own", "nova", "referral") else "own",
                      "wOffered": False, "wSold": bool(data.get("wSold")), "front": _n_num(data.get("front")), "back": _n_num(data.get("back")),
-                     "feeJason": _n_num(data.get("feeJason")), "feeReferral": _n_num(data.get("feeReferral")),
+                     "feeReferral": _n_num(data.get("feeReferral")),
                      "feeProgram": _n_num(data.get("feeProgram")),
                      # blank = auto 20% of back; a positive number = manual override
                      "feeEnvy": _n_num(data.get("feeEnvy")) if _n_num(data.get("feeEnvy")) > 0 else "",
