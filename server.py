@@ -1131,18 +1131,20 @@ def _nova_calc(d, amap):
     """Mirror the client calc(): netPool = front+back − fees; agentCut = netPool×pct
     (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
     front, back = _n_num(d.get("front")), _n_num(d.get("back"))
+    # Envy is NOT a shared fee — it's income Envy pays TO Nova (added to nova below).
     fees = (_n_num(d.get("feeJason")) + _nova_fee_stripe(d) + _n_num(d.get("feeReferral"))
-            + _n_num(d.get("feeProgram")) + _nova_fee_envy(d))
+            + _n_num(d.get("feeProgram")))
     combined = front + back
     net = combined - fees
     pct = ((amap.get(d.get("agentId")) or {}).get("pct") or {}).get(d.get("lead")) or 0
     ov = d.get("override")
     agent = _n_num(ov) if ov not in (None, "") else net * pct / 100.0
+    envy = _nova_fee_envy(d)
     # pro-rated agent share per side — matches the dashboard's collect/pay math exactly
     front_net = front - fees * (front / combined) if combined else 0.0
     back_net = back - fees * (back / combined) if combined else 0.0
     ratio = agent / (net or 1)
-    return {"fees": fees, "net": net, "agent": agent, "nova": net - agent, "pct": pct,
+    return {"fees": fees, "net": net, "agent": agent, "nova": (net - agent) + envy, "envy": envy, "pct": pct,
             "agentFront": front_net * ratio, "agentBack": back_net * ratio}
 
 
@@ -1254,7 +1256,7 @@ def _norm_assignees(data):
             out.append(a)
     return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeJason", "feeProgram", "feeEnvy", "pay", "lead", "agentId",
-                 "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyPaid"}
+                 "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
 
 
 def _nova_apply_actions(store, actions, user=None):
@@ -1316,7 +1318,7 @@ def _nova_apply_actions(store, actions, user=None):
                      "override": None,
                      "pay": data.get("pay") if data.get("pay") in ("Stripe", "Zelle", "Cash", "Check") else "Stripe",
                      "fColl": False, "bColl": False, "aPaidF": False, "aPaidFd": "", "aPaidB": False, "aPaidBd": "",
-                     "progPaid": False, "progPaidD": "", "refPaid": False, "refPaidD": "", "envyPaid": False, "envyPaidD": "",
+                     "progPaid": False, "progPaidD": "", "refPaid": False, "refPaidD": "", "envyColl": False, "envyCollD": "",
                      "notes": data.get("notes") or ""}
                 deals.insert(0, d)
                 results.append({"op": op, "ok": True, "id": d["id"], "label": d["client"] or "deal"})
@@ -1427,8 +1429,9 @@ def nova_admins_agent():
         " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself.\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
-        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|lead|agentId|notes|override|progPaid|refPaid|envyPaid}"
-        " — progPaid/refPaid/envyPaid are booleans: was that shared fee paid out.\n"
+        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|lead|agentId|notes|override|progPaid|refPaid|envyColl}"
+        " — Envy (20% of back) is INCOME Envy pays to Nova, not a cost. progPaid/refPaid = a shared fee was paid out; "
+        "envyColl = the Envy fee was collected/received from Envy.\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
         " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
         " delete_task id=<taskId> data={}\n"

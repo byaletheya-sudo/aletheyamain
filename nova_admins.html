@@ -514,7 +514,10 @@ function feeEnvy(d){
   if(("feeEnvy" in d) && d.feeEnvy!=="" && d.feeEnvy!==null && d.feeEnvy!==undefined) return +d.feeEnvy||0;  // manual override
   if(!envyEligible(d)) return 0;                                    // pre-July legacy — untouched
   return (+d.back||0)>0 ? Math.round((+d.back)*0.20) : 0; }         // auto · 20% of back
-function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0) + feeEnvy(d); }
+// Shared fees = costs Nova PAYS OUT that reduce the split pool. Envy is NOT here —
+// it's income Envy pays TO Nova (added to Nova's take below), so it never touches
+// the agent's split.
+function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0); }
 function calc(d){
   const combined = (+d.front||0) + (+d.back||0);
   const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
@@ -528,8 +531,10 @@ function calc(d){
   if(d.override!=null){ agentCut = d.override; overridden = true; }
   const ratio = (agentCut) / (netPool||1);             // effective share (after override)
   const agentFront = frontNet * ratio, agentBack = backNet * ratio;
-  const novaCut = netPool - agentCut;
-  return {combined, fees, feeStripe:feeStripe(d), feeEnvy:feeEnvy(d), feeProgram:+d.feeProgram||0, netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
+  const envy = feeEnvy(d);                               // 20% of back — Envy pays this TO Nova
+  const novaPool = netPool - agentCut;                   // Nova's share of the split pool
+  const novaCut = novaPool + envy;                       // total Nova take = pool share + Envy income
+  return {combined, fees, feeStripe:feeStripe(d), feeEnvy:envy, feeProgram:+d.feeProgram||0, netPool, pct, frontNet, backNet, agentCut, novaPool, novaCut, agentFront, agentBack, overridden,
           splitPct: netPool? Math.round(agentCut/netPool*100):0};
 }
 function collStatus(d){ // money IN
@@ -584,14 +589,15 @@ function filteredDeals(){
 // ---- RENDER: KPIs ----
 function renderKpis(){
   const ds=DEALS.filter(inPeriod);
-  let rev=0, payout=0, nova=0;
-  ds.forEach(d=>{const c=calc(d); rev+=c.netPool; payout+=c.agentCut; nova+=c.novaCut;});
+  let rev=0, payout=0, nova=0, envy=0;
+  ds.forEach(d=>{const c=calc(d); rev+=c.netPool; payout+=c.agentCut; nova+=c.novaCut; envy+=c.feeEnvy;});
   const exp=EXPENSES.filter(inPeriod).reduce((s,e)=>s+e.amt,0);
   const net=nova-exp;
   document.getElementById("kpis").innerHTML = [
     {l:"Net Revenue", v:fmt(rev), s:`${ds.length} deals · after fees shared`},
     {l:"Agent Payouts", v:fmt(payout), s:"commissions earned"},
-    {l:"Nova Gross", v:fmt(nova), s:"before expenses"},
+    {l:"Envy Income", v:fmt(envy), s:"20% of back → Nova"},
+    {l:"Nova Gross", v:fmt(nova), s:"pool + Envy · before expenses"},
     {l:"Expenses", v:fmt(exp), s:"ad spend, tools, fees"},
     {l:"Nova True Net", v:fmt(net), s:"complete profit", hero:true},
   ].map(k=>`<div class="na-kpi ${k.hero?'hero':''}"><div class="k-lab">${k.l}</div><div class="k-val">${k.v}</div><div class="k-sub">${k.s}</div></div>`).join("");
@@ -660,9 +666,10 @@ function detailRow(d){
       <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!=='')?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees · Envy</span><span><input class="na-in num" placeholder="${envyEligible(d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?(+d.feeEnvy||0):''}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?'manual':(envyEligible(d)?((+d.back||0)>0?'auto · 20% of back':'auto — no back end'):'off (pre-July) · type $ to add')}</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program + Envy</span><span></span></div>
-      <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
+      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program</span><span></span></div>
+      <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaPool)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
+      <div class="ledger-line"><span class="lab" style="color:var(--na-green)">＋ Envy income</span><span><input class="na-in num" placeholder="${envyEligible(d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?(+d.feeEnvy||0):''}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${(('feeEnvy' in d)&&d.feeEnvy!==''&&d.feeEnvy!=null)?'manual · paid to Nova':(envyEligible(d)?((+d.back||0)>0?'auto · 20% of back → Nova':'auto — no back end'):'off (pre-July) · type $ to add')}</span><span class="pos">${c.feeEnvy>0?'+'+fmt(c.feeEnvy):''}</span></div>
+      <div class="ledger-line total"><span class="lab">Nova total</span><span></span><span class="pos">${fmt(c.novaCut)}</span><span class="ovr-note">pool + Envy</span></div>
       <div class="ledger-line" style="border-bottom:none"><span class="lab">Override agent&nbsp;$</span><span><input class="na-in num" placeholder="auto" value="${d.override??''}" onchange="${E}'override',this.value)"></span><span class="ovr-note">${d.override!=null?'manual — overrides '+c.pct+'%':'blank = '+c.pct+'% auto'}</span><span></span></div>
       <div style="margin-top:8px"><span class="lab" style="font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700">Notes</span>
         <textarea class="na-ed" rows="2" placeholder="Anything extra from Garage…" onchange="${E}'notes',this.value)">${d.notes}</textarea></div>
@@ -678,6 +685,8 @@ function detailRow(d){
         <div class="pay-card"><div class="pc-t">Money in — Nova</div>
           <div class="toggle"><span>Front collected</span><span class="stat tog ${d.fColl?'g':'r'}" onclick="${T}'fColl')">${d.fColl?'● Yes':'○ No'}</span></div>
           <div class="toggle"><span>Back collected</span><span class="stat tog ${d.bColl?'g':'r'}" onclick="${T}'bColl')">${d.bColl?'● Yes':'○ No'}</span></div>
+          ${c.feeEnvy>0?`<div class="toggle"><span>Envy paid to us <span class="mini">${fmt(c.feeEnvy)}</span></span><span class="stat tog ${d.envyColl?'g':'r'}" onclick="${T}'envyColl')">${d.envyColl?'● Yes':'○ No'}</span></div>
+          ${d.envyColl?`<div class="toggle"><span class="mini">received on</span><input class="na-in" type="date" value="${d.envyCollD||''}" onchange="${E}'envyCollD',this.value)"></div>`:''}`:''}
         </div>
         <div class="pay-card"><div class="pc-t">Money out — Agent</div>
           <div class="toggle"><span>Front paid</span><span class="stat tog ${d.aPaidF?'g':'r'}" onclick="${T}'aPaidF')">${d.aPaidF?'● Yes':'○ No'}</span></div>
@@ -685,13 +694,11 @@ function detailRow(d){
           <div class="toggle"><span>Back paid</span><span class="stat tog ${d.aPaidB?'g':'r'}" onclick="${T}'aPaidB')">${d.aPaidB?'● Yes':'○ No'}</span></div>
           ${d.aPaidB?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.aPaidBd}" onchange="${E}'aPaidBd',this.value)"></div>`:''}
         </div>
-        ${(c.feeProgram>0||(+d.feeReferral||0)>0||c.feeEnvy>0)?`<div class="pay-card"><div class="pc-t">Money out — Shared fees</div>
+        ${(c.feeProgram>0||(+d.feeReferral||0)>0)?`<div class="pay-card"><div class="pc-t">Money out — Shared fees</div>
           ${c.feeProgram>0?`<div class="toggle"><span>Program paid <span class="mini">${fmt(c.feeProgram)}</span></span><span class="stat tog ${d.progPaid?'g':'r'}" onclick="${T}'progPaid')">${d.progPaid?'● Yes':'○ No'}</span></div>
           ${d.progPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.progPaidD||''}" onchange="${E}'progPaidD',this.value)"></div>`:''}`:''}
           ${(+d.feeReferral||0)>0?`<div class="toggle"><span>Referral paid <span class="mini">${fmt(+d.feeReferral)}</span></span><span class="stat tog ${d.refPaid?'g':'r'}" onclick="${T}'refPaid')">${d.refPaid?'● Yes':'○ No'}</span></div>
           ${d.refPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.refPaidD||''}" onchange="${E}'refPaidD',this.value)"></div>`:''}`:''}
-          ${c.feeEnvy>0?`<div class="toggle"><span>Envy paid <span class="mini">${fmt(c.feeEnvy)}</span></span><span class="stat tog ${d.envyPaid?'g':'r'}" onclick="${T}'envyPaid')">${d.envyPaid?'● Yes':'○ No'}</span></div>
-          ${d.envyPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.envyPaidD||''}" onchange="${E}'envyPaidD',this.value)"></div>`:''}`:''}
         </div>`:''}
       </div>
     </div>
@@ -713,7 +720,7 @@ function toggleField(id, field){
   if(field==='aPaidB') d.aPaidBd=d.aPaidB?TODAY:'';
   if(field==='progPaid') d.progPaidD=d.progPaid?TODAY:'';
   if(field==='refPaid') d.refPaidD=d.refPaid?TODAY:'';
-  if(field==='envyPaid') d.envyPaidD=d.envyPaid?TODAY:'';
+  if(field==='envyColl') d.envyCollD=d.envyColl?TODAY:'';
   scheduleRender(); saveDeal(id);
 }
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); deleteDealRemote(id); }
@@ -722,7 +729,7 @@ function newDeal(){
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
     wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe",
-    progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyPaid:false, envyPaidD:"",
+    progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyColl:false, envyCollD:"",
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
   // make the new row visible no matter the current view/filters
   setTab("ledger");
@@ -859,9 +866,10 @@ function renderExpenses(){
 // ---- RENDER: P&L ----
 function renderPnl(){
   const ds=DEALS.filter(inPeriod);
-  let frontG=0,backG=0,fees=0,payout=0,nova=0, oweFront=0,oweBack=0,oweAgent=0;
-  ds.forEach(d=>{const c=calc(d); frontG+=d.front; backG+=d.back; fees+=c.fees; payout+=c.agentCut; nova+=c.novaCut;
+  let frontG=0,backG=0,fees=0,payout=0,nova=0,envy=0, oweFront=0,oweBack=0,oweAgent=0,oweEnvy=0;
+  ds.forEach(d=>{const c=calc(d); frontG+=d.front; backG+=d.back; fees+=c.fees; payout+=c.agentCut; nova+=c.novaCut; envy+=c.feeEnvy;
     if(!d.fColl)oweFront+=d.front; if(d.back>0&&!d.bColl)oweBack+=d.back;
+    if(c.feeEnvy>0&&!d.envyColl)oweEnvy+=c.feeEnvy;
     if(c.agentFront>1&&!d.aPaidF)oweAgent+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)oweAgent+=c.agentBack;});
   const exp=EXPENSES.filter(inPeriod).reduce((s,e)=>s+e.amt,0);
   const netPool=frontG+backG-fees, net=nova-exp;
@@ -872,12 +880,14 @@ function renderPnl(){
     <div class="pnl-line minus"><span class="pl">Less: fees shared</span><span class="pv">−${fmt(fees).slice(1)}</span></div>
     <div class="pnl-line sub"><span class="pl">Net revenue pool</span><span class="pv">${fmt(netPool)}</span></div>
     <div class="pnl-line minus"><span class="pl">Less: agent payouts</span><span class="pv">−${fmt(payout).slice(1)}</span></div>
+    ${envy>0?`<div class="pnl-line"><span class="pl">Plus: Envy income (Nova)</span><span class="pv pos">+${fmt(envy).slice(1)}</span></div>`:''}
     <div class="pnl-line"><span class="pl"><b>Nova gross profit</b></span><span class="pv">${fmt(nova)}</span></div>
     <div class="pnl-line minus"><span class="pl">Less: operating expenses</span><span class="pv">−${fmt(exp).slice(1)}</span></div>
     <div class="pnl-line grand"><span class="pl">Nova true net</span><span class="pv">${fmt(net)}</span></div>`;
   document.getElementById("outBody").innerHTML = `
     <div class="outbox"><div class="obl">Front owed to Nova</div><div class="obv">${fmt(oweFront)}</div></div>
     <div class="outbox"><div class="obl">Back owed to Nova</div><div class="obv">${fmt(oweBack)}</div></div>
+    ${oweEnvy>0?`<div class="outbox"><div class="obl">Envy owed to Nova</div><div class="obv">${fmt(oweEnvy)}</div></div>`:''}
     <div class="outbox"><div class="obl">Owed to agents</div><div class="obv">${fmt(oweAgent)}</div></div>`;
   document.getElementById("oweBody").innerHTML = AGENTS.map(ag=>{
     const a=ds.filter(d=>d.agentId===ag.id); let owe=0;
@@ -978,23 +988,21 @@ function renderDashboard(){
 // ---- WIRING ----
 function renderFees(){
   const ds=DEALS.filter(inPeriod);
-  let jason=0, stripe=0, ref=0, prog=0, envy=0; const rows=[];
-  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, p=+d.feeProgram||0, e=feeEnvy(d), tot=j+s+r+p+e;
-    jason+=j; stripe+=s; ref+=r; prog+=p; envy+=e; if(tot>0) rows.push({d,j,s,r,p,e,tot}); });
-  const total=jason+stripe+ref+prog+envy;
+  let jason=0, stripe=0, ref=0, prog=0; const rows=[];
+  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, p=+d.feeProgram||0, tot=j+s+r+p;
+    jason+=j; stripe+=s; ref+=r; prog+=p; if(tot>0) rows.push({d,j,s,r,p,tot}); });
+  const total=jason+stripe+ref+prog;
   document.getElementById("feesPeriod").textContent="· "+range.label;
   document.getElementById("feesStrip").innerHTML=[
     {l:"Jason",v:jason,c:"#b79bff"},{l:"Stripe · 3%",v:stripe,c:"var(--na-blue-soft)"},
     {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Program",v:prog,c:"var(--na-fg)"},
-    {l:"Envy · 20% back",v:envy,c:"var(--na-red)"},{l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
+    {l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
   ].map(x=>`<div class="feebox ${x.hero?'hero':''}"><div class="fb-l">${x.l}</div><div class="fb-v" style="color:${x.c}">${fmt(x.v)}</div></div>`).join("");
-  const paidTag=(on,label)=>on?`<span class="stat g" style="font-size:9px">${label} ✓</span>`:'';
   document.getElementById("feesList").innerHTML = rows.length ? rows.sort((a,b)=>a.d.date<b.d.date?1:-1).map(r=>`
     <div class="exp-line"><span>${r.d.date.slice(5)} · ${r.d.client||'—'} <span class="mini">${[r.d.year,r.d.make,r.d.model].filter(Boolean).join(' ')}</span></span>
       <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',
         r.r?'Ref '+fmt(r.r)+(r.d.refPaid?' ✓':''):'',
-        r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):'',
-        r.e?'Envy '+fmt(r.e)+(r.d.envyPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
+        r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
 function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
