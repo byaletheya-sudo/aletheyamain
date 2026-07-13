@@ -495,12 +495,23 @@ const DEALS = SEED.deals || [];
 const EXPENSES = SEED.expenses || [];
 
 // Fees shared = 3 buckets: Jason (manual) + Stripe (auto, 3% of front, Stripe only) + Referral (manual).
-DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; });
+DEALS.forEach(d=>{ d.feeJason = +d.feeJason||0; d.feeReferral = +d.feeReferral||0; d.feeProgram = +d.feeProgram||0; });   // feeEnvy deliberately NOT coerced — missing key = legacy 0, "" = auto
 
 // ---- ENGINE ----
-function feeStripe(d){ if(d.feeStripe!==undefined && d.feeStripe!==null && d.feeStripe!=="") return +d.feeStripe||0;  // stored (imported/manual)
-  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }  // else auto 3% of front for new Stripe deals
-function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0); }
+// Stripe: a stored fee > 0 wins (imported/manual). But a stored 0/blank does NOT
+// zero it out on a Stripe deal — even when "the client covered the fee", we still
+// pay ~3% processing on the charge, so the auto 3% of front applies.
+function feeStripe(d){ const v=d.feeStripe;
+  if(v!==undefined && v!==null && v!=="" && (+v||0)>0) return +v;
+  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : (+v||0); }
+// Envy: automatic 20% of the back end when a back exists. Auto applies to deals
+// created with the field (new deals); a typed number overrides; legacy deals
+// without the field stay at 0 so historical, reconciled months don't shift.
+function feeEnvy(d){
+  if(!("feeEnvy" in d)) return 0;                                   // legacy deal — untouched
+  if(d.feeEnvy!=="" && d.feeEnvy!==null && d.feeEnvy!==undefined) return +d.feeEnvy||0;  // manual override
+  return (+d.back||0)>0 ? Math.round((+d.back)*0.20) : 0; }         // auto · 20% of back
+function feesTotal(d){ return (+d.feeJason||0) + feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0) + feeEnvy(d); }
 function calc(d){
   const combined = (+d.front||0) + (+d.back||0);
   const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
@@ -515,7 +526,7 @@ function calc(d){
   const ratio = (agentCut) / (netPool||1);             // effective share (after override)
   const agentFront = frontNet * ratio, agentBack = backNet * ratio;
   const novaCut = netPool - agentCut;
-  return {combined, fees, feeStripe:feeStripe(d), netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
+  return {combined, fees, feeStripe:feeStripe(d), feeEnvy:feeEnvy(d), feeProgram:+d.feeProgram||0, netPool, pct, frontNet, backNet, agentCut, novaCut, agentFront, agentBack, overridden,
           splitPct: netPool? Math.round(agentCut/netPool*100):0};
 }
 function collStatus(d){ // money IN
@@ -645,7 +656,9 @@ function detailRow(d){
       <div class="ledger-line"><span class="lab">Fees · Jason</span><span><input class="na-in num" value="${+d.feeJason||0}" onchange="${E}'feeJason',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Stripe</span><span><input class="na-in num" value="${c.feeStripe}" onchange="${E}'feeStripe',this.value,1)"></span><span class="ovr-note">${(d.feeStripe!==undefined&&d.feeStripe!==null&&d.feeStripe!=='')?'manual':(d.pay==='Stripe'?'auto · 3% of front':'— Stripe only')}</span><span></span></div>
       <div class="ledger-line"><span class="lab">Fees · Referral</span><span><input class="na-in num" value="${+d.feeReferral||0}" onchange="${E}'feeReferral',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
-      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Program</span><span><input class="na-in num" value="${+d.feeProgram||0}" onchange="${E}'feeProgram',this.value,1)"></span><span class="ovr-note">manual</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees · Envy</span><span><input class="na-in num" placeholder="${('feeEnvy' in d)&&(+d.back||0)>0?'auto '+Math.round((+d.back)*0.20):'0'}" value="${(!('feeEnvy' in d)||d.feeEnvy===''||d.feeEnvy==null)?'':(+d.feeEnvy||0)}" onchange="${E}'feeEnvy',this.value)"></span><span class="ovr-note">${!('feeEnvy' in d)?(c.feeEnvy?'':'off · type $ to add'):(d.feeEnvy!==''&&d.feeEnvy!=null?'manual':((+d.back||0)>0?'auto · 20% of back':'auto — no back end'))}</span><span></span></div>
+      <div class="ledger-line"><span class="lab">Fees shared</span><span class="money" style="text-align:right">−${fmt(c.fees).slice(1)}</span><span class="ovr-note">Jason + Stripe + Referral + Program + Envy</span><span></span></div>
       <div class="ledger-line total"><span class="lab">Net pool → split</span><span>${fmt(c.netPool)}</span><span class="pos">Nova ${fmt(c.novaCut)}</span><span>Agent ${fmt(c.agentCut)}</span></div>
       <div class="ledger-line" style="border-bottom:none"><span class="lab">Override agent&nbsp;$</span><span><input class="na-in num" placeholder="auto" value="${d.override??''}" onchange="${E}'override',this.value)"></span><span class="ovr-note">${d.override!=null?'manual — overrides '+c.pct+'%':'blank = '+c.pct+'% auto'}</span><span></span></div>
       <div style="margin-top:8px"><span class="lab" style="font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700">Notes</span>
@@ -669,6 +682,14 @@ function detailRow(d){
           <div class="toggle"><span>Back paid</span><span class="stat tog ${d.aPaidB?'g':'r'}" onclick="${T}'aPaidB')">${d.aPaidB?'● Yes':'○ No'}</span></div>
           ${d.aPaidB?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.aPaidBd}" onchange="${E}'aPaidBd',this.value)"></div>`:''}
         </div>
+        ${(c.feeProgram>0||(+d.feeReferral||0)>0||c.feeEnvy>0)?`<div class="pay-card"><div class="pc-t">Money out — Shared fees</div>
+          ${c.feeProgram>0?`<div class="toggle"><span>Program paid <span class="mini">${fmt(c.feeProgram)}</span></span><span class="stat tog ${d.progPaid?'g':'r'}" onclick="${T}'progPaid')">${d.progPaid?'● Yes':'○ No'}</span></div>
+          ${d.progPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.progPaidD||''}" onchange="${E}'progPaidD',this.value)"></div>`:''}`:''}
+          ${(+d.feeReferral||0)>0?`<div class="toggle"><span>Referral paid <span class="mini">${fmt(+d.feeReferral)}</span></span><span class="stat tog ${d.refPaid?'g':'r'}" onclick="${T}'refPaid')">${d.refPaid?'● Yes':'○ No'}</span></div>
+          ${d.refPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.refPaidD||''}" onchange="${E}'refPaidD',this.value)"></div>`:''}`:''}
+          ${c.feeEnvy>0?`<div class="toggle"><span>Envy paid <span class="mini">${fmt(c.feeEnvy)}</span></span><span class="stat tog ${d.envyPaid?'g':'r'}" onclick="${T}'envyPaid')">${d.envyPaid?'● Yes':'○ No'}</span></div>
+          ${d.envyPaid?`<div class="toggle"><span class="mini">paid on</span><input class="na-in" type="date" value="${d.envyPaidD||''}" onchange="${E}'envyPaidD',this.value)"></div>`:''}`:''}
+        </div>`:''}
       </div>
     </div>
     </div></td></tr>`;
@@ -677,6 +698,7 @@ const TODAY=CUR_MONTH+"-"+_pad(NOW.getDate());
 function edit(id, field, val, numeric){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
   if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
+  else if(field==='feeEnvy'){ const n=parseFloat(val); d.feeEnvy=(val===''||val==null||isNaN(n))?'':n; }  // blank = auto 20% of back
   else { if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; } d[field]=val; }
   scheduleRender(); saveDeal(id);
 }
@@ -686,6 +708,9 @@ function toggleField(id, field){
   if(field==='wSold' && d.wSold) d.wOffered=true;
   if(field==='aPaidF') d.aPaidFd=d.aPaidF?TODAY:'';
   if(field==='aPaidB') d.aPaidBd=d.aPaidB?TODAY:'';
+  if(field==='progPaid') d.progPaidD=d.progPaid?TODAY:'';
+  if(field==='refPaid') d.refPaidD=d.refPaid?TODAY:'';
+  if(field==='envyPaid') d.envyPaidD=d.envyPaid?TODAY:'';
   scheduleRender(); saveDeal(id);
 }
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); deleteDealRemote(id); }
@@ -693,7 +718,8 @@ function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
   DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own",
-    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, override:null, pay:"Stripe",
+    wOffered:false, wSold:false, front:0, back:0, feeJason:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe",
+    progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyPaid:false, envyPaidD:"",
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:""});
   // make the new row visible no matter the current view/filters
   setTab("ledger");
@@ -730,7 +756,7 @@ async function importData(input){
   DEALS.length=0; DEALS.push(...data.deals);
   if(Array.isArray(data.agents)&&data.agents.length){ AGENTS.length=0; AGENTS.push(...data.agents); }
   EXPENSES.length=0; EXPENSES.push(...(data.expenses||[]));
-  DEALS.forEach(d=>{ d.feeJason=+d.feeJason||0; d.feeReferral=+d.feeReferral||0; });
+  DEALS.forEach(d=>{ d.feeJason=+d.feeJason||0; d.feeReferral=+d.feeReferral||0; d.feeProgram=+d.feeProgram||0; });
   if(Array.isArray(data.tasks)) SEED.tasks=data.tasks;   // ride along if the backup has them
   if(Array.isArray(data.notes)) SEED.notes=data.notes;
   openRow=null; renderAll(); saveDataNow();
@@ -949,18 +975,23 @@ function renderDashboard(){
 // ---- WIRING ----
 function renderFees(){
   const ds=DEALS.filter(inPeriod);
-  let jason=0, stripe=0, ref=0; const rows=[];
-  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, tot=j+s+r;
-    jason+=j; stripe+=s; ref+=r; if(tot>0) rows.push({d,j,s,r,tot}); });
-  const total=jason+stripe+ref;
+  let jason=0, stripe=0, ref=0, prog=0, envy=0; const rows=[];
+  ds.forEach(d=>{ const j=+d.feeJason||0, s=feeStripe(d), r=+d.feeReferral||0, p=+d.feeProgram||0, e=feeEnvy(d), tot=j+s+r+p+e;
+    jason+=j; stripe+=s; ref+=r; prog+=p; envy+=e; if(tot>0) rows.push({d,j,s,r,p,e,tot}); });
+  const total=jason+stripe+ref+prog+envy;
   document.getElementById("feesPeriod").textContent="· "+range.label;
   document.getElementById("feesStrip").innerHTML=[
     {l:"Jason",v:jason,c:"#b79bff"},{l:"Stripe · 3%",v:stripe,c:"var(--na-blue-soft)"},
-    {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
+    {l:"Referral",v:ref,c:"var(--na-amber)"},{l:"Program",v:prog,c:"var(--na-fg)"},
+    {l:"Envy · 20% back",v:envy,c:"var(--na-red)"},{l:"Total fees shared",v:total,c:"var(--na-green)",hero:1}
   ].map(x=>`<div class="feebox ${x.hero?'hero':''}"><div class="fb-l">${x.l}</div><div class="fb-v" style="color:${x.c}">${fmt(x.v)}</div></div>`).join("");
+  const paidTag=(on,label)=>on?`<span class="stat g" style="font-size:9px">${label} ✓</span>`:'';
   document.getElementById("feesList").innerHTML = rows.length ? rows.sort((a,b)=>a.d.date<b.d.date?1:-1).map(r=>`
     <div class="exp-line"><span>${r.d.date.slice(5)} · ${r.d.client||'—'} <span class="mini">${[r.d.year,r.d.make,r.d.model].filter(Boolean).join(' ')}</span></span>
-      <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',r.r?'Ref '+fmt(r.r):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
+      <span class="money">${[r.j?'Jason '+fmt(r.j):'',r.s?'Stripe '+fmt(r.s):'',
+        r.r?'Ref '+fmt(r.r)+(r.d.refPaid?' ✓':''):'',
+        r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):'',
+        r.e?'Envy '+fmt(r.e)+(r.d.envyPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
 function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
