@@ -620,8 +620,19 @@ function presetRange(k){
   else {from="2000-01-01";to="2999-12-31";label="All time";}
   return {from,to,label};
 }
+// Period persistence: we store the PRESET KEY (e.g. "month") and recompute it against
+// TODAY on every load — so "This month" always means the real current month and a deal
+// dated today never falls outside a frozen range. Genuine custom ranges stay absolute.
+const _PRESET_LABELS={"Today":"today","This week":"week","This month":"month","Last 30 days":"30","Last 90 days":"90","This quarter":"quarter","Year to date":"ytd","All time":"all"};
 let range=presetRange("month");
-try{ const _sr=lsGet("na_range"); if(_sr){ const r=JSON.parse(_sr); if(r&&r.from&&r.to&&r.label) range=r; } }catch(e){}
+try{
+  const _sr=lsGet("na_range");
+  if(_sr){
+    if(_sr.charAt(0)==="{"){ const r=JSON.parse(_sr);           // legacy: a snapshot object was stored
+      if(r&&r.from&&r.to&&r.label){ range = _PRESET_LABELS[r.label] ? presetRange(_PRESET_LABELS[r.label]) : r; } }
+    else { range=presetRange(_sr); }                            // new: a preset key → recompute vs today
+  }
+}catch(e){}
 const inPeriod = d => d.date>=range.from && d.date<=range.to;
 
 function filteredDeals(){
@@ -853,7 +864,7 @@ function newDeal(){
     fColl:false, bColl:false, aPaidF:false, aPaidFd:"", aPaidB:false, aPaidBd:"", notes:"", reminders:[]});
   // make the new row visible no matter the current view/filters
   setTab("ledger");
-  range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label;
+  range=presetRange("month"); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range","month");
   ["fAgent","fLead","fStatus"].forEach(i=>document.getElementById(i).value="all");
   document.getElementById("fSearch").value="";
   openRow=id; renderAll(); saveDeal(id);
@@ -1165,11 +1176,11 @@ function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forE
   lsSet("na_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
-function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range)); closePP(); openRow=null; lgReset(); renderAll(); }
+function setRange(k){ range=presetRange(k); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",k); closePP(); openRow=null; lgReset(); renderAll(); }
 // dashboard "To collect" / "Owed to agents" → the ledger, pre-filtered to those deals.
 // Those card totals are ALL-TIME, so widen the range to match — the list equals the number you clicked.
 function dashGo(status){
-  range=presetRange("all"); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range",JSON.stringify(range));
+  range=presetRange("all"); document.getElementById("periodLabel").textContent=range.label; lsSet("na_range","all");
   ["fAgent","fLead"].forEach(i=>document.getElementById(i).value="all");
   document.getElementById("fSearch").value="";
   document.getElementById("fStatus").value=status;
