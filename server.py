@@ -1138,7 +1138,8 @@ def _nova_calc(d, amap):
     """Mirror the client calc(): netPool = front+back − fees; agentCut = netPool×pct
     (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
     front, back = _n_num(d.get("front")), _n_num(d.get("back"))
-    # Envy is NOT a shared fee — it's income Envy pays TO Nova (added to nova below).
+    # Envy is NOT a shared fee — it's a Nova-only cost (Envy keeps 20% of the back),
+    # subtracted from Nova below so the agent's split is untouched.
     # feeJason is legacy (Jason folded into Program) — still summed so old, un-re-saved
     # deals reconcile; new deals carry it in feeProgram.
     fees = (_n_num(d.get("feeJason")) + _nova_fee_stripe(d) + _n_num(d.get("feeReferral"))
@@ -1153,7 +1154,9 @@ def _nova_calc(d, amap):
     front_net = front - fees * (front / combined) if combined else 0.0
     back_net = back - fees * (back / combined) if combined else 0.0
     ratio = agent / (net or 1)
-    return {"fees": fees, "net": net, "agent": agent, "nova": (net - agent) + envy, "envy": envy, "pct": pct,
+    # Envy is a NOVA-ONLY cost: Envy receives the back, keeps 20% (Nova eats it), forwards
+    # 80% to Nova. Subtracted from Nova's take; the agent's split is unaffected.
+    return {"fees": fees, "net": net, "agent": agent, "nova": (net - agent) - envy, "envy": envy, "pct": pct,
             "agentFront": front_net * ratio, "agentBack": back_net * ratio}
 
 
@@ -1441,8 +1444,8 @@ def nova_admins_agent():
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
         " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|refPaid|envyColl}"
-        " — Envy (20% of back) is INCOME Envy pays to Nova, not a cost. progPaid/refPaid = a shared fee was paid out; "
-        "envyColl = the Envy fee was collected/received from Envy.\n"
+        " — Envy is a NOVA-ONLY COST: Envy receives the back, keeps 20% (Nova eats it), forwards 80% to Nova; it "
+        "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out.\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
         " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
         " delete_task id=<taskId> data={}\n"
