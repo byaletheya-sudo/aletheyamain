@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.error
 import socket
 import ipaddress
+from datetime import timedelta
 from html import unescape as _html_unescape
 
 app = Flask(__name__)
@@ -71,10 +72,12 @@ if NOVA_ADMIN_TOKEN and len(NOVA_ADMIN_TOKEN) < 20:
     print("[security] NOVA_ADMIN_TOKEN is shorter than 20 chars — ignoring it. Use a long random secret.")
     NOVA_ADMIN_TOKEN = ""
 
-# Admin session policy: activity keeps a session alive up to the idle limit; the
-# absolute limit forces a fresh login regardless. Tunable via env.
-ADMIN_IDLE_SECONDS = int(os.environ.get("NOVA_ADMIN_IDLE_MIN", "120")) * 60      # default 2h idle
-ADMIN_ABSOLUTE_SECONDS = int(os.environ.get("NOVA_ADMIN_ABS_HOURS", "12")) * 3600  # default 12h absolute
+# Admin session policy (Edgar's call): stay signed in for as long as the server is up —
+# NO idle or absolute time-out. The only automatic sign-out is a SERVER REFRESH (restart):
+# each login is stamped with the current process's boot id, and when the server restarts
+# that id changes so stale sessions are dropped. Explicit Lock/logout still signs out.
+SERVER_BOOT_ID = secrets.token_hex(8)
+app.permanent_session_lifetime = timedelta(days=30)   # persisted-cookie lifetime (survives browser restarts)
 
 # Stricter throttle for the admin gate than the general site login.
 _ADMIN_MAX = 5
@@ -337,8 +340,8 @@ def nova_admins_login():
             session["admin_ok"] = True
             session["nova_user"] = uid
             session["nova_role"] = rec["role"]
-            session["admin_at"] = time.time()      # absolute clock
-            session["admin_seen"] = time.time()    # idle clock
+            session.permanent = True               # persist the cookie across browser restarts
+            session["admin_boot"] = SERVER_BOOT_ID  # tie the session to this server process
             _LOGIN_FAILS.pop(ip, None)
             _audit("admin_login_ok", user=uid)
             return redirect("/nova-admins")
@@ -424,13 +427,13 @@ def require_login():
                 _audit("token_write", path=p)
             return None
         if session.get("admin_ok"):
-            now = time.time()
-            if (now - session.get("admin_at", 0) > ADMIN_ABSOLUTE_SECONDS
-                    or now - session.get("admin_seen", 0) > ADMIN_IDLE_SECONDS):
-                session.pop("admin_ok", None)      # session aged out -> re-login
-                _audit("admin_session_expired")
+            # Signed in for as long as this server process is up — no idle/absolute time-out.
+            # A restart rotates SERVER_BOOT_ID, so a session stamped by an older process is
+            # dropped here (the only automatic sign-out). Explicit Lock/logout still works.
+            if session.get("admin_boot") != SERVER_BOOT_ID:
+                session.pop("admin_ok", None)      # server was refreshed -> re-login
+                _audit("admin_session_expired", reason="server_refresh")
             else:
-                session["admin_seen"] = now        # activity keeps it alive
                 # cross-site write protection: browser writes must come from us
                 if request.method != "GET":
                     origin = request.headers.get("Origin", "")
@@ -1031,7 +1034,7 @@ def nova_admins_set_password():
 
 @app.route("/nova-admins/logout")
 def nova_admins_logout():
-    for k in ("admin_ok", "nova_user", "nova_role", "admin_at", "admin_seen"):
+    for k in ("admin_ok", "nova_user", "nova_role", "admin_at", "admin_seen", "admin_boot"):
         session.pop(k, None)
     _audit("admin_logout")
     return redirect("/nova-admins-login")
