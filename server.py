@@ -913,8 +913,10 @@ def nova_admins_parse():
         "is auto-computed. payBack = how the BACK (dealer paying Nova) was paid (Check/ACH/Wire/Zelle/Cash), '' if no back end. "
         "The back end is NEVER Stripe.\n"
         "- wOffered/wSold = was warranty offered / sold.\n"
-        "- fColl/bColl = was the front (client) / back (dealer) money collected by Nova. aPaidF/aPaidB = was the agent "
-        "paid their front/back share (aPaidFd/aPaidBd = those pay dates if stated).\n"
+        "- fColl = was the front (client) money collected by Nova; aPaidF = was the agent paid their front share "
+        "(aPaidFd = that pay date if stated).\n"
+        "- BACK-SIDE money is NEVER inferred: always output bColl=false and aPaidB=false (aPaidBd='') no matter "
+        "what the text says — Edgar confirms back-end money himself in the ledger.\n"
         "- Unknown strings => '', unknown numbers => 0, unknown booleans => false.\n"
         "- ok=true if you found at least a client or a vehicle; false if this isn't a deal. "
         "summary = one short sentence describing what you logged."
@@ -926,7 +928,13 @@ def nova_admins_parse():
             messages=[{"role": "system", "content": sys}, {"role": "user", "content": text}],
             response_format={"type": "json_schema", "json_schema": {"name": "deal", "strict": True, "schema": schema}},
         )
-        return jsonify(json.loads(resp.choices[0].message.content))
+        out = json.loads(resp.choices[0].message.content)
+        # Hard rule (Edgar): back-side money is only ever marked by him, once he confirms
+        # receipt — never inferred from pasted text, whatever the model returned.
+        out["bColl"] = False
+        out["aPaidB"] = False
+        out["aPaidBd"] = ""
+        return jsonify(out)
     except Exception as e:
         return jsonify({"error": "Couldn't parse that — " + str(e)[:160]}), 500
 
@@ -1153,9 +1161,13 @@ def _nova_calc(d, amap):
     ov = d.get("override")
     agent = _n_num(ov) if ov not in (None, "") else net * pct / 100.0
     envy = _nova_fee_envy(d)
-    # pro-rated agent share per side — matches the dashboard's collect/pay math exactly
-    front_net = front - fees * (front / combined) if combined else 0.0
-    back_net = back - fees * (back / combined) if combined else 0.0
+    # Per-side nets (mirrors client calc): Stripe is a card fee on the client's FRONT
+    # payment, so it comes entirely off the front; Referral/Program/Jason spread pro-rata.
+    stripe = _nova_fee_stripe(d)
+    other = fees - stripe
+    stripe_f = stripe if front > 0 else 0.0   # no front at all -> the fee rides the back
+    front_net = front - stripe_f - other * (front / combined) if combined else 0.0
+    back_net = back - (stripe - stripe_f) - other * (back / combined) if combined else 0.0
     ratio = agent / (net or 1)
     # Envy is a NOVA-ONLY cost: Envy receives the back, keeps 20% (Nova eats it), forwards
     # 80% to Nova. Subtracted from Nova's take; the agent's split is unaffected.
@@ -1451,6 +1463,9 @@ def nova_admins_agent():
         "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out.\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
         " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
+        " — BACK-SIDE rule for both mark ops: use side 'back'/'both' ONLY when Edgar explicitly says the back/dealer "
+        "money came in (or the agent's back share was paid). An unqualified 'mark it collected/paid' means side:'front' "
+        "— Edgar confirms back-end money himself.\n"
         " delete_task id=<taskId> data={}\n"
         f"- Today is {today}; resolve relative dates to YYYY-MM-DD. assignees: nema/arvin/edgar ('me' = {me['id']}).\n"
         "- Match deals/tasks/agents by the ids in the snapshot. If no clearly-matching record exists for an update, "
