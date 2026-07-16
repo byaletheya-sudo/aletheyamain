@@ -1300,6 +1300,9 @@ _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay",
                  "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
 # Expense categories in use (matches the imported ledger + dashboard ROAS matcher).
 _EXPENSE_CATS = ("Ad Spend", "Software", "Office", "Developer", "Refunds", "Auto", "Other")
+# Per-confirm action ceiling — big enough for a pasted expense list, small enough to
+# bound one confirmed write. Overflow is REPORTED, never silently dropped.
+_MAX_ACTIONS = 50
 
 
 def _nova_apply_actions(store, actions, user=None):
@@ -1322,7 +1325,12 @@ def _nova_apply_actions(store, actions, user=None):
             return {}
 
     results = []
-    for a in (actions or [])[:25]:
+    acts = list(actions or [])
+    if len(acts) > _MAX_ACTIONS:
+        results.append({"op": "batch", "ok": False,
+                        "error": f"only the first {_MAX_ACTIONS} of {len(acts)} actions were applied — send the rest in another message"})
+        acts = acts[:_MAX_ACTIONS]
+    for a in acts:
         op = a.get("op")
         data = jload(a.get("data"))
         rid = str(a.get("id") or "")
@@ -1516,7 +1524,8 @@ def nova_admins_agent():
         "— Edgar confirms back-end money himself.\n"
         " create_expense data={date(YYYY-MM-DD, today if unstated), cat(Ad Spend|Software|Office|Developer|Refunds|Auto|Other), desc, amt}"
         " — a business expense line (ad spend, tools, office…), one action per expense; amt = positive dollars. "
-        "Pick the closest cat ('Other' if unclear); desc = short human label.\n"
+        "Pick the closest cat ('Other' if unclear); desc = short human label. Edgar may paste a whole LIST of "
+        "expenses — emit one create_expense per line item (up to 50 per message), don't lump them into one.\n"
         " update_expense id=<expenseId> data={date|cat|desc|amt}\n"
         " delete_expense id=<expenseId> data={}\n"
         " delete_task id=<taskId> data={}\n"
