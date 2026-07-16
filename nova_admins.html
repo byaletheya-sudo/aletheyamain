@@ -572,9 +572,13 @@ function calc(d){
   const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
   const netPool = combined - fees;
   const _ag=A(d.agentId); const pct=(_ag&&_ag.pct&&_ag.pct[d.lead])||0;
-  // pro-rata fee allocation so front/back can be paid as cash lands
-  const frontNet = combined ? d.front - fees*(d.front/combined) : 0;
-  const backNet  = combined ? d.back  - fees*(d.back/combined)  : 0;
+  // Per-side nets, so each side can be paid as its cash lands. Stripe is a card fee on
+  // the client's FRONT payment — it comes entirely off the front (Alexandra: 1450−44=1406,
+  // never 1450−26). Referral + Program have no side, so they spread pro-rata by gross.
+  const _stripe = feeStripe(d), _other = fees - _stripe;
+  const _stripeF = (+d.front||0)>0 ? _stripe : 0;   // no front at all → the fee rides the back
+  const frontNet = combined ? d.front - _stripeF - _other*(d.front/combined) : 0;
+  const backNet  = combined ? d.back - (_stripe-_stripeF) - _other*(d.back/combined) : 0;
   let agentCut = netPool * pct/100;
   let overridden = false;
   if(d.override!=null){ agentCut = d.override; overridden = true; }
