@@ -1216,6 +1216,16 @@ def _nova_snapshot(store, today, query=""):
             owed_out += 1
     q = [w for w in (query or "").lower().split() if len(w) > 2]
 
+    # expenses: MTD/YTD spend + the recent (or query-matched) line items, with ids so
+    # the agent can update/delete a specific one.
+    expenses = store.get("expenses", []) or []
+    exp_mtd = sum(_n_num(e.get("amt")) for e in expenses if str(e.get("date") or "")[:7] == ym)
+    exp_ytd = sum(_n_num(e.get("amt")) for e in expenses if str(e.get("date") or "")[:4] == yr)
+    e_ranked = sorted(expenses, key=lambda e: str(e.get("date") or ""), reverse=True)
+    e_hit = [e for e in e_ranked if q and any(w in (str(e.get("cat", "")) + " " + str(e.get("desc", ""))).lower() for w in q)][:20]
+    e_seen = {id(e) for e in e_hit}
+    e_picked = e_hit + [e for e in e_ranked if id(e) not in e_seen][:15]
+
     def match(d):
         blob = " ".join(str(d.get(k, "")) for k in ("client", "make", "model", "dealer", "agentId", "notes")).lower()
         return any(w in blob for w in q)
@@ -1242,6 +1252,7 @@ def _nova_snapshot(store, today, query=""):
     return {
         "today": today,
         "metrics": {"deals_total": len(deals), "mtd_nova_profit": round(mtd), "ytd_nova_profit": round(ytd),
+                    "mtd_expenses": round(exp_mtd), "ytd_expenses": round(exp_ytd),
                     "to_collect": round(to_collect), "deals_with_uncollected_money": owed_in,
                     "owed_to_agents": round(owed_agents), "deals_agent_unpaid": owed_out,
                     "per_agent_mtd": [{"name": v["name"], "cut": round(v["cut"])}
@@ -1254,6 +1265,9 @@ def _nova_snapshot(store, today, query=""):
                    "assignees": t.get("assignees") or ([t["assignee"]] if t.get("assignee") else []),
                    "due": t.get("due"), "subtasks": len(t.get("subtasks", []))} for t in tasks],
         "notes": [{"id": n.get("id"), "title": n.get("title")} for n in notes],
+        "expenses_shown": len(e_picked), "expenses_total": len(expenses),
+        "expenses": [{"id": e.get("id"), "date": e.get("date"), "cat": e.get("cat"),
+                      "desc": e.get("desc"), "amt": e.get("amt")} for e in e_picked],
     }
 
 
@@ -1284,6 +1298,8 @@ def _norm_assignees(data):
     return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "source", "agentId",
                  "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
+# Expense categories in use (matches the imported ledger + dashboard ROAS matcher).
+_EXPENSE_CATS = ("Ad Spend", "Software", "Office", "Developer", "Refunds", "Auto", "Other")
 
 
 def _nova_apply_actions(store, actions, user=None):
@@ -1294,6 +1310,7 @@ def _nova_apply_actions(store, actions, user=None):
     deals = store.setdefault("deals", [])
     tasks = store.setdefault("tasks", [])
     notes = store.setdefault("notes", [])
+    expenses = store.setdefault("expenses", [])
     today = time.strftime("%Y-%m-%d")
 
     def jload(s):
@@ -1351,6 +1368,36 @@ def _nova_apply_actions(store, actions, user=None):
                      "notes": data.get("notes") or ""}
                 deals.insert(0, d)
                 results.append({"op": op, "ok": True, "id": d["id"], "label": d["client"] or "deal"})
+            elif op == "create_expense":
+                amt = round(_n_num(data.get("amt")), 2)
+                if amt <= 0:
+                    results.append({"op": op, "ok": False, "error": "expense needs a positive amount"})
+                    continue
+                e = {"id": _nova_new_id(expenses),
+                     "date": (str(data.get("date") or "") or today)[:10],
+                     "cat": data.get("cat") if data.get("cat") in _EXPENSE_CATS else "Other",
+                     "desc": str(data.get("desc") or "").strip()[:160],
+                     "amt": amt}
+                expenses.insert(0, e)
+                results.append({"op": op, "ok": True, "id": e["id"],
+                                "label": f"{e['cat']} · {e['desc'] or 'expense'} · ${amt:,.0f}"})
+            elif op in ("update_expense", "delete_expense"):
+                e = next((x for x in expenses if str(x.get("id")) == rid), None)
+                if not e:
+                    results.append({"op": op, "ok": False, "error": "expense not found"})
+                    continue
+                if op == "delete_expense":
+                    expenses[:] = [x for x in expenses if x is not e]
+                else:
+                    for k, v in data.items():
+                        if k == "amt":
+                            e["amt"] = round(_n_num(v), 2)
+                        elif k == "cat":
+                            e["cat"] = v if v in _EXPENSE_CATS else e.get("cat", "Other")
+                        elif k in ("date", "desc"):
+                            e[k] = str(v or "")[:160]
+                results.append({"op": op, "ok": True, "id": e.get("id"),
+                                "label": f"{e.get('cat','')} · {e.get('desc') or 'expense'}"})
             elif op in ("update_task", "complete_task", "delete_task"):
                 t = next((x for x in tasks if str(x.get("id")) == rid), None)
                 if not t:
@@ -1403,7 +1450,8 @@ _AGENT_ACTION = {
     "properties": {
         "op": {"type": "string", "enum": ["create_task", "create_deal", "create_note", "update_task",
                                           "complete_task", "update_deal", "mark_deal_collected",
-                                          "mark_agent_paid", "delete_task"]},
+                                          "mark_agent_paid", "delete_task",
+                                          "create_expense", "update_expense", "delete_expense"]},
         "id": {"type": "string"},
         "summary": {"type": "string"},
         "data": {"type": "string"},
@@ -1466,6 +1514,11 @@ def nova_admins_agent():
         " — BACK-SIDE rule for both mark ops: use side 'back'/'both' ONLY when Edgar explicitly says the back/dealer "
         "money came in (or the agent's back share was paid). An unqualified 'mark it collected/paid' means side:'front' "
         "— Edgar confirms back-end money himself.\n"
+        " create_expense data={date(YYYY-MM-DD, today if unstated), cat(Ad Spend|Software|Office|Developer|Refunds|Auto|Other), desc, amt}"
+        " — a business expense line (ad spend, tools, office…), one action per expense; amt = positive dollars. "
+        "Pick the closest cat ('Other' if unclear); desc = short human label.\n"
+        " update_expense id=<expenseId> data={date|cat|desc|amt}\n"
+        " delete_expense id=<expenseId> data={}\n"
         " delete_task id=<taskId> data={}\n"
         f"- Today is {today}; resolve relative dates to YYYY-MM-DD. assignees: nema/arvin/edgar ('me' = {me['id']}).\n"
         "- Match deals/tasks/agents by the ids in the snapshot. If no clearly-matching record exists for an update, "

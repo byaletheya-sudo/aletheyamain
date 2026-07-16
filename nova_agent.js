@@ -199,9 +199,11 @@
   function close(){ scrim.classList.remove("show"); if(_recOn&&_rec){try{_rec.stop();}catch(e){}} }
 
   var OP_ICON={create_task:"☑",create_deal:"🚗",create_note:"📝",update_task:"✎",
-    complete_task:"✅",update_deal:"✎",mark_deal_collected:"💰",mark_agent_paid:"💸",delete_task:"🗑"};
+    complete_task:"✅",update_deal:"✎",mark_deal_collected:"💰",mark_agent_paid:"💸",delete_task:"🗑",
+    create_expense:"🧾",update_expense:"✎",delete_expense:"🗑"};
   var OP_LBL={create_task:"New task",create_deal:"New deal",create_note:"New note",update_task:"Update task",
-    complete_task:"Complete task",update_deal:"Update deal",mark_deal_collected:"Mark collected",mark_agent_paid:"Mark agent paid",delete_task:"Delete task"};
+    complete_task:"Complete task",update_deal:"Update deal",mark_deal_collected:"Mark collected",mark_agent_paid:"Mark agent paid",delete_task:"Delete task",
+    create_expense:"New expense",update_expense:"Update expense",delete_expense:"Delete expense"};
 
   async function send(text){
     text=(text||ta.value||"").trim(); if(!text||state==="thinking") return;
