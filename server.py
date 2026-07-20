@@ -1161,13 +1161,13 @@ def _nova_calc(d, amap):
     ov = d.get("override")
     agent = _n_num(ov) if ov not in (None, "") else net * pct / 100.0
     envy = _nova_fee_envy(d)
-    # Per-side nets (mirrors client calc): Stripe is a card fee on the client's FRONT
-    # payment, so it comes entirely off the front; Referral/Program/Jason spread pro-rata.
-    stripe = _nova_fee_stripe(d)
-    other = fees - stripe
-    stripe_f = stripe if front > 0 else 0.0   # no front at all -> the fee rides the back
-    front_net = front - stripe_f - other * (front / combined) if combined else 0.0
-    back_net = back - (stripe - stripe_f) - other * (back / combined) if combined else 0.0
+    # Per-side nets (mirrors client calc): EVERY shared fee — Stripe, Referral, and
+    # Program (incl. legacy Jason, e.g. Jason Ma) — comes entirely off the FRONT, never
+    # the back. The back end is the dealer paying Nova; these fees are all deducted from
+    # the client's front payment. Only when there is no front do the fees fall to the back.
+    fees_f = fees if front > 0 else 0.0   # all shared fees ride the front (unless there's no front)
+    front_net = front - fees_f if combined else 0.0
+    back_net = back - (fees - fees_f) if combined else 0.0
     ratio = agent / (net or 1)
     # Envy is a NOVA-ONLY cost: Envy receives the back, keeps 20% (Nova eats it), forwards
     # 80% to Nova. Subtracted from Nova's take; the agent's split is unaffected.
@@ -1297,7 +1297,8 @@ def _norm_assignees(data):
             out.append(a)
     return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "source", "agentId",
-                 "notes", "override", "type", "term", "dealer", "progPaid", "refPaid", "envyColl"}
+                 "notes", "override", "type", "term", "dealer", "progPaid", "progPaidD", "refPaid", "refPaidD",
+                 "envyColl", "envyCollD"}
 # Expense categories in use (matches the imported ledger + dashboard ROAS matcher).
 _EXPENSE_CATS = ("Ad Spend", "Software", "Office", "Developer", "Refunds", "Auto", "Other")
 # Per-confirm action ceiling — big enough for a pasted expense list, small enough to
@@ -1372,7 +1373,15 @@ def _nova_apply_actions(store, actions, user=None):
                      "pay": data.get("pay") if data.get("pay") in ("Stripe", "Zelle", "Cash", "Check") else "Stripe",
                      "payBack": data.get("payBack") if data.get("payBack") in ("Zelle", "Check", "ACH", "Wire", "Cash") else "",
                      "fColl": False, "bColl": False, "aPaidF": False, "aPaidFd": "", "aPaidB": False, "aPaidBd": "",
-                     "progPaid": False, "progPaidD": "", "refPaid": False, "refPaidD": "", "envyColl": False, "envyCollD": "",
+                     # Shared-fee PAYOUTS (program/referral) can be marked paid at creation — the
+                     # Garage note records them, e.g. "Program Fee: $750 (7/19 jason paid)". This is
+                     # money OUT to the dealer/referrer, a different axis from the back-side money-IN
+                     # rule (bColl/aPaidB stay hard-false above; Edgar confirms those himself).
+                     "progPaid": bool(data.get("progPaid")),
+                     "progPaidD": str(data.get("progPaidD") or "")[:10] if data.get("progPaid") else "",
+                     "refPaid": bool(data.get("refPaid")),
+                     "refPaidD": str(data.get("refPaidD") or "")[:10] if data.get("refPaid") else "",
+                     "envyColl": False, "envyCollD": "",
                      "notes": data.get("notes") or ""}
                 deals.insert(0, d)
                 results.append({"op": op, "ok": True, "id": d["id"], "label": d["client"] or "deal"})
@@ -1432,6 +1441,12 @@ def _nova_apply_actions(store, actions, user=None):
                     for k, v in data.items():
                         if k in _ALLOWED_DEAL:
                             d[k] = v
+                    # Keep fee paid-dates coherent (mirrors the UI toggle): a fee marked paid
+                    # with no supplied date defaults to today; un-marking clears the date.
+                    if "progPaid" in data:
+                        d["progPaidD"] = (str(d.get("progPaidD") or "") or today) if d.get("progPaid") else ""
+                    if "refPaid" in data:
+                        d["refPaidD"] = (str(d.get("refPaidD") or "") or today) if d.get("refPaid") else ""
                 elif op == "mark_deal_collected":
                     side = data.get("side", "both")
                     if side in ("front", "both"):
@@ -1510,13 +1525,15 @@ def nova_admins_agent():
         " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), repeat(none|daily|weekdays|weekly|biweekly|monthly), labels[], notes, subtasks[]}"
         " — for a calendar EVENT (a meeting/appointment) add type='event' and time='HH:MM' (24h); events show on the calendar.\n"
         " create_note data={title, body}\n"
-        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral, sets the split), source(channel for metrics: FB|IG|Google|Yelp|Referral|Repeat|Walk-in|Website|Other, '' if unknown), front, back, feeReferral, feeProgram, pay(FRONT method: Stripe|Zelle|Cash|Check), payBack(BACK method — dealer pays Nova: Check|ACH|Wire|Zelle|Cash, never Stripe, '' if no back), notes}"
-        " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself. Stripe's 3% is auto on the FRONT only.\n"
+        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral, sets the split), source(channel for metrics: FB|IG|Google|Yelp|Referral|Repeat|Walk-in|Website|Other, '' if unknown), front, back, feeReferral, feeProgram, progPaid(bool), progPaidD(YYYY-MM-DD), refPaid(bool), refPaidD(YYYY-MM-DD), pay(FRONT method: Stripe|Zelle|Cash|Check), payBack(BACK method — dealer pays Nova: Check|ACH|Wire|Zelle|Cash, never Stripe, '' if no back), notes}"
+        " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself. Stripe's 3% is auto on the FRONT only. "
+        "If the note says a Program or Referral fee was ALREADY PAID — usually written right next to the fee, e.g. 'Program Fee: $750 (7/19 jason paid)' — set progPaid/refPaid=true and progPaidD/refPaidD to that date (resolve to YYYY-MM-DD). This is money OUT to the dealer/referrer, and is SEPARATE from collecting the deal's front/back money.\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
-        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|refPaid|envyColl}"
+        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|progPaidD|refPaid|refPaidD|envyColl}"
         " — Envy is a NOVA-ONLY COST: Envy receives the back, keeps 20% (Nova eats it), forwards 80% to Nova; it "
-        "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out.\n"
+        "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out; set progPaidD/refPaidD "
+        "to the pay date (YYYY-MM-DD) when it's known, else it defaults to today.\n"
         " mark_deal_collected id=<dealId> data={side:'front'|'back'|'both'}\n"
         " mark_agent_paid id=<dealId> data={side:'front'|'back'|'both'}\n"
         " — BACK-SIDE rule for both mark ops: use side 'back'/'both' ONLY when Edgar explicitly says the back/dealer "
@@ -1551,7 +1568,8 @@ def nova_admins_agent():
                     try:
                         d = json.loads(a.get("data") or "{}")
                         c = _nova_calc({"front": d.get("front"), "back": d.get("back"), "feeJason": d.get("feeJason"),
-                                        "feeReferral": d.get("feeReferral"), "pay": d.get("pay"), "agentId": d.get("agentId"),
+                                        "feeReferral": d.get("feeReferral"), "feeProgram": d.get("feeProgram"),
+                                        "pay": d.get("pay"), "agentId": d.get("agentId"),
                                         "lead": d.get("lead"), "override": None}, amap)
                         a["summary"] = (a.get("summary") or "New deal") + \
                             f" — net ${round(c['net']):,} · agent ${round(c['agent']):,} · Nova ${round(c['nova']):,}"
