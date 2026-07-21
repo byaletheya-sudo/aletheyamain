@@ -1242,6 +1242,7 @@ def _nova_snapshot(store, today, query=""):
     def deal_row(d):
         c = _nova_calc(d, amap)
         return {"id": d.get("id"), "date": d.get("date"), "client": d.get("client"),
+                "phone": d.get("phone") or "", "email": d.get("email") or "",
                 "vehicle": " ".join(str(d.get(k, "")) for k in ("year", "make", "model")).strip(),
                 "agent": (amap.get(d.get("agentId")) or {}).get("name", d.get("agentId")),
                 "lead": d.get("lead"), "front": d.get("front"), "back": d.get("back"), "pay": d.get("pay"),
@@ -1297,8 +1298,8 @@ def _norm_assignees(data):
             out.append(a)
     return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "source", "agentId",
-                 "notes", "override", "type", "term", "dealer", "progPaid", "progPaidD", "refPaid", "refPaidD",
-                 "envyColl", "envyCollD"}
+                 "notes", "override", "type", "term", "dealer", "client", "phone", "email",
+                 "progPaid", "progPaidD", "refPaid", "refPaidD", "envyColl", "envyCollD"}
 # Expense categories in use (matches the imported ledger + dashboard ROAS matcher).
 _EXPENSE_CATS = ("Ad Spend", "Software", "Office", "Developer", "Refunds", "Auto", "Other")
 # Per-confirm action ceiling — big enough for a pasted expense list, small enough to
@@ -1359,6 +1360,7 @@ def _nova_apply_actions(store, actions, user=None):
             elif op == "create_deal":
                 aid = data.get("agentId") if any(x.get("id") == data.get("agentId") for x in agents) else (agents[0].get("id") if agents else "")
                 d = {"id": _nova_new_id(deals), "date": data.get("date") or today, "client": data.get("client") or "",
+                     "phone": str(data.get("phone") or ""), "email": str(data.get("email") or ""),
                      "year": data.get("year") or int(time.strftime("%Y")), "make": data.get("make") or "", "model": data.get("model") or "",
                      "vin": "", "dealer": data.get("dealer") or "", "type": data.get("type") if data.get("type") in ("Lease", "Buy") else "Lease",
                      "term": data.get("term") or "", "agentId": aid,
@@ -1525,12 +1527,12 @@ def nova_admins_agent():
         " create_task data={title, status, priority, assignees(array of nema/arvin/edgar), due(YYYY-MM-DD), repeat(none|daily|weekdays|weekly|biweekly|monthly), labels[], notes, subtasks[]}"
         " — for a calendar EVENT (a meeting/appointment) add type='event' and time='HH:MM' (24h); events show on the calendar.\n"
         " create_note data={title, body}\n"
-        " create_deal data={client, year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral, sets the split), source(channel for metrics: FB|IG|Google|Yelp|Referral|Repeat|Walk-in|Website|Other, '' if unknown), front, back, feeReferral, feeProgram, progPaid(bool), progPaidD(YYYY-MM-DD), refPaid(bool), refPaidD(YYYY-MM-DD), pay(FRONT method: Stripe|Zelle|Cash|Check), payBack(BACK method — dealer pays Nova: Check|ACH|Wire|Zelle|Cash, never Stripe, '' if no back), notes}"
+        " create_deal data={client, phone(client phone, '' if unknown), email(client email, '' if unknown), year, make, model, dealer, type(Lease|Buy), agentId, lead(own|nova|referral, sets the split), source(channel for metrics: FB|IG|Google|Yelp|Referral|Repeat|Walk-in|Website|Other, '' if unknown), front, back, feeReferral, feeProgram, progPaid(bool), progPaidD(YYYY-MM-DD), refPaid(bool), refPaidD(YYYY-MM-DD), pay(FRONT method: Stripe|Zelle|Cash|Check), payBack(BACK method — dealer pays Nova: Check|ACH|Wire|Zelle|Cash, never Stripe, '' if no back), notes}"
         " — the Envy fee (20% of back) is AUTOMATIC when a back end exists; don't add it yourself. Stripe's 3% is auto on the FRONT only. "
         "If the note says a Program or Referral fee was ALREADY PAID — usually written right next to the fee, e.g. 'Program Fee: $750 (7/19 jason paid)' — set progPaid/refPaid=true and progPaidD/refPaidD to that date (resolve to YYYY-MM-DD). This is money OUT to the dealer/referrer, and is SEPARATE from collecting the deal's front/back money.\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
-        " update_deal id=<dealId> data={front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|progPaidD|refPaid|refPaidD|envyColl}"
+        " update_deal id=<dealId> data={client|phone|email|front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|progPaidD|refPaid|refPaidD|envyColl}"
         " — Envy is a NOVA-ONLY COST: Envy receives the back, keeps 20% (Nova eats it), forwards 80% to Nova; it "
         "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out; set progPaidD/refPaidD "
         "to the pay date (YYYY-MM-DD) when it's known, else it defaults to today.\n"

@@ -263,6 +263,19 @@
   .feebox.hero{border-color:rgba(52,211,153,.28);background:rgba(52,211,153,.06);}
   .feebox .fb-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
   .feebox .fb-v{font-family:var(--na-mono);font-size:18px;font-weight:600;margin-top:5px;}
+  /* margin split by lead source */
+  .mgn-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .mgn-segs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .mgn-seg{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:12px;padding:14px 16px;}
+  .mgn-seg.nova{border-color:rgba(96,165,250,.32);background:rgba(96,165,250,.055);}
+  .mgn-seg .ms-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .mgn-seg .ms-h b{font-size:13.5px;}
+  .mgn-seg .ms-m{font-family:var(--na-mono);font-size:25px;font-weight:600;letter-spacing:-.02em;margin-top:8px;}
+  .mgn-seg .ms-sub{font-size:11px;color:var(--na-muted);margin-top:1px;}
+  .mgn-seg .ms-rows{margin-top:11px;font-size:12.5px;}
+  .mgn-seg .ms-rows>div{display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:var(--na-muted);}
+  .mgn-seg .ms-rows>div span:last-child{font-family:var(--na-mono);color:var(--na-fg);}
+  .mgn-seg .ms-rows .ms-net{border-top:1px solid var(--na-line);margin-top:5px;padding-top:7px;color:var(--na-fg);font-weight:650;}
   /* save indicator + data tools */
   .na-right{display:flex;align-items:center;gap:9px;}
   .na-btn.xs{padding:6px 11px;font-size:11.5px;}
@@ -313,6 +326,7 @@
     .dash-insights{grid-template-columns:repeat(2,1fr);}
     .na-two{grid-template-columns:1fr;}
     .fees-strip{grid-template-columns:repeat(2,1fr);}
+    .mgn-segs{grid-template-columns:1fr;}
     .out-strip{grid-template-columns:1fr 1fr;}
     .na-agents{grid-template-columns:1fr;}
     .mchart{gap:6px;height:120px;}
@@ -491,6 +505,15 @@
         <h3 style="margin-top:22px;">Per-agent owed</h3>
         <div id="oweBody"></div>
       </div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <h3>Margin <span class="mini" id="mgnPeriod"></span></h3>
+      <p class="mini" style="margin-top:-6px;">Actual margins on booked deals — after fees shared, agent payouts, Envy, and operating expenses. Revenue = front + back gross.</p>
+      <div class="fees-strip" id="mgnKpis" style="margin-top:14px;margin-bottom:8px;"></div>
+      <div id="mgnStruct"></div>
+      <div class="mgn-h" style="margin:22px 0 2px;">By lead source</div>
+      <p class="mini" style="margin:0 0 11px;">Nova (paid) leads vs the agent's own. Ad spend is charged to Nova leads; other overhead is split by revenue share.</p>
+      <div class="mgn-segs" id="mgnSegs"></div>
     </div>
   </div>
 
@@ -720,6 +743,8 @@ function detailRow(d){
     </div>
     <div class="det-edit-head">
       <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${d.client}" onchange="${E}'client',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Phone</span><input class="na-in" type="tel" style="width:132px" placeholder="—" value="${d.phone||''}" onchange="${E}'phone',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Email</span><input class="na-in" type="email" style="width:196px" placeholder="—" value="${d.email||''}" onchange="${E}'email',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Year</span><input class="na-in" style="width:62px" value="${d.year}" onchange="${E}'year',this.value,1)"></div>
       <div class="fieldgrp"><span class="lab">Make</span><input class="na-in" style="width:128px" value="${d.make}" onchange="${E}'make',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Model</span><input class="na-in" style="width:128px" value="${d.model}" onchange="${E}'model',this.value)"></div>
@@ -862,7 +887,7 @@ function openDealFromDash(id){
 function delDeal(id){ if(!confirm('Delete this deal?'))return; const i=DEALS.findIndex(d=>d.id===id); if(i>=0)DEALS.splice(i,1); openRow=null; renderAll(); deleteDealRemote(id); }
 function newDeal(){
   const id = DEALS.reduce((m,d)=>Math.max(m,d.id),0) + 1;
-  DEALS.unshift({id, date:TODAY, client:"", year:2026, make:"", model:"", vin:"", dealer:"",
+  DEALS.unshift({id, date:TODAY, client:"", phone:"", email:"", year:2026, make:"", model:"", vin:"", dealer:"",
     type:"Lease", term:36, agentId:(AGENTS[0]&&AGENTS[0].id)||"", lead:"own", source:"",
     wOffered:false, wSold:false, front:0, back:0, feeReferral:0, feeProgram:0, feeEnvy:"", override:null, pay:"Stripe", payBack:"",
     progPaid:false, progPaidD:"", refPaid:false, refPaidD:"", envyColl:false, envyCollD:"",
@@ -1028,6 +1053,61 @@ function renderPnl(){
     a.forEach(d=>{const c=calc(d); if(c.agentFront>1&&!d.aPaidF)owe+=c.agentFront; if(c.agentBack>1&&!d.aPaidB)owe+=c.agentBack;});
     return `<div class="exp-line"><span><span class="dot" style="background:${aColor(ag.id)}"></span> ${ag.name}</span><span class="money ${owe>0?'':'pos'}">${owe>0?fmt(owe):'settled ✓'}</span></div>`;
   }).join("");
+  // ---- Margin: the ACTUAL margin after everything, expenses included ----
+  // Revenue = gross front+back; costs = fees shared + agent payouts + Envy + operating
+  // expenses. net (= nova − exp, computed above) already equals grossRev − all costs.
+  const grossRev = frontG + backG, N = ds.length;
+  const p1 = x => grossRev>0 ? (x/grossRev*100).toFixed(1)+"%" : "—";
+  const perCar = N ? net/N : 0;
+  document.getElementById("mgnPeriod").textContent = "· "+range.label;
+  document.getElementById("mgnKpis").innerHTML = [
+    {l:"Net margin", v:p1(net), c:net>=0?"var(--na-green)":"var(--na-red)", s:"true net ÷ revenue", hero:true},
+    {l:"Gross margin", v:p1(nova), c:"var(--na-fg)", s:"before operating expenses"},
+    {l:"Expense ratio", v:p1(exp), c:"var(--na-amber)", s:"overhead ÷ revenue"},
+    {l:"True profit / car", v:N?fmt(perCar):"—", c:perCar>=0?"var(--na-green)":"var(--na-red)", s:`${N} car${N===1?"":"s"} · o/h ${N?fmt(exp/N):"—"}/car`},
+  ].map(x=>`<div class="feebox ${x.hero?"hero":""}"><div class="fb-l">${x.l}</div><div class="fb-v" style="color:${x.c}">${x.v}</div><div class="mini" style="margin-top:4px;">${x.s}</div></div>`).join("");
+  const costRows = [
+    {l:"Fees shared", v:fees},
+    {l:"Agent payouts", v:payout},
+    ...(envy>0?[{l:"Envy (Nova eats 20%)", v:envy}]:[]),
+    {l:"Operating expenses", v:exp},
+  ];
+  document.getElementById("mgnStruct").innerHTML =
+    `<div class="pnl-line sub"><span class="pl">Gross revenue (front + back)</span><span class="pv">${fmt(grossRev)} · 100%</span></div>` +
+    costRows.map(r=>`<div class="pnl-line minus"><span class="pl">Less: ${r.l}</span><span class="pv">−${fmt(r.v).slice(1)} · ${p1(r.v)}</span></div>`).join("") +
+    `<div class="pnl-line grand"><span class="pl">Nova keeps · net margin</span><span class="pv" style="color:${net>=0?"var(--na-green)":"var(--na-red)"}">${fmt(net)} · ${p1(net)}</span></div>`;
+  // ---- Split by lead source: Nova (paid) leads vs the agent's own ----
+  // Ad spend BUYS Nova leads, so it's charged to the Nova segment; the rest of overhead
+  // spreads pro-rata by each segment's revenue share. Segment nets sum to Nova true net.
+  const adSpend = EXPENSES.filter(inPeriod).filter(e=>(e.cat||"")==="Ad Spend").reduce((s,e)=>s+(+e.amt||0),0);
+  const hasNova = ds.some(d=>(d.lead||"own")==="nova");
+  const adToNova = hasNova ? adSpend : 0;        // no Nova deals → ad spend falls to general overhead
+  const poolExp = exp - adToNova;                // everything else, split by revenue share
+  const segDefs = [{k:"nova",label:"Nova leads",cls:"nova"},{k:"own",label:"Agent's own",cls:""},{k:"referral",label:"Referral",cls:""}];
+  const segHtml = segDefs.map(sd=>{
+    const sds = ds.filter(d=>(d.lead||"own")===sd.k);
+    if(!sds.length) return "";
+    let rev=0, pay=0, snova=0;
+    sds.forEach(d=>{const c=calc(d); rev+=(+d.front||0)+(+d.back||0); pay+=c.agentCut; snova+=c.novaCut;});
+    const eAlloc = (sd.k==="nova"?adToNova:0) + (grossRev>0 ? poolExp*(rev/grossRev) : 0);
+    const nprof = snova - eAlloc, n = sds.length;
+    const nm = rev>0 ? (nprof/rev*100) : 0, gm = rev>0 ? (snova/rev*100) : 0;
+    const pr = x => rev>0 ? (x/rev*100).toFixed(1)+"%" : "—";
+    const adNote = (sd.k==="nova" && adToNova>0);
+    return `<div class="mgn-seg ${sd.cls}">
+      <div class="ms-h"><b>${sd.label}</b><span class="mini">${n} car${n===1?"":"s"}</span></div>
+      <div class="ms-m" style="color:${nprof>=0?"var(--na-green)":"var(--na-red)"}">${rev>0?nm.toFixed(1)+"%":"—"}</div>
+      <div class="ms-sub">net margin${adNote?" · after ad spend":""}</div>
+      <div class="ms-rows">
+        <div><span>Revenue</span><span>${fmt(rev)}</span></div>
+        <div><span>Agent split</span><span>−${fmt(pay).slice(1)} · ${pr(pay)}</span></div>
+        <div><span>Nova gross</span><span>${fmt(snova)} · ${rev>0?gm.toFixed(1)+"%":"—"}</span></div>
+        <div><span>− Expenses${adNote?" (incl. ad spend)":""}</span><span>−${fmt(eAlloc).slice(1)}</span></div>
+        <div class="ms-net"><span>Net profit</span><span>${fmt(nprof)}</span></div>
+        <div><span>Per car</span><span>${n?fmt(nprof/n):"—"}</span></div>
+      </div></div>`;
+  }).join("");
+  document.getElementById("mgnSegs").innerHTML = segHtml || `<div class="mini">No deals in this period.</div>`;
 }
 
 // ---- RENDER: Dashboard ----
