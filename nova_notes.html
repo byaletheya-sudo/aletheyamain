@@ -264,8 +264,46 @@ async function uploadImg(dataUrl){
 }
 async function addImageFromData(dataUrl){ addImage(await uploadImg(dataUrl)); }
 function delBlock(i){ const n=cur(); n.blocks.splice(i,1); if(!n.blocks.length)n.blocks.push({t:"p",text:""}); renderEd(Math.max(0,i-1)); queueSave(); }
-function onPaste(e){ const items=(e.clipboardData||{}).items||[];
-  for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImageFromData); return; } } }
+function onPaste(e){
+  if(e.target&&e.target.classList&&e.target.classList.contains("ntitle")) return;   // title <input> pastes normally
+  const cd=e.clipboardData||window.clipboardData; if(!cd) return;
+  const items=cd.items||[];
+  for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImageFromData); return; } }
+  // Text paste: take PLAIN text (drop rich HTML) and turn markdown into real blocks, so a
+  // pasted doc keeps its headings/lists/paragraphs instead of collapsing into one run-on
+  // block on refresh. Root-cause fix for the flattened-paste bug.
+  const raw=cd.getData("text/plain"); if(raw==null||raw==="") return;
+  e.preventDefault(); pasteText(raw);
+}
+function mdInline(s){ return String(s).replace(/\*\*(.+?)\*\*/g,"$1").replace(/__(.+?)__/g,"$1").replace(/`([^`]+)`/g,"$1").trim(); }
+function parseMdBlocks(raw){
+  const out=[]; let m;
+  for(const line of String(raw).replace(/\r\n?/g,"\n").split("\n")){
+    const s=line.trim();
+    if(!s) continue;                                              // blank line = paragraph break
+    if(m=/^#\s+(.*)/.exec(s))                          out.push({t:"h1",text:mdInline(m[1])});
+    else if(m=/^#{2,}\s+(.*)/.exec(s))                 out.push({t:"h2",text:mdInline(m[1])});   // ##+ -> h2 (only h1/h2 exist)
+    else if(m=/^(?:[-*+]\s+)?\[([ xX]?)\]\s+(.*)/.exec(s)) out.push({t:"todo",text:mdInline(m[2]),done:/[xX]/.test(m[1])});   // "- [ ] x", "[x] x"
+    else if(m=/^[-*+]\s+(.*)/.exec(s))                 out.push({t:"bullet",text:mdInline(m[1])});
+    else                                        out.push({t:"p",text:mdInline(s)});
+  }
+  return out;
+}
+function pasteText(raw){
+  const n=cur(); if(!n) return;
+  const blks=parseMdBlocks(raw); if(!blks.length) return;
+  const i=(curBlk!=null&&n.blocks[curBlk]!=null)?curBlk:n.blocks.length-1;
+  const b=n.blocks[i];
+  // single plain line -> insert inline at the caret (a normal paste)
+  if(blks.length===1&&blks[0].t==="p"){ try{ document.execCommand("insertText",false,blks[0].text); }catch(x){ b.text=(b.text||"")+blks[0].text; renderEd(i); queueSave(); } return; }
+  // multi-block -> replace the current block if it's empty, else drop the blocks in after it
+  let at;
+  if(b&&b.t==="p"&&!(b.text||"").trim()){ n.blocks.splice(i,1,...blks); at=i+blks.length-1; }
+  else { n.blocks.splice(i+1,0,...blks); at=i+blks.length; }
+  if(n.blocks[at]&&n.blocks[at].t!=="p"){ n.blocks.splice(at+1,0,{t:"p",text:""}); at+=1; }        // trailing editable line
+  if(!n.blocks[at]){ n.blocks.push({t:"p",text:""}); at=n.blocks.length-1; }
+  renderEd(at); queueSave();
+}
 function onDrop(e){ const files=(e.dataTransfer||{}).files||[];
   for(const f of files){ if(f.type&&f.type.indexOf("image")===0){ e.preventDefault(); downscaleImg(f,addImageFromData); return; } } }
 let curBlk=0;
