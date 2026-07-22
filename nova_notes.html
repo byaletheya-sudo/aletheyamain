@@ -269,11 +269,17 @@ function onPaste(e){
   const cd=e.clipboardData||window.clipboardData; if(!cd) return;
   const items=cd.items||[];
   for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ e.preventDefault(); const f=it.getAsFile(); if(f) downscaleImg(f,addImageFromData); return; } }
-  // Text paste: take PLAIN text (drop rich HTML) and turn markdown into real blocks, so a
-  // pasted doc keeps its headings/lists/paragraphs instead of collapsing into one run-on
-  // block on refresh. Root-cause fix for the flattened-paste bug.
-  const raw=cd.getData("text/plain"); if(raw==null||raw==="") return;
-  e.preventDefault(); pasteText(raw);
+  // Text paste → real blocks, so a pasted doc keeps its headings/lists/paragraphs instead
+  // of collapsing into one run-on block. Content copied from a RENDERED view (markdown
+  // preview, Google Docs…) carries the true structure in text/html — text/plain has already
+  // flattened the #/-/** markers away — so prefer the HTML when it has semantic blocks;
+  // otherwise treat the plain text as markdown (raw .md files, code editors).
+  const html=cd.getData("text/html")||"", text=cd.getData("text/plain")||"";
+  if(!html && !text) return;
+  e.preventDefault();
+  let blks = /<(h[1-6]|ul|ol|li|blockquote)\b/i.test(html) ? parseHtmlBlocks(html) : parseMdBlocks(text);
+  if(!blks.length) blks = parseMdBlocks(text);
+  insertBlocks(blks);
 }
 function mdInline(s){ return String(s).replace(/\*\*(.+?)\*\*/g,"$1").replace(/__(.+?)__/g,"$1").replace(/`([^`]+)`/g,"$1").trim(); }
 function parseMdBlocks(raw){
@@ -289,9 +295,27 @@ function parseMdBlocks(raw){
   }
   return out;
 }
-function pasteText(raw){
-  const n=cur(); if(!n) return;
-  const blks=parseMdBlocks(raw); if(!blks.length) return;
+// Parse the clipboard's text/html (a rendered doc) into blocks. Headings/lists/paragraphs
+// map directly; inline tags (strong/em/code) flatten to plain text since blocks are unstyled.
+function parseHtmlBlocks(html){
+  let doc; try{ doc=new DOMParser().parseFromString(html,"text/html"); }catch(e){ return []; }
+  const out=[], txt=el=>(el.textContent||"").replace(/\s+/g," ").trim();
+  const add=(t,text,done)=>{ text=(text||"").replace(/\s+/g," ").trim(); if(!text)return; out.push(done===undefined?{t,text}:{t,text,done}); };
+  const li=node=>{ const cb=node.querySelector('input[type="checkbox"]'); const t=txt(node); cb?add("todo",t,cb.checked):add("bullet",t); };
+  const walk=node=>{ for(const ch of node.children){ const tag=ch.tagName.toLowerCase();
+    if(tag==="h1") add("h1",txt(ch));
+    else if(/^h[2-6]$/.test(tag)) add("h2",txt(ch));
+    else if(tag==="p"||tag==="blockquote"||tag==="pre") add("p",txt(ch));
+    else if(tag==="ul"||tag==="ol"){ for(const c of ch.children){ if(c.tagName.toLowerCase()==="li") li(c); } }
+    else if(tag==="li") li(ch);
+    else if(tag==="hr"||tag==="style"||tag==="script"||tag==="head"||tag==="title"||tag==="meta"||tag==="figure"){ /* skip */ }
+    else if(ch.children && ch.children.length) walk(ch);            // recurse containers (div/section/article/table…)
+    else add("p",txt(ch)); } };                                     // leaf with only text
+  walk(doc.body||doc.documentElement);
+  return out;
+}
+function insertBlocks(blks){
+  const n=cur(); if(!n||!blks||!blks.length) return;
   const i=(curBlk!=null&&n.blocks[curBlk]!=null)?curBlk:n.blocks.length-1;
   const b=n.blocks[i];
   // single plain line -> insert inline at the caret (a normal paste)
