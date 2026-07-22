@@ -302,15 +302,20 @@ function parseHtmlBlocks(html){
   const out=[], txt=el=>(el.textContent||"").replace(/\s+/g," ").trim();
   const add=(t,text,done)=>{ text=(text||"").replace(/\s+/g," ").trim(); if(!text)return; out.push(done===undefined?{t,text}:{t,text,done}); };
   const li=node=>{ const cb=node.querySelector('input[type="checkbox"]'); const t=txt(node); cb?add("todo",t,cb.checked):add("bullet",t); };
+  const BLOCK=/^(div|section|article|main|header|footer|p|h[1-6]|ul|ol|li|blockquote|pre|table|thead|tbody|tr|td|th|dl|dt|dd)$/;
+  // Only recurse into a container that actually holds BLOCK-level children. If it just holds
+  // inline stuff (<strong>, <span>, text), treat the whole thing as one block via textContent
+  // — otherwise recursing into .children (elements only) drops sibling text nodes, e.g.
+  // "<div><strong>Label:</strong> the rest</div>" would lose " the rest". (colon-line bug)
+  const hasBlockKid=el=>{ for(const c of el.children){ if(BLOCK.test(c.tagName.toLowerCase())) return true; } return false; };
   const walk=node=>{ for(const ch of node.children){ const tag=ch.tagName.toLowerCase();
     if(tag==="h1") add("h1",txt(ch));
     else if(/^h[2-6]$/.test(tag)) add("h2",txt(ch));
-    else if(tag==="p"||tag==="blockquote"||tag==="pre") add("p",txt(ch));
     else if(tag==="ul"||tag==="ol"){ for(const c of ch.children){ if(c.tagName.toLowerCase()==="li") li(c); } }
     else if(tag==="li") li(ch);
     else if(tag==="hr"||tag==="style"||tag==="script"||tag==="head"||tag==="title"||tag==="meta"||tag==="figure"){ /* skip */ }
-    else if(ch.children && ch.children.length) walk(ch);            // recurse containers (div/section/article/table…)
-    else add("p",txt(ch)); } };                                     // leaf with only text
+    else if(hasBlockKid(ch)) walk(ch);                             // real container (div/section/table…) → recurse
+    else add("p",txt(ch)); } };                                    // p/blockquote/pre or inline-only div → one block (keeps text nodes)
   walk(doc.body||doc.documentElement);
   return out;
 }
