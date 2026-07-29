@@ -411,6 +411,7 @@
     <button class="na-tab" data-t="expenses">Expenses <span class="pill" id="cnt-exp">0</span></button>
     <button class="na-tab" data-t="pnl">P&amp;L</button>
     <button class="na-tab" data-t="nema">Nema</button>
+    <button class="na-tab" data-t="cac">CAC</button>
     <button class="na-tab" data-t="hist">History <span class="pill" id="cnt-hist">0</span></button>
   </div>
 
@@ -546,6 +547,20 @@
         <th class="num">Net pool</th><th class="num">Nova take*</th><th>Era</th>
       </tr></thead><tbody id="nemaDeals"></tbody></table></div>
       <p class="mini" style="margin:8px 0 0">* at current split rates — historic actual payouts may have differed.</p></div>
+  </div>
+
+  <!-- CAC — customer acquisition cost, history + live merged (F4) -->
+  <div id="view-cac" class="hide">
+    <div class="na-kpis" id="cacKpis" style="display:grid"></div>
+    <div class="panel" style="margin-top:16px"><h3>Monthly CAC trend <span class="mini">bars = blended CAC · amber line = new clients</span></h3>
+      <div id="cacChart"></div></div>
+    <div class="panel" style="margin-top:16px"><h3>Month by month <span class="mini">since March 2025 · referral wins over ad-influenced · pre-July paid tags inferred from lead type</span></h3>
+      <div class="na-tablewrap"><table class="na-tbl"><thead><tr>
+        <th>Month</th><th class="num">Ad spend</th><th class="num">New clients</th>
+        <th class="num">Paid</th><th class="num">Referral</th>
+        <th class="num">Blended CAC</th><th class="num">Paid CAC</th><th class="num">ROAS</th><th></th>
+      </tr></thead><tbody id="cacMonths"></tbody></table></div>
+      <p class="mini" style="margin:8px 0 0">Spend = expense rows matching the dashboard's ad-spend matcher (Ad Spend / Meta / Yelp / ads). Referral CAC is ~$0 by definition — referral counts shown instead. ROAS = gross revenue that month ÷ spend.</p></div>
   </div>
 
   <!-- HISTORY — the pre-July 2026 archive, its own area, never mixed into live numbers -->
@@ -1111,6 +1126,83 @@ function renderNema(){
   }).join("");
 }
 
+// ---- RENDER: CAC (F4) — acquisition cost across history + live ----
+const HEXPENSES = SEED.historyExpenses || [];
+const SETTINGS = SEED.settings || {};
+const CAC_START="2025-03";
+// the SAME matcher the dashboard ROAS uses (keep in sync with renderDashboard)
+const adSpendRx = /ad ?spend|meta|yelp|ads/i;
+function cacSpendByMonth(){
+  const by={};
+  HEXPENSES.concat(EXPENSES).forEach(e=>{
+    if(!e.date) return;
+    if(adSpendRx.test((e.cat||"")+" "+(e.desc||""))) by[e.date.slice(0,7)]=(by[e.date.slice(0,7)]||0)+(+e.amt||0);
+  });
+  return by;
+}
+// paid = an ad channel (FB/IG/Google/Yelp), or a Nova lead when the channel is untagged
+// (pre-July history has no channel — Nova leads ARE the FB/IG leads, so this is labeled
+// "inferred"). Referral wins over ad-influenced per the build doc.
+function cacBucket(d){
+  if(d.lead==="referral" || d.source==="Referral") return "referral";
+  if(["FB","IG","Google","Yelp"].includes(d.source)) return "paid";
+  if(!d.source && d.lead==="nova") return "paid";
+  return "other";
+}
+function renderCac(){
+  const spendBy=cacSpendByMonth();
+  const merged=mergedDeals().map(x=>x.d);
+  const first=naFirstDeals(merged);
+  const okMonths=SETTINGS.cacZeroSpendOk||[];
+  // month list from CAC_START through the current month
+  const months=[]; let m=CAC_START;
+  while(m<=CUR_MONTH){ months.push(m); m=naAddMonths(m+"-01",1).slice(0,7); }
+  let totSpend=0, totNew=0, totPaid=0, totRef=0, totRev=0;
+  const rows=months.map(mo=>{
+    const news=Object.values(first).filter(d=>d.date.startsWith(mo));
+    const paid=news.filter(d=>cacBucket(d)==="paid").length;
+    const ref=news.filter(d=>cacBucket(d)==="referral").length;
+    const spend=spendBy[mo]||0;
+    const rev=merged.filter(d=>d.date.startsWith(mo)).reduce((s,d)=>s+(+d.front||0)+(+d.back||0),0);
+    totSpend+=spend; totNew+=news.length; totPaid+=paid; totRef+=ref; totRev+=rev;
+    return {mo, spend, n:news.length, paid, ref, rev,
+      cac:spend&&news.length?spend/news.length:null,
+      paidCac:spend&&paid?spend/paid:null,
+      roas:spend?rev/spend:null,
+      flagged:!spend&&!okMonths.includes(mo)};
+  });
+  const life=totSpend&&totNew?totSpend/totNew:0;
+  const withCac=rows.filter(r=>r.cac!=null);
+  const last=withCac[withCac.length-1], prev=withCac[withCac.length-2];
+  const trend=last&&prev?(last.cac<prev.cac?"↓ improving":last.cac>prev.cac?"↑ rising":"→ flat"):"—";
+  document.getElementById("cacKpis").innerHTML=[
+    {l:"Lifetime blended CAC", v:totNew?fmt(life):"—", s:`${fmt(totSpend)} spend ÷ ${totNew} new clients`, hero:true},
+    {l:"Total ad spend", v:fmt(totSpend), s:"since March 2025"},
+    {l:"New clients", v:totNew, s:`${totPaid} paid · ${totRef} referral · ${totNew-totPaid-totRef} other`},
+    {l:"Referral share", v:(totNew?Math.round(totRef/totNew*100):0)+"%", s:"free growth — should climb"},
+    {l:"Latest CAC", v:last&&last.cac!=null?fmt(last.cac):"—", s:last?monthName(last.mo)+" · "+trend:"—"},
+    {l:"Lifetime ROAS", v:totSpend?(totRev/totSpend).toFixed(1)+"×":"—", s:"gross revenue ÷ ad spend"},
+  ].map(k=>`<div class="na-kpi ${k.hero?'hero':''}"><div class="k-lab">${k.l}</div><div class="k-val">${k.v}</div><div class="k-sub">${k.s}</div></div>`).join("");
+  naBarChart(document.getElementById("cacChart"),
+    rows.map(r=>({label:r.mo.slice(2), value:r.cac||0, value2:r.n,
+      color:r.cac==null?"var(--na-panel-2)":undefined})),
+    {line:true, fmt:v=>fmt(v)+" CAC", fmt2:v=>v+" new"});
+  document.getElementById("cacMonths").innerHTML=rows.map(r=>`
+    <tr><td>${monthName(r.mo)}</td>
+      <td class="num money">${r.spend?fmt(r.spend):(r.flagged?'<span class="stat a" title="No ad-spend expense row this month — CAC not computed. If genuinely $0, mark it OK.">none ⚠</span>':'<span class="mini">$0 ok</span>')}</td>
+      <td class="num">${r.n}</td><td class="num">${r.paid}</td><td class="num">${r.ref}</td>
+      <td class="num money">${r.cac!=null?fmt(r.cac):'<span class="mini">—</span>'}</td>
+      <td class="num money">${r.paidCac!=null?fmt(r.paidCac):'<span class="mini">—</span>'}</td>
+      <td class="num money">${r.roas!=null?r.roas.toFixed(1)+"×":'<span class="mini">—</span>'}</td>
+      <td>${r.flagged?`<button class="na-btn ghost xs" onclick="cacMarkOk('${r.mo}')" title="Confirm this month genuinely had no ad spend">$0 ok</button>`:''}</td></tr>`).join("");
+}
+function cacMarkOk(mo){
+  SETTINGS.cacZeroSpendOk=(SETTINGS.cacZeroSpendOk||[]).concat([mo]);
+  SEED.settings=SETTINGS;
+  saveRow({settings:{cacZeroSpendOk:SETTINGS.cacZeroSpendOk}});
+  renderCac();
+}
+
 // ---- RENDER: Agents ----
 function renderAgents(){
   document.getElementById("cnt-agents").textContent=AGENTS.length;
@@ -1419,16 +1511,16 @@ function renderFees(){
         r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
-function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderHist(); renderNema(); }
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderHist(); renderNema(); renderCac(); }
 // Coalesce bursts of edits into ONE render on the next frame (a checkbox toggle
 // no longer rebuilds all 7 tabs synchronously on every click).
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
-function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl","hist","nema"].forEach(x=>
+function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl","hist","nema","cac"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
-  // hist + nema ignore the live period picker — they span the full March-2025+ record
-  const bare = (t==="dashboard"||t==="hist"||t==="nema");
+  // hist + nema + cac ignore the live period picker — they span the full March-2025+ record
+  const bare = (t==="dashboard"||t==="hist"||t==="nema"||t==="cac");
   document.getElementById("periodWrap").style.display = bare?"none":"flex";
   document.getElementById("kpis").style.display = bare?"none":"grid";
   lsSet("na_tab",t);

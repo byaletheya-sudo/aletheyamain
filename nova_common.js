@@ -87,6 +87,52 @@ function naMonthDiff(a, b){
 }
 function naPhoneKey(p){ return String(p||"").replace(/\D/g,"").slice(-10); }
 
+// earliest deal per normalized client name — a deal is a "new client" iff it IS that
+// first deal (CAC rule: returning renewals never count as acquisition)
+function naFirstDeals(deals){
+  var first={};
+  (deals||[]).forEach(function(d){
+    if(!d||!d.date) return;
+    var n=naNormName(d.client); if(!n) return;
+    if(!first[n] || d.date<first[n].date) first[n]=d;
+  });
+  return first;
+}
+// CSV download (quotes/commas escaped); rows = array of arrays, first row = header
+function naCsv(rows, filename){
+  var body=rows.map(function(r){ return r.map(function(c){
+    c=String(c==null?"":c); return /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c;
+  }).join(","); }).join("\n");
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([body],{type:"text/csv"}));
+  a.download=filename; a.click();
+}
+// Inline-SVG bar chart with an optional second-series overlay line. data = [{label,
+// value, color?, value2?}]; opts = {height?, line?, fmt?, fmt2?}. Values render as
+// <title> hovers; every chart in the CRM build (CAC trend, UIF trend, ladder) uses this.
+function naBarChart(el, data, opts){
+  opts=opts||{};
+  if(!data||!data.length){ el.innerHTML='<p class="mini" style="color:var(--na-muted-2)">No data yet.</p>'; return; }
+  var W=Math.max(el.clientWidth||640,320), H=opts.height||190, padB=24, padT=12;
+  var max=1, max2=1;
+  data.forEach(function(d){ if(+d.value>max)max=+d.value; if(+d.value2>max2)max2=+d.value2; });
+  var n=data.length, bw=W/n, labEvery=Math.ceil(n/Math.floor(W/46));
+  var bars=data.map(function(d,i){
+    var h=(+d.value||0)/max*(H-padT-padB), x=i*bw, y=H-padB-h;
+    var lab=(i%labEvery===0)?'<text x="'+(x+bw/2)+'" y="'+(H-7)+'" text-anchor="middle" font-size="9" fill="var(--na-muted-2)">'+d.label+'</text>':'';
+    var tip=d.label+": "+(opts.fmt?opts.fmt(+d.value||0):d.value)+(d.value2!=null&&opts.fmt2?(" · "+opts.fmt2(+d.value2||0)):"");
+    return '<g><rect x="'+(x+bw*0.16)+'" y="'+y+'" width="'+(bw*0.68)+'" height="'+Math.max(h,0)+'" rx="2.5" fill="'+(d.color||"var(--na-blue)")+'"><title>'+tip+'</title></rect>'+lab+'</g>';
+  }).join("");
+  var line="";
+  if(opts.line){
+    var pts=data.map(function(d,i){
+      return (i*bw+bw/2)+","+(H-padB-(+d.value2||0)/max2*(H-padT-padB));
+    }).join(" ");
+    line='<polyline points="'+pts+'" fill="none" stroke="var(--na-amber)" stroke-width="2" stroke-linejoin="round" opacity=".9"/>';
+  }
+  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+bars+line+'</svg>';
+}
+
 // ---- THE LEASE BOOK (CRM build F2/F5/F6/F7) ----
 // ONE central derivation shared by every consumer: live deals + historic deals + the
 // mutable leasebook overlay in, one lease record per deal out. All maturity/renewal
