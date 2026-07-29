@@ -363,6 +363,7 @@
       <h1 class="na-title">Deal Ledger</h1>
       <nav class="suite-nav">
         <a class="on" href="/nova-admins">Deal Ledger</a>
+        <a href="/nova-admins/renewals">Renewals</a>
         <a href="/nova-admins/tasks">Tasks</a>
         <a href="/nova-admins/notes">Notes</a>
       </nav>
@@ -613,55 +614,9 @@ const EXPENSES = SEED.expenses || [];
 DEALS.forEach(d=>{ d.feeProgram = (+d.feeProgram||0) + (+d.feeJason||0); d.feeJason = 0; d.feeReferral = +d.feeReferral||0; });
 
 // ---- ENGINE ----
-// Stripe: a stored fee > 0 wins (imported/manual). But a stored 0/blank does NOT
-// zero it out on a Stripe deal — even when "the client covered the fee", we still
-// pay ~3% processing on the charge, so the auto 3% of front applies.
-// 3% processing on WHATEVER side was charged via Stripe — front, back, or both.
-// Stripe is a FRONT-END charge only — the client pays their front on a card. The
-// back end is the dealer paying Nova (Check/ACH/Wire/Zelle), never Stripe. So the
-// 3% processing fee is 3% of the front when pay==="Stripe". A manual total > 0 overrides.
-function feeStripe(d){ const v=d.feeStripe;
-  if(v!==undefined && v!==null && v!=="" && (+v||0)>0) return +v;
-  return d.pay==="Stripe" ? Math.round((+d.front||0)*0.03) : 0; }
-// Envy: automatic 20% of the back end when a back exists. Applies to every deal
-// dated ENVY_START or later (Edgar: retroactive for July 2026 + everything
-// forward) — date-based so it survives Imports. A typed number overrides; deals
-// before the start date stay at 0 so reconciled history (Jan–Jun) doesn't shift.
-const ENVY_START="2026-07-01";
-function envyEligible(d){ return ("feeEnvy" in d) || (d.date||"")>=ENVY_START; }
-function feeEnvy(d){
-  if(("feeEnvy" in d) && d.feeEnvy!=="" && d.feeEnvy!==null && d.feeEnvy!==undefined) return +d.feeEnvy||0;  // manual override
-  if(!envyEligible(d)) return 0;                                    // pre-July legacy — untouched
-  return (+d.back||0)>0 ? Math.round((+d.back)*0.20) : 0; }         // auto · 20% of back
-// Shared fees = costs that reduce the split pool (agent + Nova both share them). Envy
-// is NOT here — it's a NOVA-ONLY cost: Envy receives the back end, keeps 20% (Nova eats
-// it), and forwards 80% to Nova. It's subtracted from Nova's take below, so it never
-// touches the agent's split.
-function feesTotal(d){ return feeStripe(d) + (+d.feeReferral||0) + (+d.feeProgram||0); }
-function calc(d){
-  const combined = (+d.front||0) + (+d.back||0);
-  const fees = feesTotal(d);                            // Jason + Stripe(auto) + Referral
-  const netPool = combined - fees;
-  const _ag=A(d.agentId); const pct=(_ag&&_ag.pct&&_ag.pct[d.lead])||0;
-  // Per-side nets, so each side can be paid as its cash lands. EVERY shared fee — Stripe
-  // (3% of the client's card charge), Referral, and Program (incl. legacy Jason, e.g.
-  // Jason Ma) — comes entirely off the FRONT, never the back. The back end is the dealer
-  // paying Nova; these fees are all deducted from the client's front payment (Edgar, July
-  // 2026). Only when there is no front at all do the fees fall to the back.
-  const _feesF = (+d.front||0)>0 ? fees : 0;   // all shared fees ride the front (unless there's no front)
-  const frontNet = combined ? (+d.front||0) - _feesF : 0;
-  const backNet  = combined ? (+d.back||0) - (fees - _feesF) : 0;
-  let agentCut = netPool * pct/100;
-  let overridden = false;
-  if(d.override!=null){ agentCut = d.override; overridden = true; }
-  const ratio = (agentCut) / (netPool||1);             // effective share (after override)
-  const agentFront = frontNet * ratio, agentBack = backNet * ratio;
-  const envy = feeEnvy(d);                               // 20% of back — Envy keeps this; Nova eats it
-  const novaPool = netPool - agentCut;                   // Nova's share of the split pool
-  const novaCut = novaPool - envy;                       // Nova take = pool share − Envy's 20% cut
-  return {combined, fees, feeStripe:feeStripe(d), feeEnvy:envy, feeProgram:+d.feeProgram||0, netPool, pct, frontNet, backNet, agentCut, novaPool, novaCut, agentFront, agentBack, overridden,
-          splitPct: netPool? Math.round(agentCut/netPool*100):0};
-}
+// feeStripe/feeEnvy/feesTotal/calc moved to nova_common.js (shared with the Renewals
+// page). calc() resolves agents via window.AGENTS — expose ours before any calc call.
+window.AGENTS = AGENTS;
 function collStatus(d){ // money IN
   const sides=[]; if(d.front>0) sides.push(d.fColl); if(d.back>0) sides.push(d.bColl);
   if(!sides.length) return "n"; if(sides.every(x=>x)) return "g"; if(sides.some(x=>x)) return "a"; return "r";

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Admins — Renewals</title>
+<link rel="stylesheet" href="/nova-admins/common.css">
+<script src="/nova-admins/common.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--na-bg);color:var(--na-fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;font-size:13.5px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;}
+  .na-app{max-width:1320px;margin:0 auto;padding:26px 26px 80px;}
+
+  /* masthead + suite nav (house pattern, duplicated per page) */
+  .na-eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-eyebrow b{color:var(--na-blue);}
+  .na-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:4px 0 18px;flex-wrap:wrap;}
+  .na-title{font-size:30px;font-weight:760;letter-spacing:-.02em;margin:2px 0 0;}
+  .na-right{display:flex;align-items:center;gap:9px;}
+  .suite-nav{display:inline-flex;gap:4px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:3px;margin-top:12px;}
+  .suite-nav a{text-decoration:none;color:var(--na-muted);font-size:12.5px;font-weight:650;padding:6px 13px;border-radius:8px;}
+  .suite-nav a.on{background:var(--na-panel-2);color:var(--na-fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}
+  .suite-nav a:not(.on):hover{color:var(--na-fg);}
+
+  .na-btn{all:unset;cursor:pointer;background:var(--na-blue);color:#fff;border-radius:10px;padding:9px 14px;
+    font-size:12.5px;font-weight:650;display:inline-flex;align-items:center;gap:6px;}
+  .na-btn.ghost{background:var(--na-panel);color:var(--na-fg);border:1px solid var(--na-line);}
+  .na-btn.xs{padding:6px 11px;font-size:11.5px;}
+  .na-sel,.na-in{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);
+    border-radius:10px;padding:8px 11px;font-size:12.5px;font-family:inherit;outline:none;}
+  .na-sel:focus,.na-in:focus{border-color:var(--na-line-2);}
+  input.na-in[type=date]{font-family:var(--na-mono);font-size:11px;padding:6px 8px;}
+  textarea.na-ed{width:100%;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:12.5px;outline:none;resize:vertical;}
+  .na-search{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:8px 12px;font-size:12.5px;font-family:inherit;outline:none;min-width:210px;}
+  .na-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .na-spacer{flex:1;}
+  .mini{font-size:10.5px;color:var(--na-muted-2);}
+  .save-tag{font-size:11px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid var(--na-line);background:var(--na-panel);white-space:nowrap;}
+  .save-tag.ok{color:var(--na-green);border-color:rgba(52,211,153,.3);}
+  .save-tag.saving{color:var(--na-amber);border-color:rgba(251,191,36,.3);}
+  .save-tag.err{color:var(--na-red);border-color:rgba(248,113,113,.3);}
+  .hide{display:none!important;}
+
+  /* tabs (house pattern from the Deal Ledger) */
+  .na-tabs{display:flex;gap:2px;border-bottom:1px solid var(--na-line);margin-bottom:16px;overflow-x:auto;}
+  .na-tab{all:unset;cursor:pointer;padding:10px 15px;font-size:13px;font-weight:650;color:var(--na-muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
+  .na-tab:hover{color:var(--na-fg);}
+  .na-tab.on{color:var(--na-fg);border-bottom-color:var(--na-blue);}
+  .na-tab .pill{font-size:10px;background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:20px;padding:1px 7px;margin-left:5px;color:var(--na-muted);font-family:var(--na-mono);}
+
+  /* stat strip */
+  .rn-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+  .rnstat{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:13px 15px;}
+  .rnstat .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .rnstat .v{font-family:var(--na-mono);font-size:22px;font-weight:600;margin-top:6px;}
+  .rnstat .s{font-size:11px;color:var(--na-muted);margin-top:2px;}
+  .rnstat.red .v{color:var(--na-red);} .rnstat.amber .v{color:var(--na-amber);} .rnstat.green .v{color:var(--na-green);}
+  .rnstat.hero{border-color:rgba(58,142,239,.4);background:linear-gradient(160deg,rgba(58,142,239,.10),var(--na-panel) 55%);}
+
+  /* table */
+  .na-tablewrap{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table.na-tbl{width:100%;border-collapse:collapse;min-width:900px;}
+  .na-tbl th{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;text-align:left;
+    padding:11px 13px;border-bottom:1px solid var(--na-line);background:var(--na-inset);white-space:nowrap;cursor:pointer;user-select:none;}
+  .na-tbl th:hover{color:var(--na-fg);}
+  .na-tbl th .arr{font-size:9px;margin-left:4px;color:var(--na-blue);}
+  .na-tbl th.num,.na-tbl td.num{text-align:right;}
+  .na-tbl td{padding:10px 13px;border-bottom:1px solid var(--na-line);font-size:12.5px;vertical-align:middle;white-space:nowrap;}
+  .na-tbl tbody tr.drow{cursor:pointer;}
+  .na-tbl tbody tr.drow:hover{background:var(--na-panel-2);}
+  .na-tbl tr.drow.open{background:var(--na-panel-2);}
+  .sub{color:var(--na-muted);}
+  .veh{font-weight:600;}
+  .money{font-family:var(--na-mono);}
+
+  /* urgency + status pills */
+  .stat{font-size:10.5px;font-weight:650;padding:2px 9px;border-radius:20px;white-space:nowrap;}
+  .stat.g{color:var(--na-green);background:var(--na-green-bg);}
+  .stat.a{color:var(--na-amber);background:var(--na-amber-bg);}
+  .stat.r{color:var(--na-red);background:var(--na-red-bg);}
+  .stat.n{color:var(--na-muted);background:var(--na-panel-2);}
+  .stat.b{color:var(--na-blue-soft);background:rgba(58,142,239,.13);}
+  .stat.tog{cursor:pointer;user-select:none;}
+
+  /* drawer */
+  tr.detail td{padding:0;border-bottom:1px solid var(--na-line);background:var(--na-inset);}
+  .det{padding:18px 20px;display:grid;grid-template-columns:1.1fr 1fr;gap:22px;}
+  .det h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--na-muted-2);}
+  .mrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;padding:3px 0;}
+  .mrow .ml{color:var(--na-muted);}
+  .rn-card{background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:11px 13px;margin-top:10px;}
+  .rn-card .pc-t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;margin-bottom:7px;}
+  .panel{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:16px 18px;}
+  .panel h3{margin:0 0 12px;font-size:15px;font-weight:700;}
+  .panel h3 .mini{font-weight:500;margin-left:6px;}
+
+  @media (max-width:760px){
+    .rn-stats{grid-template-columns:repeat(2,1fr);}
+    .det{grid-template-columns:1fr;}
+    .na-app{padding:18px 12px 70px;}
+  }
+</style>
+</head>
+<body>
+<div class="na-app">
+
+  <div class="na-eyebrow">NOVA ADMINS · <b>byAletheya</b></div>
+  <div class="na-title-row">
+    <div>
+      <h1 class="na-title">Renewals</h1>
+      <nav class="suite-nav">
+        <a href="/nova-admins">Deal Ledger</a>
+        <a class="on" href="/nova-admins/renewals">Renewals</a>
+        <a href="/nova-admins/tasks">Tasks</a>
+        <a href="/nova-admins/notes">Notes</a>
+      </nav>
+    </div>
+    <div class="na-right">
+      <span id="saveTag" class="save-tag hide"></span>
+      <a class="na-btn ghost xs" style="text-decoration:none" href="/logout" title="Sign out">🔒 Lock</a>
+    </div>
+  </div>
+
+  <div class="na-tabs" id="tabs">
+    <button class="na-tab on" data-t="leases">Leases <span class="pill" id="cnt-leases">0</span></button>
+    <button class="na-tab" data-t="uif">Units in Force</button>
+    <button class="na-tab" data-t="cohorts">Cohorts</button>
+    <button class="na-tab" data-t="ladder">Ladder</button>
+  </div>
+
+  <!-- LEASES (F2): every lease, sorted by maturity, with outreach tracking -->
+  <div id="view-leases">
+    <div class="rn-stats" id="leaseStats"></div>
+    <div class="na-filters">
+      <select class="na-sel" id="lfKind" onchange="renderLeases()">
+        <option value="lease">Leases</option>
+        <option value="financed">Financed (24-mo outreach)</option>
+      </select>
+      <select class="na-sel" id="lfUrgency" onchange="renderLeases()">
+        <option value="all">All statuses</option>
+        <option value="red">🔴 Under 6 months</option>
+        <option value="yellow">🟡 6–12 months</option>
+        <option value="green">🟢 12+ months</option>
+        <option value="matured">Matured</option>
+        <option value="closedEarly">Closed early</option>
+      </select>
+      <select class="na-sel" id="lfOutreach" onchange="renderLeases()">
+        <option value="all">All outreach</option>
+        <option value="not_started">Not started</option>
+        <option value="contacted">Contacted</option>
+        <option value="pipeline">In pipeline</option>
+        <option value="closed">Closed</option>
+      </select>
+      <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" id="lfNoContact" onchange="renderLeases()"> needs contact info
+      </label>
+      <input class="na-search" id="lfSearch" placeholder="Search client, vehicle, dealer…">
+      <div class="na-spacer"></div>
+      <span class="mini" id="leaseMeta"></span>
+    </div>
+    <div class="na-tablewrap">
+      <table class="na-tbl">
+        <thead><tr id="leaseHead"></tr></thead>
+        <tbody id="leaseBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- UNITS IN FORCE (F5) — ships in a later wave -->
+  <div id="view-uif" class="hide">
+    <div class="panel"><h3>Units in Force</h3><p class="mini">Coming next — live count of active leases, by agent and brand, with the monthly trend.</p></div>
+  </div>
+
+  <!-- COHORTS (F6) — ships in a later wave -->
+  <div id="view-cohorts" class="hide">
+    <div class="panel"><h3>Cohort renewal rates</h3><p class="mini">Coming next — clients grouped by signing month, tracked to renewal.</p></div>
+  </div>
+
+  <!-- LADDER (F7) — ships in a later wave -->
+  <div id="view-ladder" class="hide">
+    <div class="panel"><h3>Maturity ladder</h3><p class="mini">Coming next — the 36-month forward pipeline chart.</p></div>
+  </div>
+
+</div>
+
+<script>
+/*NOVA_SEED*/
+const SEED = (typeof window!=="undefined" && window.NOVA_SEED) || {};
+window.AGENTS = SEED.agents || [];
+const DEALS = SEED.deals || [];
+const HDEALS = SEED.historyDeals || [];
+const LEASEBOOK = SEED.leasebook || [];
+// same legacy-fee fold every page does, so calc() reads all rows identically
+[DEALS,HDEALS].forEach(arr=>arr.forEach(d=>{ d.feeProgram=(+d.feeProgram||0)+(+d.feeJason||0); d.feeJason=0; d.feeReferral=+d.feeReferral||0; }));
+
+const NOW=new Date();
+const _pad=n=>String(n).padStart(2,"0");
+const TODAY=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1)+"-"+_pad(NOW.getDate());
+const fmt = n => (n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString();
+const A = id => window.AGENTS.find(a=>a.id===id);
+const OUTREACH = {not_started:"Not started", contacted:"Contacted", pipeline:"In pipeline", closed:"Closed"};
+const URG = {green:["g","12+ mo"], yellow:["a","6–12 mo"], red:["r","< 6 mo"], past:["n","past"]};
+
+// ---- the book: computed once per render pass, shared by every tab ----
+let BOOK=[];
+function rebuildBook(){ BOOK = naLeaseBook(DEALS, HDEALS, LEASEBOOK, TODAY); }
+
+// ---- overlay mutations (the only mutable lease state — sparse, keyed by deal ref) ----
+function lbOverlay(ref){
+  let o=LEASEBOOK.find(x=>x.id===ref);
+  if(!o){ o={id:ref}; LEASEBOOK.push(o); }
+  return o;
+}
+function lbSet(ref, field, val){
+  const o=lbOverlay(ref); o[field]=val;
+  o.updated=TODAY; o.updatedBy=(window.NOVA_USER&&window.NOVA_USER.id)||"edgar";
+  saveRow({lease:o}); scheduleRender();
+}
+function lbToggleClosedEarly(ref){
+  const o=lbOverlay(ref);
+  o.closedEarly=!o.closedEarly;
+  o.closedEarlyDate=o.closedEarly?(o.closedEarlyDate||TODAY):"";
+  o.updated=TODAY; o.updatedBy=(window.NOVA_USER&&window.NOVA_USER.id)||"edgar";
+  saveRow({lease:o}); scheduleRender();
+}
+// edits that land on the UNDERLYING deal (contact/term) — routed by era
+function bkEdit(ref, field, val, numeric){
+  const x=BOOK.find(b=>b.ref===ref); if(!x)return;
+  if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; }
+  x.deal[field]=val;
+  saveRow(x.src==="hist"?{hdeal:x.deal}:{deal:x.deal});
+  scheduleRender();
+}
+// renewal confirm / reject from the drawer. Confirming an EARLY repeat also closes
+// the old lease early as of the new deal's close date (build-doc rule).
+function bkConfirmRenewal(ref, matchRef, early, matchDate){
+  const o=lbOverlay(ref);
+  o.renewalLink=matchRef;
+  if(early){ o.closedEarly=true; o.closedEarlyDate=matchDate||TODAY; }
+  o.updated=TODAY; o.updatedBy=(window.NOVA_USER&&window.NOVA_USER.id)||"edgar";
+  saveRow({lease:o}); scheduleRender();
+}
+function bkRejectRenewal(ref, matchRef){
+  const o=lbOverlay(ref);
+  o.renewalRejects=(o.renewalRejects||[]).concat([matchRef]);
+  if(o.renewalLink===matchRef) o.renewalLink=null;
+  o.updated=TODAY; o.updatedBy=(window.NOVA_USER&&window.NOVA_USER.id)||"edgar";
+  saveRow({lease:o}); scheduleRender();
+}
+function bkUnlinkRenewal(ref){ lbSet(ref,"renewalLink",null); }
+
+// ---- Leases tab (F2) ----
+let openRef=null;
+let tSort={key:"maturity",dir:1};
+function sortBy(k){ tSort = tSort.key===k ? {key:k,dir:-tSort.dir} : {key:k,dir:1}; renderLeases(); }
+function th(k,label,num){ const on=tSort.key===k;
+  return `<th class="${num?'num':''}" onclick="sortBy('${k}')">${label}${on?`<span class="arr">${tSort.dir>0?'▲':'▼'}</span>`:''}</th>`; }
+function leasesFiltered(){
+  const kind=document.getElementById("lfKind").value,
+        urg=document.getElementById("lfUrgency").value,
+        out=document.getElementById("lfOutreach").value,
+        noc=document.getElementById("lfNoContact").checked,
+        q=document.getElementById("lfSearch").value.toLowerCase().trim();
+  let rows=BOOK.filter(x=>x.kind===kind);
+  if(urg==="matured"||urg==="closedEarly") rows=rows.filter(x=>x.status===urg);
+  else if(urg!=="all") rows=rows.filter(x=>x.status==="active"&&x.urgency===urg);
+  if(out!=="all") rows=rows.filter(x=>x.outreach===out);
+  if(noc) rows=rows.filter(x=>x.flags.includes("no_contact"));
+  if(q) rows=rows.filter(x=>(`${x.client} ${x.vehicle} ${x.dealer}`).toLowerCase().includes(q));
+  const k=tSort.key, dir=tSort.dir;
+  rows.sort((a,b)=>{ const va=a[k]??"", vb=b[k]??""; return (va<vb?-1:va>vb?1:0)*dir; });
+  return rows;
+}
+function renderLeases(){
+  const kind=document.getElementById("lfKind").value;
+  const all=BOOK.filter(x=>x.kind==="lease");
+  const fin=BOOK.filter(x=>x.kind==="financed");
+  const act=all.filter(x=>x.status==="active");
+  const buckets={red:0,yellow:0,green:0};
+  act.forEach(x=>buckets[x.urgency]!==undefined&&buckets[x.urgency]++);
+  const maturedOpen=all.filter(x=>x.status==="matured"&&!["confirmed","auto"].includes(x.renewal.state)&&x.outreach!=="closed").length;
+  const noContact=BOOK.filter(x=>x.flags.includes("no_contact")).length;
+  const assumed=all.filter(x=>x.termAssumed).length;
+  document.getElementById("leaseStats").innerHTML=[
+    {l:"Active leases", v:act.length, s:(assumed?`${assumed} with assumed 36-mo term`:"terms all on record"), cls:"hero"},
+    {l:"Renewal window · red", v:buckets.red, s:"maturing inside 6 months", cls:"red"},
+    {l:"Coming up · yellow", v:buckets.yellow, s:"6–12 months out", cls:"amber"},
+    {l:"Locked in · green", v:buckets.green, s:"12+ months out", cls:"green"},
+    {l:"Matured, no renewal", v:maturedOpen, s:"past-due outreach"},
+    {l:"Financed · active cycle", v:fin.filter(x=>x.status==="active").length, s:"24-month outreach cadence"},
+    {l:"Needs contact info", v:noContact, s:"phone + email both missing"},
+    {l:"Matches to review", v:BOOK.filter(x=>x.renewal.state==="review").length, s:"possible renewals & early repeats", cls:"amber"},
+  ].map(s=>`<div class="rnstat ${s.cls||''}"><div class="l">${s.l}</div><div class="v">${s.v}</div><div class="s">${s.s}</div></div>`).join("");
+
+  document.getElementById("cnt-leases").textContent=act.length;
+  document.getElementById("leaseHead").innerHTML =
+    th("urgency","Status")+th("monthsToMaturity","Due in",1)+th("client","Client")+th("vehicle","Vehicle")
+    +th("agentId","Agent")+th("closeDate","Closed")+th("term","Term",1)+th("maturity",kind==="financed"?"Next outreach":"Maturity")
+    +"<th>Contact</th><th>Outreach</th><th>Renewal</th>";
+  const rows=leasesFiltered();
+  document.getElementById("leaseMeta").textContent=`${rows.length} shown`;
+  document.getElementById("leaseBody").innerHTML = rows.length ? rows.map(x=>{
+    const u=URG[x.urgency]||URG.past, ag=A(x.agentId);
+    const stat = x.status==="active" ? `<span class="stat ${u[0]}">${u[1]}</span>`
+      : x.status==="closedEarly" ? '<span class="stat n">closed early</span>'
+      : ["confirmed","auto"].includes(x.renewal.state) ? '<span class="stat b">renewed</span>'
+      : '<span class="stat r">matured</span>';
+    const ren = x.renewal.state==="none" ? '<span class="mini">—</span>'
+      : x.renewal.state==="rejected" ? '<span class="mini">ruled out</span>'
+      : x.renewal.state==="confirmed" ? `<span class="stat g">✓ ${x.renewal.matchDate.slice(0,7)}</span>`
+      : x.renewal.state==="auto" ? `<span class="stat g" title="auto-matched, high confidence">✓ ${x.renewal.matchDate.slice(0,7)}</span>`
+      : `<span class="stat a" title="possible match — review in the drawer">? review</span>`;
+    const hasContact=!x.flags.includes("no_contact");
+    return `<tr class="drow${openRef===x.ref?' open':''}" onclick="bkToggleRow('${x.ref}')">
+      <td>${stat}</td>
+      <td class="num money">${x.status==="active"?x.monthsToMaturity+" mo":"—"}</td>
+      <td><div class="veh">${esc(x.client)}</div></td>
+      <td class="sub">${esc(x.vehicle)||'—'}</td>
+      <td class="sub">${ag?esc(ag.name.split(" ")[0]):'—'}</td>
+      <td class="sub">${x.closeDate}</td>
+      <td class="num">${x.kind==="financed"?'<span class="mini">n/a</span>':(x.term?x.term+" mo":'<span class="stat a" title="no term on record — 36 assumed">36?</span>')}</td>
+      <td class="money">${x.maturity}</td>
+      <td>${hasContact?'<span class="stat g">●</span>':'<span class="stat r" title="no phone or email">○</span>'}</td>
+      <td onclick="event.stopPropagation()"><select class="na-sel" style="padding:5px 8px;font-size:11.5px" onchange="lbSet('${x.ref}','outreach',this.value)">
+        ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select></td>
+      <td>${ren}</td>
+    </tr>${openRef===x.ref?bkDetailRow(x):''}`;
+  }).join("") : `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--na-muted)">${BOOK.length?"Nothing matches these filters.":"No deals in the book yet — import the pre-July archive on the Deal Ledger's History tab."}</td></tr>`;
+}
+function bkToggleRow(ref){ openRef=(openRef===ref)?null:ref; renderLeases(); }
+function bkDetailRow(x){
+  const o=x.overlay, d=x.deal, E=`bkEdit('${x.ref}',`;
+  const m=x.renewal.matchRef?BOOK.find(b=>b.ref===x.renewal.matchRef):null;
+  const renPanel =
+    x.renewal.state==="confirmed"||x.renewal.state==="auto" ?
+      `<div class="mrow"><span>✓ ${x.renewal.state==="auto"?"Auto-matched":"Confirmed"}: closed again <b>${x.renewal.matchDate}</b>${m?` — ${esc(m.vehicle)||'?'} (${esc((A(x.renewal.matchAgentId)||{}).name||x.renewal.matchAgentId||'?')})`:''}</span>
+        ${x.renewal.state==="auto"?`<span><button class="na-btn xs" onclick="bkConfirmRenewal('${x.ref}','${x.renewal.matchRef}')">Confirm</button>
+        <button class="na-btn ghost xs" onclick="bkRejectRenewal('${x.ref}','${x.renewal.matchRef}')">Not them</button></span>`
+        :`<button class="na-btn ghost xs" onclick="bkUnlinkRenewal('${x.ref}')">Unlink</button>`}</div>`
+    : x.renewal.state==="review" ?
+      `<div class="mrow"><span>${x.renewal.early?'⏪ Came back <b>early</b>':'? Possible renewal'}: same name closed <b>${x.renewal.matchDate}</b>${m?` — ${esc(m.vehicle)||'?'}`:''}
+        <span class="mini">${x.renewal.early?'(confirming closes this lease early as of that date)':'(ambiguous — confirm it’s the same person)'}</span></span>
+        <span><button class="na-btn xs" onclick="bkConfirmRenewal('${x.ref}','${x.renewal.matchRef}',${x.renewal.early?'true':'false'},'${x.renewal.matchDate}')">${x.renewal.early?'Yes — close early':'Confirm'}</button>
+        <button class="na-btn ghost xs" onclick="bkRejectRenewal('${x.ref}','${x.renewal.matchRef}')">Not them</button></span></div>`
+    : `<div class="mrow"><span class="mini">${x.renewal.state==="rejected"?"Candidate ruled out — no other match.":"No later deal by this client yet."}</span></div>`;
+  return `<tr class="detail"><td colspan="11"><div class="det">
+    <div>
+      <h4>Client & lease</h4>
+      <div class="mrow"><span class="ml">Phone</span><input class="na-in" type="tel" style="width:170px" placeholder="—" value="${esc(x.phone)}" onchange="${E}'phone',this.value)"></div>
+      <div class="mrow"><span class="ml">Email</span><input class="na-in" type="email" style="width:220px" placeholder="—" value="${esc(x.email)}" onchange="${E}'email',this.value)"></div>
+      <div class="mrow"><span class="ml">Term</span><span><input class="na-in num" style="width:60px" placeholder="36?" value="${d.term||''}" onchange="${E}'term',this.value,1)"> mo
+        ${x.termAssumed?'<span class="mini" style="color:var(--na-red)">missing — 36 assumed</span>':''}</span></div>
+      <div class="mrow"><span class="ml">Dealer</span><span class="sub">${esc(x.dealer)||'—'}</span></div>
+      <div class="mrow"><span class="ml">Era</span><span class="stat ${x.src==="live"?"g":"n"}">${x.src==="live"?"Live":"Historic"}</span> <span class="mini">edits save to the ${x.src==="live"?"ledger":"History tab"}</span></div>
+      <div class="rn-card"><div class="pc-t">Renewal</div>${renPanel}</div>
+    </div>
+    <div>
+      <h4>Maturity & outreach</h4>
+      <div class="mrow"><span class="ml">Natural maturity</span><span class="money">${x.natural}</span></div>
+      <div class="mrow"><span class="ml">Override</span><span><input class="na-in" type="date" value="${o.maturityOverride||''}" onchange="lbSet('${x.ref}','maturityOverride',this.value)"> <span class="mini">blank = close + ${x.cycle} mo</span></span></div>
+      <div class="mrow"><span class="ml">Closed early</span><span><span class="stat tog ${o.closedEarly?'a':'n'}" onclick="lbToggleClosedEarly('${x.ref}')">${o.closedEarly?'● Yes':'○ No'}</span>
+        ${o.closedEarly?`<input class="na-in" type="date" value="${o.closedEarlyDate||''}" onchange="lbSet('${x.ref}','closedEarlyDate',this.value)">`:''}</span></div>
+      <div class="mrow"><span class="ml">Outreach</span><select class="na-sel" onchange="lbSet('${x.ref}','outreach',this.value)">
+        ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select></div>
+      <div style="margin-top:9px"><span class="mini" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">Outreach notes</span>
+        <textarea class="na-ed" rows="2" placeholder="Left voicemail, wants an X5 next…" onchange="lbSet('${x.ref}','notes',this.value)">${esc(o.notes||'')}</textarea></div>
+    </div>
+  </div></td></tr>`;
+}
+
+// ---- boot ----
+let tab="leases";
+function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
+    document.getElementById("view-"+x).classList.toggle("hide", x!==t));
+  document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+  lsSet("rn_tab",t);
+}
+document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
+function renderAll(){ rebuildBook(); renderLeases(); }
+let _rafRender=null;
+function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
+let _searchT=null; document.getElementById("lfSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(renderLeases,140); });
+renderAll();
+setTab(lsGet("rn_tab")||"leases");
+</script>
+<script src="/nova-admins/agent.js" defer></script>
+</body>
+</html>

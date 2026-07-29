@@ -801,6 +801,12 @@ def nova_admins_notes_page():
     return _nova_admin_serve("nova_notes.html")
 
 
+@app.route("/nova-admins/renewals")
+def nova_admins_renewals_page():
+    """Tool 4: the lease book — maturities, units in force, cohorts, maturity ladder."""
+    return _nova_admin_serve("nova_renewals.html")
+
+
 @app.route("/nova-admins/parse-task", methods=["POST"])
 def nova_admins_parse_task():
     """Turn natural language into one or more structured tasks (title, subtasks,
@@ -1194,7 +1200,7 @@ def _nova_fee_envy(d):
 
 def _nova_calc(d, amap):
     """Mirror the client calc(): netPool = front+back − fees; agentCut = netPool×pct
-    (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with nova_admins.html."""
+    (or a flat override); novaCut = netPool − agentCut. Kept in lockstep with calc() in nova_common.js."""
     front, back = _n_num(d.get("front")), _n_num(d.get("back"))
     # Envy is NOT a shared fee — it's a Nova-only cost (Envy keeps 20% of the back),
     # subtracted from Nova below so the agent's split is untouched.
