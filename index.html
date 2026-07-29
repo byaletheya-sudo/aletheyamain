@@ -2599,7 +2599,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       const raw = await html2canvas($('ad'), {
         width: 1080, height: 1920, scale: 2, backgroundColor: null, useCORS: true, logging: false,
       });
-      const canvas = cropCanvasExact(raw, 1080 * 2, 1920 * 2);   // trim html2canvas's oversize edge (white border)
+      const canvas = cropCanvasExact(raw, 1080 * 2, 1920 * 2, '#050a12');   // exact-fit + dark base fill (white border)
 
       // restore preview
       stage.style.position = ''; stage.style.left = ''; stage.style.top = '';
@@ -3552,7 +3552,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     const raw = await html2canvas($('sp'), { width: 1080, height: soldH, scale: 2, backgroundColor: null, useCORS: true, logging: false });
     stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top;
     stage.style.width = prev.w; fitPreviews();
-    return cropCanvasExact(raw, 1080 * 2, soldH * 2);   // trim html2canvas's oversize edge (white border)
+    return cropCanvasExact(raw, 1080 * 2, soldH * 2, '#05080d');   // exact-fit + dark base fill (white border)
   }
 
   function soldFilename() {
@@ -3954,15 +3954,27 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
       if (await t_setAdCar(d.image_data, token)) { t_resetCrop(); $('t_dlBtn').disabled = false; setVdb('Color updated ✓', 'done'); }
     } catch (e) { if (token === t_imgSeq) setVdb('✕ ' + e.message, 'error'); }
   }
-  // html2canvas (1.4.1) leaves a 1–3px transparent strip on the right/bottom — which
-  // reads as a WHITE border on a dark ad. Crop to exact size AND (when bg is given) fill
-  // that base color first so any sub-pixel transparent edge inside the frame isn't white.
+  // html2canvas (1.4.1) never fills the frame exactly: sometimes the canvas comes back a
+  // few px oversize, and at some browser zoom/DPR settings the content is painted a few px
+  // SHORT of the frame — either way the leftover strip is transparent, which reads as a
+  // WHITE border once Instagram/Photos flattens the PNG. Find the actually-painted bounding
+  // box and stretch it to the exact output size (≤1% — invisible), then fill the base color
+  // underneath so any remaining sub-pixel transparent seam can't flash white either.
   function cropCanvasExact(raw, w, h, bg) {
-    if (!bg && raw.width === w && raw.height === h) return raw;
+    const d = raw.getContext('2d').getImageData(0, 0, raw.width, raw.height).data;
+    const rowHas = y => { const o = y * raw.width * 4 + 3; for (let x = 0; x < raw.width; x++) if (d[o + x * 4] !== 0) return true; return false; };
+    const colHas = x => { for (let y = 0; y < raw.height; y++) if (d[(y * raw.width + x) * 4 + 3] !== 0) return true; return false; };
+    let top = 0, bot = raw.height - 1, left = 0, right = raw.width - 1;
+    while (top < bot && !rowHas(top)) top++;
+    while (bot > top && !rowHas(bot)) bot--;
+    while (left < right && !colHas(left)) left++;
+    while (right > left && !colHas(right)) right--;
+    const cw = right - left + 1, ch = bot - top + 1;
     const out = document.createElement('canvas'); out.width = w; out.height = h;
     const ctx = out.getContext('2d');
     if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h); }
-    ctx.drawImage(raw, 0, 0);
+    if (cw >= w * 0.9 && ch >= h * 0.9) ctx.drawImage(raw, left, top, cw, ch, 0, 0, w, h);
+    else ctx.drawImage(raw, 0, 0);   // capture came back mostly empty — don't stretch garbage
     return out;
   }
   async function t_download() {
@@ -5769,7 +5781,7 @@ $2000 Down · 36 Month · 10,000 Miles · $1000 BF
     stage.style.position = 'fixed'; stage.style.left = '-100000px'; stage.style.top = '0'; stage.style.width = '1080px'; stage.style.height = h + 'px';
     const raw = await html2canvas($('rv'), { width: 1080, height: h, scale: 2, backgroundColor: null, useCORS: true, logging: false });
     stage.style.position = prev.pos; stage.style.left = prev.left; stage.style.top = prev.top; stage.style.width = prev.w; fitPreviews();
-    return cropCanvasExact(raw, 1080 * 2, h * 2);   // trim html2canvas's oversize edge (white border)
+    return cropCanvasExact(raw, 1080 * 2, h * 2, '#0a0e17');   // exact-fit + dark base fill (white border)
   }
   async function rv_download() {
     rv_setStatus('Rendering…', 'active');
