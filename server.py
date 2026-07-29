@@ -1065,6 +1065,11 @@ def nova_admins_save():
                      "tasks": data.get("tasks", existing.get("tasks", [])),
                      "notes": data.get("notes", existing.get("notes", [])),
                      "users": existing.get("users", [])}
+            # CRM-era keys (historic pre-July area, lease book, dealer registry, settings)
+            # survive older exports the same way — never silently dropped by an Import.
+            for k in ("historyDeals", "historyExpenses", "dealers", "leasebook"):
+                clean[k] = data.get(k, existing.get(k, []))
+            clean["settings"] = data.get("settings", existing.get("settings", {}))
             _nova_write(clean)
         _audit("data_replace", deals=len(clean["deals"]), expenses=len(clean["expenses"]),
                tasks=len(clean["tasks"]), notes=len(clean["notes"]))
@@ -1081,7 +1086,8 @@ def nova_admins_mutate():
     try:
         with _NOVA_LOCK:
             data = _nova_load()
-            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense"), ("tasks", "task"), ("notes", "note")):
+            for coll, key in (("deals", "deal"), ("agents", "agent"), ("expenses", "expense"), ("tasks", "task"), ("notes", "note"),
+                              ("historyDeals", "hdeal"), ("historyExpenses", "hexpense"), ("dealers", "dealer"), ("leasebook", "lease")):
                 item = body.get(key)
                 if isinstance(item, dict):
                     arr = data.setdefault(coll, [])
@@ -1094,11 +1100,52 @@ def nova_admins_mutate():
                 delk = "delete" + key[0].upper() + key[1:]
                 if delk in body:
                     data[coll] = [x for x in data.get(coll, []) if x.get("id") != body[delk]]
+            # settings is a single object, not a row collection — shallow-merge provided keys.
+            if isinstance(body.get("settings"), dict):
+                data.setdefault("settings", {}).update(body["settings"])
             _nova_write(data)
-            changed = [k for k in ("deal", "agent", "expense", "task", "note") if k in body] \
+            changed = [k for k in ("deal", "agent", "expense", "task", "note",
+                                   "hdeal", "hexpense", "dealer", "lease", "settings") if k in body] \
                 + [k for k in body if k.startswith("delete")]
             _audit("mutate", what=",".join(changed) or "none")
             return jsonify({"ok": True, "deals": len(data.get("deals", []))})
+    except Exception as e:
+        return jsonify({"error": str(e)[:160]}), 500
+
+
+# The pre-July-2026 wipe archive — immutable source for the Historic area.
+_NOVA_ARCHIVE_FILE = os.path.join(BASE_DIR, "generated", "nova_admins_ARCHIVE_pre_july_wipe_2026-07-16.json")
+
+
+@app.route("/nova-admins/import-history", methods=["POST"])
+def nova_admins_import_history():
+    """One-time import of the pre-July-2026 archive into the separate Historic area
+    (historyDeals/historyExpenses — NEVER merged into the live fresh-start arrays).
+    Refuses a second run unless {"force": true}; force replaces wholesale from the
+    archive file, discarding any edits made to history records since the first import."""
+    body = request.get_json(silent=True) or {}
+    try:
+        with open(_NOVA_ARCHIVE_FILE, encoding="utf-8") as f:
+            arc = json.load(f)
+    except OSError:
+        return jsonify({"error": "Archive file not found on the server."}), 404
+    deals = [d for d in (arc.get("deals") or []) if isinstance(d, dict)]
+    expenses = [e for e in (arc.get("expenses") or []) if isinstance(e, dict)]
+    for d in deals:  # keys the archive era predates — needed by the contact/channel editors
+        d.setdefault("phone", "")
+        d.setdefault("email", "")
+        d.setdefault("source", "")
+    try:
+        with _NOVA_LOCK:
+            data = _nova_load()
+            if data.get("historyDeals") and not body.get("force"):
+                return jsonify({"error": "already imported",
+                                "historyDeals": len(data["historyDeals"])}), 409
+            data["historyDeals"] = deals
+            data["historyExpenses"] = expenses
+            _nova_write(data)
+        _audit("import-history", deals=len(deals), expenses=len(expenses), force=bool(body.get("force")))
+        return jsonify({"ok": True, "historyDeals": len(deals), "historyExpenses": len(expenses)})
     except Exception as e:
         return jsonify({"error": str(e)[:160]}), 500
 

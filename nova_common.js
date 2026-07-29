@@ -12,6 +12,20 @@ async function saveRow(payload){
   catch(e){ markSaved("Save failed — offline","err"); }
 }
 
+// ---- CRM/lease-book shared helpers ----
+// Month math with day-of-month clamping (Jan 31 + 1mo → Feb 28). Kept in lockstep with
+// _add_months in server.py — change both together.
+function naAddMonths(ymdStr, n){
+  var p = String(ymdStr||"").split("-").map(Number);
+  if(p.length<3 || !p[0]) return "";
+  var t = new Date(p[0], p[1]-1+n, 1);
+  var last = new Date(t.getFullYear(), t.getMonth()+1, 0).getDate();
+  t.setDate(Math.min(p[2], last));
+  return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+}
+// "Luis D." → "luis d" — the ledger's client-name convention normalized for cross-deal matching.
+function naNormName(s){ return String(s||"").toLowerCase().replace(/\./g,"").replace(/\s+/g," ").trim(); }
+
 // ---- theme: dark / light / auto (auto follows the OS) ----
 // Runs from <head>, so the attribute lands on <html> before first paint — no flash.
 (function(){

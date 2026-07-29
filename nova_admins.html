@@ -408,6 +408,7 @@
     <button class="na-tab" data-t="agents">Agents <span class="pill" id="cnt-agents">0</span></button>
     <button class="na-tab" data-t="expenses">Expenses <span class="pill" id="cnt-exp">0</span></button>
     <button class="na-tab" data-t="pnl">P&amp;L</button>
+    <button class="na-tab" data-t="hist">History <span class="pill" id="cnt-hist">0</span></button>
   </div>
 
   <!-- DASHBOARD -->
@@ -514,6 +515,25 @@
       <div class="mgn-h" style="margin:22px 0 2px;">By lead source</div>
       <p class="mini" style="margin:0 0 11px;">Nova (paid) leads vs the agent's own. Ad spend is charged to Nova leads; other overhead is split by revenue share.</p>
       <div class="mgn-segs" id="mgnSegs"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY — the pre-July 2026 archive, its own area, never mixed into live numbers -->
+  <div id="view-hist" class="hide">
+    <div class="na-filters">
+      <select class="na-sel" id="hfAgent"><option value="all">All agents</option></select>
+      <input class="na-search" id="hfSearch" placeholder="Search client, vehicle, dealer…">
+      <div class="na-spacer"></div>
+      <span class="mini" id="histMeta"></span>
+    </div>
+    <div class="na-tablewrap">
+      <table class="na-tbl">
+        <thead><tr>
+          <th>Date</th><th>Client / Vehicle</th><th>Agent</th><th>Lead</th>
+          <th>Type · Term</th><th>Dealer</th><th class="num">Net pool</th><th>Contact</th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -911,12 +931,16 @@ async function saveDataNow(){
   markSaved("Saving…","saving");
   try{
     const r=await fetch("/nova-admins/save",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[]})});
+      body:JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[],
+        historyDeals:SEED.historyDeals||[],historyExpenses:SEED.historyExpenses||[],
+        dealers:SEED.dealers||[],leasebook:SEED.leasebook||[],settings:SEED.settings||{}})});
     markSaved(r.ok?"✓ Saved":"Save failed","" + (r.ok?"ok":"err"));
   }catch(e){ markSaved("Save failed — offline","err"); }
 }
 function exportData(){
-  const blob=new Blob([JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[]},null,1)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({agents:AGENTS,deals:DEALS,expenses:EXPENSES,tasks:SEED.tasks||[],notes:SEED.notes||[],
+    historyDeals:SEED.historyDeals||[],historyExpenses:SEED.historyExpenses||[],
+    dealers:SEED.dealers||[],leasebook:SEED.leasebook||[],settings:SEED.settings||{}},null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="nova_admins_backup.json"; a.click();
 }
 async function importData(input){
@@ -930,12 +954,108 @@ async function importData(input){
   DEALS.forEach(d=>{ d.feeProgram=(+d.feeProgram||0)+(+d.feeJason||0); d.feeJason=0; d.feeReferral=+d.feeReferral||0; });
   if(Array.isArray(data.tasks)) SEED.tasks=data.tasks;   // ride along if the backup has them
   if(Array.isArray(data.notes)) SEED.notes=data.notes;
-  openRow=null; renderAll(); saveDataNow();
+  // CRM-era keys ride along too (in place — HDEALS aliases SEED.historyDeals); when a
+  // backup predates them, the server keeps its existing copies rather than wiping.
+  if(Array.isArray(data.historyDeals)){ HDEALS.length=0; HDEALS.push(...data.historyDeals); }
+  if(Array.isArray(data.historyExpenses)) SEED.historyExpenses=data.historyExpenses;
+  if(Array.isArray(data.dealers)) SEED.dealers=data.dealers;
+  if(Array.isArray(data.leasebook)) SEED.leasebook=data.leasebook;
+  if(data.settings&&typeof data.settings==="object") SEED.settings=data.settings;
+  hdOpenRow=null; openRow=null; renderAll(); saveDataNow();
 }
 function opt(arr,sel){return arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join("");}
 function agentOpts(sel){return AGENTS.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${a.name}</option>`).join("");}
 function leadOpts(sel){return Object.entries(leadLabel).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v}</option>`).join("");}
 function toggleRow(id){ openRow = (openRow===id)?null:id; renderLedger(); }
+
+// ---- RENDER: History (the pre-July 2026 archive — separate area, never in live numbers) ----
+const HDEALS = SEED.historyDeals || [];
+// same legacy-fee fold the live deals get, so calc() reads historic rows identically
+HDEALS.forEach(d=>{ d.feeProgram=(+d.feeProgram||0)+(+d.feeJason||0); d.feeJason=0; d.feeReferral=+d.feeReferral||0; });
+let hdOpenRow=null;
+function hdFiltered(){
+  let ds=HDEALS.slice();
+  const fa=document.getElementById("hfAgent").value, q=document.getElementById("hfSearch").value.toLowerCase().trim();
+  if(fa!=="all") ds=ds.filter(d=>d.agentId===fa);
+  if(q) ds=ds.filter(d=>(`${d.client} ${d.vin||''} ${d.year||''} ${d.make||''} ${d.model||''} ${d.dealer||''}`).toLowerCase().includes(q));
+  return ds.sort((a,b)=>a.date<b.date?1:-1);
+}
+function renderHist(){
+  document.getElementById("cnt-hist").textContent=HDEALS.length;
+  const body=document.getElementById("histBody");
+  if(!HDEALS.length){
+    body.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:44px;color:var(--na-muted)">
+      The pre-July 2026 archive hasn't been imported yet.<br>
+      <button class="na-btn" style="margin-top:14px" onclick="importHistory()">⬇ Import pre-July archive</button>
+      <div class="mini" style="margin-top:8px">Loads the wiped Jan 2025 – Jun 2026 deals into this separate Historic area.<br>Live fresh-start numbers are not touched.</div></td></tr>`;
+    document.getElementById("histMeta").textContent=""; return;
+  }
+  const ds=hdFiltered();
+  const lo=HDEALS.reduce((m,d)=>(d.date&&d.date<m)?d.date:m,"9999"), hi=HDEALS.reduce((m,d)=>(d.date&&d.date>m)?d.date:m,"");
+  document.getElementById("histMeta").textContent=`${ds.length} of ${HDEALS.length} historic deals · ${lo.slice(0,7)} → ${hi.slice(0,7)}`;
+  body.innerHTML = ds.map(d=>{
+    const c=calc(d), ag=A(d.agentId);
+    const hasContact=(d.phone||"").trim()||(d.email||"").trim();
+    return `<tr class="drow${hdOpenRow===d.id?' open':''}" onclick="hdToggleRow(${d.id})">
+      <td class="sub">${(d.date||'').slice(5)}<div class="mini">${(d.date||'').slice(0,4)}</div></td>
+      <td><div class="veh">${esc(d.client)}</div><div class="sub">${[d.year,d.make,d.model].filter(Boolean).join(' ')||'—'}</div></td>
+      <td>${ag?`<span class="agentchip"><span class="dot" style="background:${aColor(ag.id)}"></span>${esc(ag.name.split(" ")[0])}</span>`:'<span class="mini">—</span>'}</td>
+      <td><span class="lead ${d.lead}">${leadLabel[d.lead]||d.lead||'—'}</span></td>
+      <td class="sub">${d.type||'—'} · ${d.term?d.term+' mo':'<span class="stat a" title="No term on record — the lease book assumes 36 months">36?</span>'}</td>
+      <td class="sub">${esc(d.dealer||'—')}</td>
+      <td class="num money">${fmt(c.netPool)}</td>
+      <td>${hasContact?'<span class="stat g">● On file</span>':'<span class="stat n">— None</span>'}</td>
+    </tr>${hdOpenRow===d.id?hdDetailRow(d):''}`;
+  }).join("");
+}
+function hdDetailRow(d){
+  const c=calc(d), E=`hdEdit(${d.id},`;
+  return `<tr class="detail" id="hdet-${d.id}"><td colspan="8">
+    <div class="det-banner">
+      <span class="db-dot" style="background:${aColor(d.agentId)}"></span>
+      <span class="db-name">${esc(d.client)||'—'}</span>
+      <span class="db-veh">${[d.year,d.make,d.model].filter(Boolean).join(' ')||'—'}</span>
+      <span class="db-spacer"></span>
+      <span class="db-tag">Historic deal · pre-July 2026</span>
+    </div>
+    <div class="det-edit-head">
+      <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${esc(d.client)}" onchange="${E}'client',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Phone</span><input class="na-in" type="tel" style="width:132px" placeholder="—" value="${esc(d.phone||'')}" onchange="${E}'phone',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Email</span><input class="na-in" type="email" style="width:196px" placeholder="—" value="${esc(d.email||'')}" onchange="${E}'email',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Year</span><input class="na-in" style="width:62px" value="${d.year||''}" onchange="${E}'year',this.value,1)"></div>
+      <div class="fieldgrp"><span class="lab">Make</span><input class="na-in" style="width:128px" value="${esc(d.make||'')}" onchange="${E}'make',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Model</span><input class="na-in" style="width:128px" value="${esc(d.model||'')}" onchange="${E}'model',this.value)"></div>
+      <div class="fieldgrp"><span class="lab">Agent</span><select class="na-in" onchange="${E}'agentId',this.value)">${agentOpts(d.agentId)}</select></div>
+    </div>
+    <div class="det"><div class="det-meta" style="grid-column:1/-1">
+      <div class="mrow"><span class="ml">Dealership</span><input class="na-in" style="width:230px" value="${esc(d.dealer||'')}" onchange="${E}'dealer',this.value)"></div>
+      <div class="mrow"><span class="ml">Type / Term</span><span><select class="na-in" onchange="${E}'type',this.value)">${opt(['Lease','Buy'],d.type)}</select>
+        <input class="na-in num" style="width:54px" placeholder="36?" value="${d.term||''}" onchange="${E}'term',this.value,1)"> mo
+        ${!d.term?'<span class="mini" style="color:var(--na-red)">missing — lease book assumes 36</span>':''}</span></div>
+      <div class="mrow"><span class="ml">Lead source</span><select class="na-in" onchange="${E}'lead',this.value)">${leadOpts(d.lead)}</select></div>
+      <div class="mrow"><span class="ml">Channel</span><select class="na-in" onchange="${E}'source',this.value)"><option value="" ${!d.source?'selected':''}>— untracked</option>${opt(SOURCES,d.source)}</select></div>
+      <div class="mrow"><span class="ml">Money</span><span class="mini">front ${fmt(+d.front||0)} + back ${fmt(+d.back||0)} → net pool ${fmt(c.netPool)} · reconciled history — read-only</span></div>
+      <div style="margin-top:4px"><span class="lab" style="font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700">Notes</span>
+        <textarea class="na-ed" rows="2" onchange="${E}'notes',this.value)">${esc(d.notes||'')}</textarea></div>
+    </div></div></td></tr>`;
+}
+function hdEdit(id, field, val, numeric){
+  const d=HDEALS.find(x=>x.id===id); if(!d)return;
+  if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; }
+  d[field]=val;
+  scheduleRender(); saveRow({hdeal:d});
+}
+function hdToggleRow(id){ hdOpenRow=(hdOpenRow===id)?null:id; renderHist(); }
+async function importHistory(){
+  if(!confirm("Import the pre-July 2026 archive into this Historic area?\nLive fresh-start numbers are not touched."))return;
+  markSaved("Importing…","saving");
+  try{
+    const r=await fetch("/nova-admins/import-history",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok) location.reload();
+    else{ markSaved("Import failed","err"); alert(j.error||"Import failed"); }
+  }catch(e){ markSaved("Import failed — offline","err"); }
+}
 
 // ---- RENDER: Agents ----
 function renderAgents(){
@@ -1245,15 +1365,16 @@ function renderFees(){
         r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
-function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); }
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderHist(); }
 // Coalesce bursts of edits into ONE render on the next frame (a checkbox toggle
 // no longer rebuilds all 7 tabs synchronously on every click).
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
-function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl"].forEach(x=>
+function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl","hist"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
-  const bare = (t==="dashboard");
+  // hist ignores the live period picker — the archive is all pre-July by definition
+  const bare = (t==="dashboard"||t==="hist");
   document.getElementById("periodWrap").style.display = bare?"none":"flex";
   document.getElementById("kpis").style.display = bare?"none":"grid";
   lsSet("na_tab",t);
@@ -1283,6 +1404,9 @@ document.getElementById("dashScope").addEventListener("click",e=>{const b=e.targ
   dashScope=b.dataset.s; document.querySelectorAll("#dashScope button").forEach(x=>x.classList.toggle("on",x===b)); renderDashboard();});
 // populate agent filter
 document.getElementById("fAgent").innerHTML += AGENTS.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+document.getElementById("hfAgent").innerHTML += AGENTS.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+document.getElementById("hfAgent").addEventListener("input",renderHist);
+let _hSearchT=null; document.getElementById("hfSearch").addEventListener("input",function(){ clearTimeout(_hSearchT); _hSearchT=setTimeout(renderHist,140); });
 document.getElementById("periodLabel").textContent=range.label;
 renderAll();
 setTab(lsGet("na_tab")||"dashboard");
