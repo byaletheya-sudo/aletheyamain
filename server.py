@@ -1137,11 +1137,19 @@ def nova_admins_import_history():
     Refuses a second run unless {"force": true}; force replaces wholesale from the
     archive file, discarding any edits made to history records since the first import."""
     body = request.get_json(silent=True) or {}
-    try:
-        with open(_NOVA_ARCHIVE_FILE, encoding="utf-8") as f:
-            arc = json.load(f)
-    except OSError:
-        return jsonify({"error": "Archive file not found on the server."}), 404
+    if len(json.dumps(body)) > 12_000_000:
+        return jsonify({"error": "Payload too large."}), 413
+    # The deployed box doesn't carry the gitignored archive file — accept the archive
+    # as a {"deals": [...], "expenses": [...]} payload there (seeded from the Mac).
+    if isinstance(body.get("deals"), list) and body["deals"]:
+        arc = {"deals": body["deals"], "expenses": body.get("expenses") or []}
+    else:
+        try:
+            with open(_NOVA_ARCHIVE_FILE, encoding="utf-8") as f:
+                arc = json.load(f)
+        except OSError:
+            return jsonify({"error": "No archive file on this server — POST the archive as "
+                                     '{"deals": [...], "expenses": [...]} instead.'}), 404
     deals = [d for d in (arc.get("deals") or []) if isinstance(d, dict)]
     expenses = [e for e in (arc.get("expenses") or []) if isinstance(e, dict)]
     for d in deals:  # keys the archive era predates — needed by the contact/channel editors
