@@ -180,9 +180,32 @@
     </div>
   </div>
 
-  <!-- COHORTS (F6) — ships in a later wave -->
+  <!-- COHORTS (F6): clients grouped by signing month, tracked to renewal -->
   <div id="view-cohorts" class="hide">
-    <div class="panel"><h3>Cohort renewal rates</h3><p class="mini">Coming next — clients grouped by signing month, tracked to renewal.</p></div>
+    <div class="print-only print-head"><span class="ph-t">Nova Auto Pros — Cohort Renewal Rates</span><span class="ph-s" id="cohortStamp"></span></div>
+    <div class="rn-stats" id="cohortStats"></div>
+    <div class="panel no-print" id="cohortReviewWrap" style="margin-bottom:16px">
+      <h3>Matches to review <span class="mini">possible renewals & early repeats — your call is final</span></h3>
+      <div id="cohortReview"></div>
+    </div>
+    <div class="na-filters no-print">
+      <div class="na-spacer"></div>
+      <button class="na-btn ghost xs" onclick="cohortCsv()">⬇ CSV</button>
+      <button class="na-btn ghost xs" onclick="window.print()" title="Print / save as PDF — data-room ready">🖨 Export PDF</button>
+    </div>
+    <div class="na-tablewrap">
+      <table class="na-tbl">
+        <thead><tr>
+          <th>Cohort</th><th class="num">Clients</th><th class="num">Renewed</th>
+          <th class="num">Rate</th><th>Status</th><th>Return window</th>
+        </tr></thead>
+        <tbody id="cohortBody"></tbody>
+      </table>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h3>Lost clients <span class="mini">renewal window open 4+ months, no new deal — win-back outreach</span></h3>
+      <div id="cohortLost"></div>
+    </div>
   </div>
 
   <!-- LADDER (F7) — ships in a later wave -->
@@ -417,6 +440,88 @@ function renderUif(){
   uifBarRows(document.getElementById("uifBrands"), by(x=>x.brand), act.length);
 }
 
+// ---- Cohorts tab (F6) ----
+let cohortOpen=null;
+const isRenewed = x => ["confirmed","auto"].includes(x.renewal.state);
+const windowOpen = x => TODAY >= naAddMonths(x.maturity,-2);
+const dataComplete = x => TODAY >= naAddMonths(x.maturity,4);   // late returners get 4 months past maturity
+const isLost = x => x.status!=="closedEarly" && dataComplete(x) && !isRenewed(x);
+function cohortRows(){
+  const g={};
+  BOOK.filter(x=>x.kind==="lease").forEach(x=>{ const m=x.closeDate.slice(0,7); (g[m]=g[m]||[]).push(x); });
+  return Object.keys(g).sort().map(m=>{
+    const xs=g[m], renewed=xs.filter(isRenewed).length;
+    const anyOpen=xs.some(windowOpen), allDone=xs.every(dataComplete);
+    const status=!anyOpen?"tooearly":allDone?"active":"pending";
+    const win=xs.map(x=>naAddMonths(x.maturity,-2)).sort()[0];
+    return {m, xs, size:xs.length, renewed, rate:xs.length?renewed/xs.length:0, status, windowFrom:win};
+  });
+}
+function renderCohorts(){
+  const rows=cohortRows();
+  const withData=rows.filter(r=>r.status!=="tooearly");
+  const totalRen=rows.reduce((s,r)=>s+r.renewed,0);
+  const lost=BOOK.filter(x=>x.kind==="lease"&&isLost(x));
+  const review=BOOK.filter(x=>x.renewal.state==="review");
+  document.getElementById("cohortStats").innerHTML=[
+    {l:"Cohorts", v:rows.length, s:"signing months on record", cls:"hero"},
+    {l:"Renewals confirmed", v:totalRen, s:"incl. confirmed early repeats"},
+    {l:"Cohorts w/ open windows", v:withData.length, s:"earliest windows open "+(rows[0]?rows[0].windowFrom:"—")},
+    {l:"Lost clients", v:lost.length, s:"for win-back outreach", cls:lost.length?"red":""},
+  ].map(s=>`<div class="rnstat ${s.cls||''}"><div class="l">${s.l}</div><div class="v">${s.v}</div><div class="s">${s.s}</div></div>`).join("");
+  // review queue (same confirm/reject actions as the Leases drawer)
+  document.getElementById("cohortReviewWrap").style.display=review.length?"":"none";
+  document.getElementById("cohortReview").innerHTML=review.map(x=>`
+    <div class="mrow" style="border-bottom:1px dashed var(--na-line);padding:7px 0">
+      <span><b>${esc(x.client)}</b> <span class="mini">${esc(x.vehicle)||''} · leased ${x.closeDate}</span>
+        — ${x.renewal.early?'came back <b>early</b>':'possible renewal'} <b>${x.renewal.matchDate}</b></span>
+      <span style="display:flex;gap:6px">
+        <button class="na-btn xs" onclick="bkConfirmRenewal('${x.ref}','${x.renewal.matchRef}',${x.renewal.early?'true':'false'},'${x.renewal.matchDate}')">${x.renewal.early?'Yes — close early':'Confirm'}</button>
+        <button class="na-btn ghost xs" onclick="bkRejectRenewal('${x.ref}','${x.renewal.matchRef}')">Not them</button>
+      </span></div>`).join("");
+  const stText={active:'<span class="stat g">Active data</span>', pending:'<span class="stat a">Pending window</span>', tooearly:'<span class="stat n">Too early</span>'};
+  document.getElementById("cohortBody").innerHTML=rows.map(r=>`
+    <tr class="drow${cohortOpen===r.m?' open':''}" onclick="cohortToggle('${r.m}')">
+      <td class="veh">${monthName(r.m)}</td>
+      <td class="num">${r.size}</td>
+      <td class="num">${r.status==="tooearly"?'<span class="mini">—</span>':r.renewed}</td>
+      <td class="num money">${r.status==="tooearly"?'<span class="mini">—</span>':Math.round(r.rate*100)+"%"}</td>
+      <td>${stText[r.status]}</td>
+      <td class="sub">${r.windowFrom?"from "+r.windowFrom:"—"}</td>
+    </tr>${cohortOpen===r.m?cohortDetail(r):''}`).join("");
+  document.getElementById("cohortLost").innerHTML=lost.length?lost.map(x=>`
+    <div class="exp-line"><span><b>${esc(x.client)}</b> <span class="mini">${esc(x.vehicle)||''} · matured ${x.maturity}${x.phone?' · '+esc(x.phone):''}</span></span>
+      <select class="na-sel" style="padding:5px 8px;font-size:11.5px" onchange="lbSet('${x.ref}','outreach',this.value)">
+        ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select></div>`).join("")
+    :'<p class="mini">No lost clients yet — every opened window is young or renewed.</p>';
+  document.getElementById("cohortStamp").textContent="Generated "+TODAY+" · "+rows.length+" cohorts · "+totalRen+" renewals confirmed";
+}
+function cohortToggle(m){ cohortOpen=(cohortOpen===m)?null:m; renderCohorts(); }
+function cohortDetail(r){
+  const chip=x=>isRenewed(x)?`<span class="stat g">✓ renewed ${x.renewal.matchDate.slice(0,7)}${x.renewal.matchAgentId&&x.renewal.matchAgentId!==x.agentId?' · '+esc((A(x.renewal.matchAgentId)||{}).name||'')+'':''}</span>`
+    :x.renewal.state==="review"?'<span class="stat a">? review</span>'
+    :isLost(x)?'<span class="stat r">lost</span>'
+    :'<span class="stat n">waiting</span>';
+  return `<tr class="detail"><td colspan="6"><div style="padding:14px 18px">
+    ${r.xs.slice().sort((a,b)=>a.maturity<b.maturity?-1:1).map(x=>`
+      <div class="mrow" style="border-bottom:1px dashed var(--na-line);padding:6px 0">
+        <span><b>${esc(x.client)}</b> <span class="mini">${esc(x.vehicle)||''}</span></span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <span class="mini">matures ${x.maturity}</span>${chip(x)}
+          <select class="na-sel no-print" style="padding:4px 7px;font-size:11px" onclick="event.stopPropagation()" onchange="lbSet('${x.ref}','outreach',this.value)">
+            ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select>
+        </span></div>`).join("")}
+  </div></td></tr>`;
+}
+function cohortCsv(){
+  const rows=cohortRows();
+  naCsv([["Cohort","Clients","Renewed","Rate","Status","Window opens"]]
+    .concat(rows.map(r=>[r.m, r.size, r.status==="tooearly"?"":r.renewed,
+      r.status==="tooearly"?"":Math.round(r.rate*100)+"%",
+      {active:"Active data",pending:"Pending window",tooearly:"Too early"}[r.status], r.windowFrom||""])),
+    "nova_cohort_renewals_"+TODAY+".csv");
+}
+
 // ---- boot ----
 let tab="leases";
 function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
@@ -425,7 +530,8 @@ function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
   lsSet("rn_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
-function renderAll(){ rebuildBook(); renderLeases(); renderUif(); }
+function renderAll(){ rebuildBook(); renderLeases(); renderUif(); renderCohorts(); }
+const monthName = m => new Date(m+"-01T00:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"});
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
 let _searchT=null; document.getElementById("lfSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(renderLeases,140); });
