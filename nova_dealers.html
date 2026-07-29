@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Admins — Dealers</title>
+<link rel="stylesheet" href="/nova-admins/common.css">
+<script src="/nova-admins/common.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--na-bg);color:var(--na-fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;font-size:13.5px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;}
+  .na-app{max-width:1320px;margin:0 auto;padding:26px 26px 80px;}
+
+  .na-eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-eyebrow b{color:var(--na-blue);}
+  .na-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:4px 0 18px;flex-wrap:wrap;}
+  .na-title{font-size:30px;font-weight:760;letter-spacing:-.02em;margin:2px 0 0;}
+  .na-right{display:flex;align-items:center;gap:9px;}
+  .suite-nav{display:inline-flex;gap:4px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:3px;margin-top:12px;}
+  .suite-nav a{text-decoration:none;color:var(--na-muted);font-size:12.5px;font-weight:650;padding:6px 13px;border-radius:8px;}
+  .suite-nav a.on{background:var(--na-panel-2);color:var(--na-fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}
+  .suite-nav a:not(.on):hover{color:var(--na-fg);}
+
+  .na-btn{all:unset;cursor:pointer;background:var(--na-blue);color:#fff;border-radius:10px;padding:9px 14px;
+    font-size:12.5px;font-weight:650;display:inline-flex;align-items:center;gap:6px;}
+  .na-btn.ghost{background:var(--na-panel);color:var(--na-fg);border:1px solid var(--na-line);}
+  .na-btn.xs{padding:6px 11px;font-size:11.5px;}
+  .na-sel,.na-in{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);
+    border-radius:10px;padding:8px 11px;font-size:12.5px;font-family:inherit;outline:none;}
+  .na-sel:focus,.na-in:focus{border-color:var(--na-line-2);}
+  input.na-in[type=date]{font-family:var(--na-mono);font-size:11px;padding:6px 8px;}
+  textarea.na-ed{width:100%;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:12.5px;outline:none;resize:vertical;}
+  .na-search{background:var(--na-panel);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:8px 12px;font-size:12.5px;font-family:inherit;outline:none;min-width:190px;}
+  .na-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .na-spacer{flex:1;}
+  .mini{font-size:10.5px;color:var(--na-muted-2);}
+  .save-tag{font-size:11px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid var(--na-line);background:var(--na-panel);white-space:nowrap;}
+  .save-tag.ok{color:var(--na-green);border-color:rgba(52,211,153,.3);}
+  .save-tag.saving{color:var(--na-amber);border-color:rgba(251,191,36,.3);}
+  .save-tag.err{color:var(--na-red);border-color:rgba(248,113,113,.3);}
+  .hide{display:none!important;}
+
+  .dl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+  .dlstat{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:13px 15px;}
+  .dlstat .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--na-muted-2);font-weight:700;}
+  .dlstat .v{font-family:var(--na-mono);font-size:22px;font-weight:600;margin-top:6px;}
+  .dlstat .s{font-size:11px;color:var(--na-muted);margin-top:2px;}
+  .dlstat.hero{border-color:rgba(52,211,153,.4);background:linear-gradient(160deg,rgba(52,211,153,.10),var(--na-panel) 55%);}
+  .dlstat.amber .v{color:var(--na-amber);} .dlstat.red .v{color:var(--na-red);}
+
+  .na-tablewrap{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table.na-tbl{width:100%;border-collapse:collapse;min-width:860px;}
+  .na-tbl th{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;text-align:left;
+    padding:11px 13px;border-bottom:1px solid var(--na-line);background:var(--na-inset);white-space:nowrap;}
+  .na-tbl th.num,.na-tbl td.num{text-align:right;}
+  .na-tbl td{padding:10px 13px;border-bottom:1px solid var(--na-line);font-size:12.5px;vertical-align:middle;}
+  .na-tbl tbody tr{cursor:pointer;}
+  .na-tbl tbody tr:hover{background:var(--na-panel-2);}
+  .na-tbl tr:last-child td{border-bottom:none;}
+  .sub{color:var(--na-muted);}
+  .veh{font-weight:600;}
+  .money{font-family:var(--na-mono);}
+
+  .stat{font-size:10.5px;font-weight:650;padding:2px 9px;border-radius:20px;white-space:nowrap;}
+  .stat.g{color:var(--na-green);background:var(--na-green-bg);}
+  .stat.a{color:var(--na-amber);background:var(--na-amber-bg);}
+  .stat.r{color:var(--na-red);background:var(--na-red-bg);}
+  .stat.n{color:var(--na-muted);background:var(--na-panel-2);}
+
+  .panel{background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:16px 18px;}
+  .panel h3{margin:0 0 12px;font-size:15px;font-weight:700;}
+  .panel h3 .mini{font-weight:500;margin-left:6px;}
+  .exp-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--na-line);font-size:12.5px;}
+  .exp-line:last-child{border-bottom:none;}
+
+  /* modal (cloned from the agent-edit modal pattern) */
+  .agm-scrim{position:fixed;inset:0;background:rgba(5,6,10,.66);display:flex;align-items:center;justify-content:center;z-index:50;padding:18px;}
+  .agm{background:var(--na-panel);border:1px solid var(--na-line-2);border-radius:16px;width:min(560px,100%);max-height:92vh;overflow:auto;}
+  .agm-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--na-line);}
+  .agm-name{flex:1;background:var(--na-panel-2);border:1px solid var(--na-line);color:var(--na-fg);border-radius:10px;padding:9px 12px;font-size:14px;font-weight:650;outline:none;}
+  .agm-x{all:unset;cursor:pointer;color:var(--na-muted);font-size:16px;padding:4px 8px;}
+  .agm-x:hover{color:var(--na-fg);}
+  .agm-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+  .agm-foot{display:flex;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--na-line);}
+  .del-btn{background:rgba(248,113,113,.12);color:var(--na-red);border:none;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:650;cursor:pointer;}
+  .fr{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .fr .lab{font-size:11px;color:var(--na-muted);min-width:86px;}
+  .ct-row{display:flex;gap:6px;align-items:center;}
+  .ct-row input{flex:1;min-width:0;}
+  .ct-x{all:unset;cursor:pointer;color:var(--na-muted);padding:0 5px;font-size:14px;}
+  .ct-x:hover{color:var(--na-red);}
+
+  @media (max-width:760px){ .dl-stats{grid-template-columns:repeat(2,1fr);} .na-app{padding:18px 12px 70px;} }
+</style>
+</head>
+<body>
+<div class="na-app">
+
+  <div class="na-eyebrow">NOVA ADMINS · <b>byAletheya</b></div>
+  <div class="na-title-row">
+    <div>
+      <h1 class="na-title">Dealers</h1>
+      <nav class="suite-nav">
+        <a href="/nova-admins">Deal Ledger</a>
+        <a href="/nova-admins/renewals">Renewals</a>
+        <a class="on" href="/nova-admins/dealers">Dealers</a>
+        <a href="/nova-admins/tasks">Tasks</a>
+        <a href="/nova-admins/notes">Notes</a>
+      </nav>
+    </div>
+    <div class="na-right">
+      <span id="saveTag" class="save-tag hide"></span>
+      <button class="na-btn ghost xs" onclick="window.print()" title="Print / save as PDF — data-room ready">🖨 Export PDF</button>
+      <a class="na-btn ghost xs" style="text-decoration:none" href="/logout" title="Sign out">🔒 Lock</a>
+    </div>
+  </div>
+
+  <div class="print-only print-head"><span class="ph-t">Nova Auto Pros — Dealer Network & Agreements</span><span class="ph-s" id="printStamp"></span></div>
+
+  <div class="dl-stats" id="dlStats"></div>
+
+  <div class="na-filters">
+    <select class="na-sel" id="dfStatus" onchange="renderDealers()">
+      <option value="all">All contract statuses</option>
+      <option value="Signed">Signed</option>
+      <option value="Pending">Pending</option>
+      <option value="Not Started">Not started</option>
+    </select>
+    <select class="na-sel" id="dfBrand" onchange="renderDealers()"><option value="all">All brands</option></select>
+    <select class="na-sel" id="dfState" onchange="renderDealers()"><option value="all">All states</option></select>
+    <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="dfInactive" onchange="renderDealers()"> show inactive
+    </label>
+    <input class="na-search" id="dfSearch" placeholder="Search dealers…">
+    <div class="na-spacer"></div>
+    <button class="na-btn" onclick="newDealer()">+ Add Dealer</button>
+  </div>
+
+  <div class="na-tablewrap">
+    <table class="na-tbl">
+      <thead><tr>
+        <th>Dealer</th><th>Contract</th><th>Type</th><th>Signed</th><th>File</th>
+        <th>Primary contact</th><th class="num">This month</th><th class="num">Lifetime</th><th class="num">Gross sent</th>
+      </tr></thead>
+      <tbody id="dealerBody"></tbody>
+    </table>
+  </div>
+
+  <div class="panel no-print" style="margin-top:16px">
+    <h3>Unmatched dealer names <span class="mini">ledger spellings not linked to a registry dealer — link or create</span></h3>
+    <div id="unmatchedBody"></div>
+  </div>
+
+</div>
+
+<!-- DEALER EDIT MODAL -->
+<div class="agm-scrim hide" id="dlScrim" onclick="if(event.target===this)closeDealer()">
+  <div class="agm">
+    <div class="agm-head"><input class="agm-name" id="dmName" placeholder="Dealership name">
+      <button class="agm-x" onclick="closeDealer()">✕</button></div>
+    <div class="agm-body">
+      <div class="fr"><span class="lab">Brand</span><input class="na-in" id="dmBrand" style="flex:1" placeholder="Mercedes-Benz">
+        <span class="lab" style="min-width:0">State</span><input class="na-in" id="dmState" style="width:70px" placeholder="CA"></div>
+      <div class="fr"><span class="lab">Contract</span>
+        <select class="na-sel" id="dmStatus"><option>Not Started</option><option>Pending</option><option>Signed</option></select>
+        <select class="na-sel" id="dmType"><option value="CA">CA Dealer</option><option value="Out-of-State">Out-of-State</option></select>
+        <input class="na-in" type="date" id="dmSigned" title="Date signed"></div>
+      <div class="fr"><span class="lab">Agreement file</span>
+        <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--na-fg)">
+          <input type="checkbox" id="dmFile"> physical/PDF agreement is on file</label></div>
+      <div class="fr"><span class="lab">Inactive</span>
+        <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--na-fg)">
+          <input type="checkbox" id="dmInactive"> no longer active — kept for the record</label></div>
+      <div>
+        <div class="fr" style="justify-content:space-between"><span class="lab">Contacts</span>
+          <button class="na-btn ghost xs" onclick="dmAddContact()">+ contact</button></div>
+        <div id="dmContacts" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+      </div>
+      <div><span class="lab" style="font-size:11px;color:var(--na-muted)">Ledger spellings (aliases) — one per line</span>
+        <textarea class="na-ed" id="dmAliases" rows="2" placeholder="MB BH&#10;Mercedes Beverily - Jason"></textarea></div>
+      <div><span class="lab" style="font-size:11px;color:var(--na-muted)">Relationship notes</span>
+        <textarea class="na-ed" id="dmNotes" rows="2" placeholder="Jason (fleet) is the guy — prefers text…"></textarea></div>
+    </div>
+    <div class="agm-foot"><button class="del-btn" id="dmDel" onclick="deleteDealer()">Delete</button>
+      <button class="na-btn" onclick="saveDealerModal()">Save</button></div>
+  </div>
+</div>
+
+<script>
+/*NOVA_SEED*/
+const SEED = (typeof window!=="undefined" && window.NOVA_SEED) || {};
+window.AGENTS = SEED.agents || [];
+const DEALS = SEED.deals || [];
+const HDEALS = SEED.historyDeals || [];
+const DEALERS = SEED.dealers || [];
+const NOW=new Date();
+const _pad=n=>String(n).padStart(2,"0");
+const TODAY=NOW.getFullYear()+"-"+_pad(NOW.getMonth()+1)+"-"+_pad(NOW.getDate());
+const CUR_MONTH=TODAY.slice(0,7);
+const fmt = n => (n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString();
+
+// dealer-string normalization: lowercase + collapse whitespace, so the ledger's
+// three spellings of one store all land on the same registry dealer via aliases
+const dnorm = s => String(s||"").toLowerCase().replace(/\s+/g," ").trim();
+function aliasMap(){
+  const m={};
+  DEALERS.forEach(d=>{
+    [d.name].concat(d.aliases||[]).forEach(a=>{ const k=dnorm(a); if(k) m[k]=d.id; });
+  });
+  return m;
+}
+function allDeals(){ return HDEALS.concat(DEALS).filter(d=>d.date); }
+// volume per dealer + the unmatched spellings, one pass
+function dealerVolumes(){
+  const am=aliasMap(), vol={}, un={};
+  allDeals().forEach(d=>{
+    const k=dnorm(d.dealer);
+    if(!k){ return; }
+    const id=am[k];
+    if(id!=null){ const v=(vol[id]=vol[id]||{mo:0,life:0,gross:0});
+      v.life++; v.gross+=(+d.front||0)+(+d.back||0); if(d.date.startsWith(CUR_MONTH)) v.mo++; }
+    else{ const u=(un[k]=un[k]||{raw:d.dealer,n:0}); u.n++; }
+  });
+  return {vol,un};
+}
+
+function renderDealers(){
+  const {vol,un}=dealerVolumes();
+  const active=DEALERS.filter(d=>!d.inactive);
+  const papered=active.filter(d=>d.status==="Signed");
+  document.getElementById("dlStats").innerHTML=[
+    {l:"Relationships papered", v:`${papered.length} of ${active.length}`, s:"signed agreements · active dealers", cls:"hero"},
+    {l:"Pending", v:active.filter(d=>d.status==="Pending").length, s:"agreement out for signature", cls:"amber"},
+    {l:"Not started", v:active.filter(d=>(d.status||"Not Started")==="Not Started").length, s:"still informal", cls:"red"},
+    {l:"Unmatched ledger names", v:Object.keys(un).length, s:"spellings not linked below"},
+  ].map(s=>`<div class="dlstat ${s.cls||''}"><div class="l">${s.l}</div><div class="v">${s.v}</div><div class="s">${s.s}</div></div>`).join("");
+
+  // filter dropdowns (preserve selection)
+  const brands=[...new Set(DEALERS.map(d=>d.brand).filter(Boolean))].sort();
+  const states=[...new Set(DEALERS.map(d=>d.state).filter(Boolean))].sort();
+  const bSel=document.getElementById("dfBrand"), sSel=document.getElementById("dfState");
+  const bv=bSel.value, sv=sSel.value;
+  bSel.innerHTML='<option value="all">All brands</option>'+brands.map(b=>`<option>${esc(b)}</option>`).join("");
+  sSel.innerHTML='<option value="all">All states</option>'+states.map(s=>`<option>${esc(s)}</option>`).join("");
+  bSel.value=[...bSel.options].some(o=>o.value===bv)?bv:"all";
+  sSel.value=[...sSel.options].some(o=>o.value===sv)?sv:"all";
+
+  const fs=document.getElementById("dfStatus").value, fb=bSel.value, fst=sSel.value,
+        inc=document.getElementById("dfInactive").checked,
+        q=document.getElementById("dfSearch").value.toLowerCase().trim();
+  let rows=DEALERS.slice();
+  if(!inc) rows=rows.filter(d=>!d.inactive);
+  if(fs!=="all") rows=rows.filter(d=>(d.status||"Not Started")===fs);
+  if(fb!=="all") rows=rows.filter(d=>d.brand===fb);
+  if(fst!=="all") rows=rows.filter(d=>d.state===fst);
+  if(q) rows=rows.filter(d=>(`${d.name} ${d.brand} ${(d.aliases||[]).join(" ")} ${(d.contacts||[]).map(c=>c.name).join(" ")}`).toLowerCase().includes(q));
+  rows.sort((a,b)=>((vol[b.id]||{}).life||0)-((vol[a.id]||{}).life||0));
+
+  const badge={Signed:'<span class="stat g">● Signed</span>',Pending:'<span class="stat a">◐ Pending</span>'};
+  document.getElementById("dealerBody").innerHTML = rows.length ? rows.map(d=>{
+    const v=vol[d.id]||{mo:0,life:0,gross:0};
+    const c0=(d.contacts||[])[0];
+    return `<tr onclick="editDealer(${d.id})">
+      <td><div class="veh">${esc(d.name)}${d.inactive?' <span class="stat n">inactive</span>':''}</div>
+        <div class="sub">${[d.brand,d.state].filter(Boolean).map(esc).join(" · ")||"—"}</div></td>
+      <td>${badge[d.status]||'<span class="stat r">○ Not started</span>'}</td>
+      <td class="sub">${d.agreementType==="Out-of-State"?"Out-of-State":"CA"}</td>
+      <td class="sub">${d.signedDate||"—"}</td>
+      <td>${d.fileOnFile?'<span class="stat g">✓</span>':'<span class="stat n">—</span>'}</td>
+      <td class="sub">${c0?esc(c0.name)+(c0.title?` <span class="mini">(${esc(c0.title)})</span>`:"")+(c0.phone?`<div class="mini">${esc(c0.phone)}</div>`:""):"—"}</td>
+      <td class="num money">${v.mo}</td>
+      <td class="num money">${v.life}</td>
+      <td class="num money">${fmt(v.gross)}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--na-muted)">No dealers yet — add one, or create them straight from the unmatched ledger names below.</td></tr>`;
+
+  const unArr=Object.values(un).sort((a,b)=>b.n-a.n);
+  document.getElementById("unmatchedBody").innerHTML = unArr.length ? unArr.map(u=>`
+    <div class="exp-line"><span><b>${esc(u.raw)}</b> <span class="mini">${u.n} deal${u.n>1?"s":""} in the ledger</span></span>
+      <span style="display:flex;gap:6px;align-items:center">
+        ${DEALERS.length?`<select class="na-sel" style="padding:5px 8px;font-size:11.5px" id="ua-${btoa(unescape(encodeURIComponent(u.raw))).replace(/[^a-zA-Z0-9]/g,"")}">
+          <option value="">— link as alias of…</option>${DEALERS.filter(d=>!d.inactive).map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("")}</select>
+        <button class="na-btn ghost xs" onclick="linkAlias('${esc(u.raw).replace(/'/g,"\\'")}', this)">Link</button>`:""}
+        <button class="na-btn xs" onclick="createFromRaw('${esc(u.raw).replace(/'/g,"\\'")}')">+ Create dealer</button>
+      </span></div>`).join("")
+    : '<p class="mini">Every ledger dealer spelling is linked. ✨</p>';
+
+  document.getElementById("printStamp").textContent="Generated "+TODAY+" · "+papered.length+" of "+active.length+" active relationships papered";
+}
+
+function linkAlias(raw, btn){
+  const sel=btn.parentElement.querySelector("select");
+  const id=+sel.value; if(!id){ return; }
+  const d=DEALERS.find(x=>x.id===id); if(!d) return;
+  d.aliases=(d.aliases||[]).concat([raw]);
+  d.updated=TODAY;
+  saveRow({dealer:d}); renderDealers();
+}
+function createFromRaw(raw){
+  const id=DEALERS.reduce((m,d)=>Math.max(m,d.id),0)+1;
+  const rec={id, name:raw, brand:"", state:"CA", aliases:[], contacts:[],
+    status:"Not Started", agreementType:"CA", signedDate:"", fileOnFile:false,
+    notes:"", inactive:false, created:TODAY, updated:TODAY};
+  DEALERS.push(rec); saveRow({dealer:rec});
+  renderDealers(); editDealer(id);
+}
+
+// ---- modal ----
+let dmId=null, dmContactsTmp=[];
+function newDealer(){
+  dmId=null; dmContactsTmp=[];
+  ["dmName","dmBrand","dmState","dmSigned","dmAliases","dmNotes"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("dmStatus").value="Not Started";
+  document.getElementById("dmType").value="CA";
+  document.getElementById("dmFile").checked=false;
+  document.getElementById("dmInactive").checked=false;
+  document.getElementById("dmDel").style.display="none";
+  dmRenderContacts();
+  document.getElementById("dlScrim").classList.remove("hide");
+  document.getElementById("dmName").focus();
+}
+function editDealer(id){
+  const d=DEALERS.find(x=>x.id===id); if(!d) return;
+  dmId=id; dmContactsTmp=(d.contacts||[]).map(c=>({...c}));
+  document.getElementById("dmName").value=d.name||"";
+  document.getElementById("dmBrand").value=d.brand||"";
+  document.getElementById("dmState").value=d.state||"";
+  document.getElementById("dmStatus").value=d.status||"Not Started";
+  document.getElementById("dmType").value=d.agreementType||"CA";
+  document.getElementById("dmSigned").value=d.signedDate||"";
+  document.getElementById("dmFile").checked=!!d.fileOnFile;
+  document.getElementById("dmInactive").checked=!!d.inactive;
+  document.getElementById("dmAliases").value=(d.aliases||[]).join("\n");
+  document.getElementById("dmNotes").value=d.notes||"";
+  document.getElementById("dmDel").style.display="";
+  dmRenderContacts();
+  document.getElementById("dlScrim").classList.remove("hide");
+}
+function dmRenderContacts(){
+  document.getElementById("dmContacts").innerHTML = dmContactsTmp.map((c,i)=>`
+    <div class="ct-row">
+      <input class="na-in" placeholder="Name" value="${esc(c.name||'')}" onchange="dmContactsTmp[${i}].name=this.value">
+      <input class="na-in" placeholder="Title (GM, GSM…)" style="max-width:110px" value="${esc(c.title||'')}" onchange="dmContactsTmp[${i}].title=this.value">
+      <input class="na-in" type="tel" placeholder="Phone" style="max-width:120px" value="${esc(c.phone||'')}" onchange="dmContactsTmp[${i}].phone=this.value">
+      <input class="na-in" type="email" placeholder="Email" style="max-width:150px" value="${esc(c.email||'')}" onchange="dmContactsTmp[${i}].email=this.value">
+      <button class="ct-x" onclick="dmContactsTmp.splice(${i},1);dmRenderContacts()" title="Remove">✕</button>
+    </div>`).join("") || '<div class="mini">No contacts yet.</div>';
+}
+function dmAddContact(){ dmContactsTmp.push({name:"",title:"",phone:"",email:""}); dmRenderContacts(); }
+function saveDealerModal(){
+  const name=document.getElementById("dmName").value.trim();
+  if(!name){ document.getElementById("dmName").focus(); return; }
+  let d;
+  if(dmId==null){ d={id:DEALERS.reduce((m,x)=>Math.max(m,x.id),0)+1, created:TODAY}; DEALERS.push(d); }
+  else{ d=DEALERS.find(x=>x.id===dmId); if(!d) return; }
+  d.name=name;
+  d.brand=document.getElementById("dmBrand").value.trim();
+  d.state=document.getElementById("dmState").value.trim().toUpperCase();
+  d.status=document.getElementById("dmStatus").value;
+  d.agreementType=document.getElementById("dmType").value;
+  d.signedDate=document.getElementById("dmSigned").value;
+  d.fileOnFile=document.getElementById("dmFile").checked;
+  d.inactive=document.getElementById("dmInactive").checked;
+  d.aliases=document.getElementById("dmAliases").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  d.contacts=dmContactsTmp.filter(c=>(c.name||c.phone||c.email||"").trim());
+  d.notes=document.getElementById("dmNotes").value;
+  d.updated=TODAY;
+  saveRow({dealer:d});
+  closeDealer(); renderDealers();
+}
+function deleteDealer(){
+  if(dmId==null) return;
+  if(!confirm("Delete this dealer record?\nPrefer marking it inactive — history has value in the data room.")) return;
+  const i=DEALERS.findIndex(x=>x.id===dmId); if(i>=0)DEALERS.splice(i,1);
+  saveRow({deleteDealer:dmId});
+  closeDealer(); renderDealers();
+}
+function closeDealer(){ document.getElementById("dlScrim").classList.add("hide"); dmId=null; }
+
+let _dSearchT=null; document.getElementById("dfSearch").addEventListener("input",function(){ clearTimeout(_dSearchT); _dSearchT=setTimeout(renderDealers,140); });
+renderDealers();
+</script>
+<script src="/nova-admins/agent.js" defer></script>
+</body>
+</html>

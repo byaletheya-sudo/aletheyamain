@@ -23,6 +23,28 @@ html[data-theme="light"]{
 /* per-page accents that need more ink on white */
 html[data-theme="light"] .tlabel{color:#6d3fd4;background:rgba(122,79,224,.12);}
 html[data-theme="light"] .nbadge{color:#4a5162;}
+/* ---- print = the data-room export path (Dealers / Cohorts / Ladder use window.print()).
+   Force the light palette and hide app chrome; the active tab is the only visible view
+   (inactive views carry .hide), so what you see is what prints. ---- */
+.print-only{display:none;}
+@media print{
+  :root, html[data-theme="dark"], html[data-theme="light"]{
+    color-scheme:light;
+    --na-bg:#ffffff; --na-panel:#ffffff; --na-panel-2:#f1f2f6; --na-line:rgba(18,26,44,.16);
+    --na-line-2:rgba(18,26,44,.3); --na-fg:#111826; --na-muted:#4a5162; --na-muted-2:#767d8c;
+    --na-blue:#2f7fe0; --na-purple:#7a4fe0; --na-green:#0e7f58; --na-green-bg:rgba(14,159,110,.12);
+    --na-red:#c23a3a; --na-red-bg:rgba(217,72,72,.10); --na-amber:#95651a; --na-amber-bg:rgba(183,121,31,.12);
+    --na-blue-soft:#2467c2; --na-inset:#f1f2f6;
+  }
+  body{background:#fff!important;color:var(--na-fg)!important;}
+  .na-right,.suite-nav,.na-tabs,.na-filters,.na-thseg,.no-print,#novaAgentOrb{display:none!important;}
+  .print-only{display:block!important;}
+  .na-app{max-width:none!important;padding:0!important;}
+  .print-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid #111826;
+    padding-bottom:8px;margin-bottom:16px;}
+  .print-head .ph-t{font-size:20px;font-weight:800;letter-spacing:-.01em;}
+  .print-head .ph-s{font-size:11px;color:#4a5162;}
+}
 /* the dark/light/auto switcher (injected into .na-right by nova_common.js) */
 .na-thseg{display:inline-flex;gap:2px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:10px;padding:2px;flex:none;}
 .na-thseg button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;font-size:11px;font-weight:650;color:var(--na-muted);line-height:1.2;}

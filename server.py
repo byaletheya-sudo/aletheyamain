@@ -807,6 +807,12 @@ def nova_admins_renewals_page():
     return _nova_admin_serve("nova_renewals.html")
 
 
+@app.route("/nova-admins/dealers")
+def nova_admins_dealers_page():
+    """Tool 5: the dealer contract registry — which relationships are papered."""
+    return _nova_admin_serve("nova_dealers.html")
+
+
 @app.route("/nova-admins/parse-task", methods=["POST"])
 def nova_admins_parse_task():
     """Turn natural language into one or more structured tasks (title, subtasks,
