@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect
 from openai import OpenAI
 import base64
+import calendar
 import os
 import re
 import io
@@ -1328,7 +1329,66 @@ def _nova_snapshot(store, today, query=""):
         "expenses_shown": len(e_picked), "expenses_total": len(expenses),
         "expenses": [{"id": e.get("id"), "date": e.get("date"), "cat": e.get("cat"),
                       "desc": e.get("desc"), "amt": e.get("amt")} for e in e_picked],
+        # read-only awareness of the CRM build. Lease outreach / history deals / the
+        # dealer registry are edited on the Renewals, History and Dealers pages —
+        # there are NO agent ops for them; point the user there instead of inventing ops.
+        "leasebook": _nova_leasebook_summary(store, today),
+        "dealers": {"total": len([d for d in store.get("dealers", []) if not d.get("inactive")]),
+                    "papered": len([d for d in store.get("dealers", []) if not d.get("inactive") and d.get("status") == "Signed"]),
+                    "pending": len([d for d in store.get("dealers", []) if not d.get("inactive") and d.get("status") == "Pending"])},
+        "history_deals": len(store.get("historyDeals", [])),
     }
+
+
+def _add_months(ymd, n):
+    """Add n months to YYYY-MM-DD, clamping the day (Jan 31 + 1mo → Feb 28).
+    Kept in lockstep with naAddMonths in nova_common.js — change both together."""
+    try:
+        y, m, d = (int(p) for p in str(ymd).split("-")[:3])
+    except Exception:
+        return ""
+    m0 = m - 1 + n
+    y2, m2 = y + m0 // 12, m0 % 12 + 1
+    last = calendar.monthrange(y2, m2)[1]
+    return f"{y2:04d}-{m2:02d}-{min(d, last):02d}"
+
+
+def _nova_leasebook_summary(store, today):
+    """Maturity math ONLY — mirrors naLeaseBook's maturity/active rules so Ask Nova can
+    answer 'units in force?' / 'who matures soon?'. Renewal detection stays client-side."""
+    ov = {o.get("id"): o for o in store.get("leasebook", []) if isinstance(o, dict)}
+    units = fin = mat90 = assumed = 0
+    red = []
+    horizon = _add_months(today, 3)
+    rows = [("H", d) for d in store.get("historyDeals", [])] + [("L", d) for d in store.get("deals", [])]
+    for pre, d in rows:
+        if not isinstance(d, dict) or not d.get("date"):
+            continue
+        o = ov.get(f"{pre}{d.get('id')}", {})
+        kind = "financed" if d.get("type") == "Buy" else "lease"
+        try:
+            term = int(d.get("term") or 0)
+        except Exception:
+            term = 0
+        cycle = 24 if kind == "financed" else (term or 36)
+        maturity = o.get("maturityOverride") or (o.get("closedEarly") and o.get("closedEarlyDate")) \
+            or _add_months(d["date"], cycle)
+        active = (not o.get("closedEarly")) and str(maturity) > today
+        if not active:
+            continue
+        if kind == "financed":
+            fin += 1
+            continue
+        units += 1
+        if not term:
+            assumed += 1
+        if str(maturity) <= horizon:
+            mat90 += 1
+            if len(red) < 10:
+                red.append({"client": d.get("client", ""), "maturity": maturity,
+                            "outreach": o.get("outreach", "not_started"), "phone": d.get("phone", "")})
+    return {"units_in_force": units, "financed_in_force": fin, "maturing_90d": mat90,
+            "terms_assumed": assumed, "maturing_soon": red}
 
 
 def _nova_new_id(arr):

@@ -169,9 +169,15 @@
     </div>
   </div>
 
-  <!-- UNITS IN FORCE (F5) — ships in a later wave -->
+  <!-- UNITS IN FORCE (F5): the book of active leases — Nova's AUM -->
   <div id="view-uif" class="hide">
-    <div class="panel"><h3>Units in Force</h3><p class="mini">Coming next — live count of active leases, by agent and brand, with the monthly trend.</p></div>
+    <div class="rn-stats" id="uifStats"></div>
+    <div class="panel" style="margin-bottom:16px"><h3>Units in force by month <span class="mini">active leases at each month-end, March 2025 → now · amber line = financed</span></h3>
+      <div id="uifChart"></div></div>
+    <div class="na-two" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="panel"><h3>By agent <span class="mini">whose book is biggest</span></h3><div id="uifAgents"></div></div>
+      <div class="panel"><h3>By brand <span class="mini">where the renewals will be</span></h3><div id="uifBrands"></div></div>
+    </div>
   </div>
 
   <!-- COHORTS (F6) — ships in a later wave -->
@@ -371,6 +377,46 @@ function bkDetailRow(x){
   </div></td></tr>`;
 }
 
+// ---- Units in Force tab (F5) ----
+const UIF_START="2025-03";
+function uifBarRows(el, pairs, total){
+  el.innerHTML = pairs.length ? pairs.map(([label,n])=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:5px 0">
+      <span style="min-width:110px;font-size:12.5px">${esc(label)}</span>
+      <div style="flex:1;height:9px;background:var(--na-panel-2);border-radius:6px;overflow:hidden">
+        <div style="height:100%;width:${total?Math.round(n/total*100):0}%;background:linear-gradient(90deg,var(--na-green),var(--na-blue));border-radius:6px"></div></div>
+      <span class="money" style="min-width:34px;text-align:right;font-size:12px">${n}</span>
+    </div>`).join("") : '<p class="mini">Nothing active yet.</p>';
+}
+function renderUif(){
+  const act=BOOK.filter(x=>x.kind==="lease"&&x.status==="active");
+  const finAct=BOOK.filter(x=>x.kind==="financed"&&x.status==="active");
+  const assumed=act.filter(x=>x.termAssumed).length;
+  const next12=act.filter(x=>x.monthsToMaturity<12).length;
+  document.getElementById("uifStats").innerHTML=[
+    {l:"Units in force", v:act.length, s:"active leases · Nova's book", cls:"hero"},
+    {l:"Financed in force", v:finAct.length, s:"parallel 24-mo outreach count"},
+    {l:"Terms assumed", v:assumed, s:"36-mo default — fix in History", cls:assumed?"amber":""},
+    {l:"Entering window in 12 mo", v:next12, s:"renewal opportunities coming"},
+  ].map(s=>`<div class="rnstat ${s.cls||''}"><div class="l">${s.l}</div><div class="v">${s.v}</div><div class="s">${s.s}</div></div>`).join("");
+  // monthly trend: active during month m = closed before m's end AND maturing after it
+  const months=[]; let m=UIF_START;
+  const curM=TODAY.slice(0,7);
+  while(m<=curM){ months.push(m); m=naAddMonths(m+"-01",1).slice(0,7); }
+  const data=months.map(mo=>{
+    const nextM=naAddMonths(mo+"-01",1);
+    const n=BOOK.filter(x=>x.kind==="lease"&&x.closeDate<nextM&&x.maturity>=nextM).length;
+    const f=BOOK.filter(x=>x.kind==="financed"&&x.closeDate<nextM&&x.maturity>=nextM).length;
+    return {label:mo.slice(2), value:n, value2:f};
+  });
+  naBarChart(document.getElementById("uifChart"), data,
+    {line:true, height:200, fmt:v=>v+" leases in force", fmt2:v=>v+" financed"});
+  const by=(keyFn)=>{ const g={}; act.forEach(x=>{ const k=keyFn(x)||"—"; g[k]=(g[k]||0)+1; });
+    return Object.entries(g).sort((a,b)=>b[1]-a[1]); };
+  uifBarRows(document.getElementById("uifAgents"), by(x=>(A(x.agentId)||{}).name), act.length);
+  uifBarRows(document.getElementById("uifBrands"), by(x=>x.brand), act.length);
+}
+
 // ---- boot ----
 let tab="leases";
 function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
@@ -379,7 +425,7 @@ function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
   lsSet("rn_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
-function renderAll(){ rebuildBook(); renderLeases(); }
+function renderAll(){ rebuildBook(); renderLeases(); renderUif(); }
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
 let _searchT=null; document.getElementById("lfSearch").addEventListener("input",function(){ clearTimeout(_searchT); _searchT=setTimeout(renderLeases,140); });
