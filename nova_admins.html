@@ -408,6 +408,7 @@
     <button class="na-tab" data-t="agents">Agents <span class="pill" id="cnt-agents">0</span></button>
     <button class="na-tab" data-t="expenses">Expenses <span class="pill" id="cnt-exp">0</span></button>
     <button class="na-tab" data-t="pnl">P&amp;L</button>
+    <button class="na-tab" data-t="nema">Nema</button>
     <button class="na-tab" data-t="hist">History <span class="pill" id="cnt-hist">0</span></button>
   </div>
 
@@ -516,6 +517,33 @@
       <p class="mini" style="margin:0 0 11px;">Nova (paid) leads vs the agent's own. Ad spend is charged to Nova leads; other overhead is split by revenue share.</p>
       <div class="mgn-segs" id="mgnSegs"></div>
     </div>
+  </div>
+
+  <!-- NEMA — individual production tracker, history + live merged (F1) -->
+  <div id="view-nema" class="hide">
+    <div class="na-filters">
+      <label class="mini" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="nemaEarly" onchange="renderNema()"> include pre-March 2025
+      </label>
+      <div class="na-spacer"></div>
+      <span class="mini" id="nemaMeta"></span>
+    </div>
+    <div class="na-kpis" id="nemaKpis" style="display:grid"></div>
+    <div class="na-two" style="margin-top:16px">
+      <div class="panel"><h3>Production by month <span class="mini">gross = front + back · cumulative from start</span></h3>
+        <div class="na-tablewrap"><table class="na-tbl"><thead><tr>
+          <th>Month</th><th class="num">Deals</th><th class="num">Gross</th><th class="num">Net pool</th>
+          <th class="num">Cumulative gross</th><th>Share of company</th><th>Nova / Own / Ref</th>
+        </tr></thead><tbody id="nemaMonths"></tbody></table></div></div>
+      <div class="panel"><h3>Needs contact info <span class="mini">no phone or email on file — flagged for review</span></h3>
+        <div id="nemaReview"></div></div>
+    </div>
+    <div class="panel" style="margin-top:16px"><h3>Every Nema deal</h3>
+      <div class="na-tablewrap"><table class="na-tbl"><thead><tr>
+        <th>Date</th><th>Client / Vehicle</th><th>Sourced</th><th class="num">Gross</th>
+        <th class="num">Net pool</th><th class="num">Nova take*</th><th>Era</th>
+      </tr></thead><tbody id="nemaDeals"></tbody></table></div>
+      <p class="mini" style="margin:8px 0 0">* at current split rates — historic actual payouts may have differed.</p></div>
   </div>
 
   <!-- HISTORY — the pre-July 2026 archive, its own area, never mixed into live numbers -->
@@ -1057,6 +1085,76 @@ async function importHistory(){
   }catch(e){ markSaved("Import failed — offline","err"); }
 }
 
+// ---- RENDER: Nema tracker (F1) — individual production across history + live ----
+const NEMA_START="2025-03-01";
+const monthName = m => new Date(m+"-01T00:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"});
+// merged view of every deal on record, tagged with its era ("hist" edits save via hdeal)
+function mergedDeals(){
+  return HDEALS.map(d=>({src:"hist",d})).concat(DEALS.map(d=>({src:"live",d}))).filter(x=>x.d.date);
+}
+function nemaOpen(src,id){
+  if(src==="hist"){ setTab("hist"); hdOpenRow=id; renderHist();
+    setTimeout(()=>{ const el=document.getElementById("hdet-"+id); if(el)el.scrollIntoView({block:"center"}); },40); }
+  else openDealFromDash(id);
+}
+function nemaEdit(src,id,field,val){ (src==="hist"?hdEdit:edit)(id,field,val); }
+function renderNema(){
+  const early=document.getElementById("nemaEarly").checked;
+  const from = early ? "0000-00-00" : NEMA_START;
+  const company = mergedDeals().filter(x=>x.d.date>=from);
+  const mine = company.filter(x=>x.d.agentId==="nema");
+  document.getElementById("nemaMeta").textContent =
+    mine.length ? `${mine.length} deals · ${mine.reduce((m,x)=>x.d.date<m?x.d.date:m,"9999").slice(0,7)} → ${mine.reduce((m,x)=>x.d.date>m?x.d.date:m,"").slice(0,7)}` : "no deals";
+  // lifetime numbers
+  let gross=0, pool=0; const leadCt={nova:0,own:0,referral:0};
+  mine.forEach(x=>{ const c=calc(x.d); gross+=(+x.d.front||0)+(+x.d.back||0); pool+=c.netPool; leadCt[x.d.lead]=(leadCt[x.d.lead]||0)+1; });
+  const sharePct = company.length ? Math.round(mine.length/company.length*100) : 0;
+  document.getElementById("nemaKpis").innerHTML = [
+    {l:"Deals closed", v:mine.length, s:(early?"all time":"since March 2025")},
+    {l:"Gross produced", v:fmt(gross), s:"front + back"},
+    {l:"Net pool", v:fmt(pool), s:"after fees shared"},
+    {l:"Avg gross / deal", v:fmt(mine.length?gross/mine.length:0), s:"lifetime average"},
+    {l:"Nova-generated", v:leadCt.nova||0, s:`vs ${leadCt.own||0} self-sourced · ${leadCt.referral||0} referral`},
+    {l:"Share of company", v:sharePct+"%", s:`${mine.length} of ${company.length} deals`, hero:true},
+  ].map(k=>`<div class="na-kpi ${k.hero?'hero':''}"><div class="k-lab">${k.l}</div><div class="k-val">${k.v}</div><div class="k-sub">${k.s}</div></div>`).join("");
+  // monthly table, chronological, with cumulative gross + share of company per month
+  const months={};
+  mine.forEach(x=>{ const m=x.d.date.slice(0,7); (months[m]=months[m]||{n:0,gross:0,pool:0,nova:0,own:0,ref:0});
+    const c=calc(x.d); months[m].n++; months[m].gross+=(+x.d.front||0)+(+x.d.back||0); months[m].pool+=c.netPool;
+    months[m][x.d.lead==="nova"?"nova":x.d.lead==="referral"?"ref":"own"]++; });
+  const compMonths={};
+  company.forEach(x=>{ const m=x.d.date.slice(0,7); compMonths[m]=(compMonths[m]||0)+1; });
+  let cum=0;
+  document.getElementById("nemaMonths").innerHTML = Object.keys(months).sort().map(m=>{
+    const r=months[m]; cum+=r.gross; const tot=compMonths[m]||0;
+    return `<tr><td>${monthName(m)}</td><td class="num">${r.n}</td><td class="num money">${fmt(r.gross)}</td>
+      <td class="num money">${fmt(r.pool)}</td><td class="num money">${fmt(cum)}</td>
+      <td><span class="split">${tot?Math.round(r.n/tot*100):0}% of ${tot}</span></td>
+      <td class="sub">${r.nova} / ${r.own} / ${r.ref}</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="mini" style="padding:20px;text-align:center">No deals yet${HDEALS.length?"":" — import the pre-July archive on the History tab first"}.</td></tr>`;
+  // review queue: no contact info on file
+  const need = mine.filter(x=>!((x.d.phone||"").trim()||(x.d.email||"").trim())).sort((a,b)=>a.d.date<b.d.date?1:-1);
+  document.getElementById("nemaReview").innerHTML = need.length ? need.map(x=>`
+    <div class="exp-line" style="gap:8px;align-items:center">
+      <span style="cursor:pointer;min-width:0;flex:1" onclick="nemaOpen('${x.src}',${x.d.id})">${x.d.date.slice(0,7)} · <b>${esc(x.d.client)}</b> <span class="mini">${[x.d.year,x.d.make,x.d.model].filter(Boolean).join(' ')}</span></span>
+      <input class="na-in" type="tel" style="width:118px" placeholder="phone" onchange="nemaEdit('${x.src}',${x.d.id},'phone',this.value)">
+      <input class="na-in" type="email" style="width:150px" placeholder="email" onchange="nemaEdit('${x.src}',${x.d.id},'email',this.value)">
+    </div>`).join("")
+    : '<p class="mini">Every Nema deal has contact info on file. 🎉</p>';
+  // full deal list, newest first
+  document.getElementById("nemaDeals").innerHTML = mine.slice().sort((a,b)=>a.d.date<b.d.date?1:-1).map(x=>{
+    const d=x.d, c=calc(d);
+    return `<tr class="drow" onclick="nemaOpen('${x.src}',${d.id})">
+      <td class="sub">${d.date.slice(5)}<div class="mini">${d.date.slice(0,4)}</div></td>
+      <td><div class="veh">${esc(d.client)}</div><div class="sub">${[d.year,d.make,d.model].filter(Boolean).join(' ')||'—'}</div></td>
+      <td><span class="lead ${d.lead}">${d.lead==="own"?"Nema-sourced":leadLabel[d.lead]||d.lead}</span></td>
+      <td class="num money">${fmt((+d.front||0)+(+d.back||0))}</td>
+      <td class="num money">${fmt(c.netPool)}</td>
+      <td class="num money pos">${fmt(c.novaCut)}</td>
+      <td><span class="stat ${x.src==="live"?"g":"n"}">${x.src==="live"?"Live":"Historic"}</span></td></tr>`;
+  }).join("");
+}
+
 // ---- RENDER: Agents ----
 function renderAgents(){
   document.getElementById("cnt-agents").textContent=AGENTS.length;
@@ -1365,16 +1463,16 @@ function renderFees(){
         r.p?'Prog '+fmt(r.p)+(r.d.progPaid?' ✓':''):''].filter(Boolean).join(' · ')} &nbsp;<b>= ${fmt(r.tot)}</b></span></div>`).join("")
     : '<p class="mini">No fees shared in this period.</p>';
 }
-function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderHist(); }
+function renderAll(){ renderDashboard(); renderKpis(); renderLedger(); renderAgents(); renderExpenses(); renderFees(); renderPnl(); renderHist(); renderNema(); }
 // Coalesce bursts of edits into ONE render on the next frame (a checkbox toggle
 // no longer rebuilds all 7 tabs synchronously on every click).
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
-function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl","hist"].forEach(x=>
+function setTab(t){ tab=t; ["dashboard","ledger","agents","expenses","pnl","hist","nema"].forEach(x=>
     document.getElementById("view-"+x).classList.toggle("hide", x!==t));
   document.querySelectorAll(".na-tab").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
-  // hist ignores the live period picker — the archive is all pre-July by definition
-  const bare = (t==="dashboard"||t==="hist");
+  // hist + nema ignore the live period picker — they span the full March-2025+ record
+  const bare = (t==="dashboard"||t==="hist"||t==="nema");
   document.getElementById("periodWrap").style.display = bare?"none":"flex";
   document.getElementById("kpis").style.display = bare?"none":"grid";
   lsSet("na_tab",t);
