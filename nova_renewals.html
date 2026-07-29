@@ -208,9 +208,27 @@
     </div>
   </div>
 
-  <!-- LADDER (F7) — ships in a later wave -->
+  <!-- LADDER (F7): the forward revenue pipeline, 36 months out -->
   <div id="view-ladder" class="hide">
-    <div class="panel"><h3>Maturity ladder</h3><p class="mini">Coming next — the 36-month forward pipeline chart.</p></div>
+    <div class="print-only print-head"><span class="ph-t">Nova Auto Pros — Maturity Ladder · Forward Pipeline</span><span class="ph-s" id="ladderStamp"></span></div>
+    <div class="rn-stats" id="ladderStats"></div>
+    <div class="na-filters no-print">
+      <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" id="ldAssumed" checked onchange="renderLadder()"> include leases with assumed 36-mo terms
+      </label>
+      <span class="mini">·</span>
+      <span class="mini">Avg fee for projection:</span>
+      <input class="na-in" id="ldFee" style="width:90px" placeholder="auto" title="Blank = trailing-12-month average net pool per lease"
+        onchange="ladderSetFee(this.value)">
+      <div class="na-spacer"></div>
+      <button class="na-btn ghost xs" onclick="window.print()" title="Print / save as PDF — pitch-deck ready">🖨 Export PDF</button>
+    </div>
+    <div class="panel" style="margin-bottom:16px"><h3>Leases maturing per month <span class="mini">next 36 months · amber line = projected fee revenue</span></h3>
+      <div id="ladderChart"></div></div>
+    <div class="panel" style="margin-bottom:16px"><h3>Maturing in the next 6 months <span class="mini">call these first</span></h3>
+      <div id="ladderSoon"></div></div>
+    <div class="panel"><h3>Past due <span class="mini">matured, no renewal — belongs in win-back, not the forward ladder</span></h3>
+      <div id="ladderPast"></div></div>
   </div>
 
 </div>
@@ -522,6 +540,63 @@ function cohortCsv(){
     "nova_cohort_renewals_"+TODAY+".csv");
 }
 
+// ---- Ladder tab (F7) ----
+const SETTINGS = SEED.settings || {};
+function ladderAvgFee(){
+  const manual=+SETTINGS.ladderAvgFee||0;
+  if(manual>0) return {fee:manual, src:"manual"};
+  const from=naAddMonths(TODAY,-12);
+  const recent=BOOK.filter(x=>x.kind==="lease"&&x.closeDate>=from);
+  const pool=recent.reduce((s,x)=>s+calc(x.deal).netPool,0);
+  return {fee:recent.length?pool/recent.length:0, src:"trailing 12-mo avg net pool"};
+}
+function ladderSetFee(v){
+  const n=parseFloat(v);
+  SETTINGS.ladderAvgFee=(v===""||isNaN(n))?null:n;
+  SEED.settings=SETTINGS;
+  saveRow({settings:{ladderAvgFee:SETTINGS.ladderAvgFee}});
+  renderLadder();
+}
+function renderLadder(){
+  const inclAssumed=document.getElementById("ldAssumed").checked;
+  const {fee,src}=ladderAvgFee();
+  const pool=BOOK.filter(x=>x.kind==="lease"&&x.status==="active"&&(inclAssumed||!x.termAssumed));
+  const months=[]; let m=TODAY.slice(0,7);
+  for(let i=0;i<36;i++){ months.push(m); m=naAddMonths(m+"-01",1).slice(0,7); }
+  const perMonth=months.map((mo,i)=>{
+    const n=pool.filter(x=>x.maturity.slice(0,7)===mo).length;
+    return {mo, n, i, color:i<3?"var(--na-red)":i<6?"var(--na-amber)":"var(--na-green)"};
+  });
+  const totalUnits=perMonth.reduce((s,r)=>s+r.n,0);
+  const pipeline=totalUnits*fee;
+  const assumed=BOOK.filter(x=>x.kind==="lease"&&x.status==="active"&&x.termAssumed).length;
+  document.getElementById("ladderStats").innerHTML=[
+    {l:"36-month pipeline value", v:fmt(pipeline), s:`${totalUnits} maturities × ${fmt(fee)} avg fee`, cls:"hero"},
+    {l:"Avg fee used", v:fmt(fee), s:src},
+    {l:"Maturing ≤ 6 months", v:perMonth.slice(0,6).reduce((s,r)=>s+r.n,0), s:"the immediate call list", cls:"amber"},
+    {l:"Assumed terms "+(inclAssumed?"included":"excluded"), v:assumed, s:"36-mo default — fix real terms in History"},
+  ].map(s=>`<div class="rnstat ${s.cls||''}"><div class="l">${s.l}</div><div class="v">${s.v}</div><div class="s">${s.s}</div></div>`).join("");
+  naBarChart(document.getElementById("ladderChart"),
+    perMonth.map(r=>({label:r.mo.slice(2), value:r.n, value2:r.n*fee, color:r.color})),
+    {line:true, height:210, fmt:v=>v+" maturing", fmt2:v=>fmt(v)+" projected"});
+  const soon=BOOK.filter(x=>x.kind==="lease"&&x.status==="active"&&x.maturity<=naAddMonths(TODAY,6))
+    .sort((a,b)=>a.maturity<b.maturity?-1:1);
+  document.getElementById("ladderSoon").innerHTML=soon.length?soon.map(x=>`
+    <div class="exp-line"><span><b>${esc(x.client)}</b> <span class="mini">${esc(x.vehicle)||''} · matures ${x.maturity}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}</span></span>
+      <select class="na-sel no-print" style="padding:5px 8px;font-size:11.5px" onchange="lbSet('${x.ref}','outreach',this.value)">
+        ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select></div>`).join("")
+    :'<p class="mini">Nothing matures inside 6 months — the earliest window is still ahead.</p>';
+  const past=BOOK.filter(x=>x.kind==="lease"&&x.status==="matured"&&!isRenewed(x));
+  document.getElementById("ladderPast").innerHTML=past.length?past.map(x=>`
+    <div class="exp-line"><span><b>${esc(x.client)}</b> <span class="mini">${esc(x.vehicle)||''} · matured ${x.maturity}</span></span>
+      <select class="na-sel no-print" style="padding:5px 8px;font-size:11.5px" onchange="lbSet('${x.ref}','outreach',this.value)">
+        ${Object.entries(OUTREACH).map(([k,v])=>`<option value="${k}" ${x.outreach===k?'selected':''}>${v}</option>`).join("")}</select></div>`).join("")
+    :'<p class="mini">None — no lease has matured without a renewal.</p>';
+  const feeIn=document.getElementById("ldFee");
+  if(document.activeElement!==feeIn) feeIn.value=SETTINGS.ladderAvgFee||"";
+  document.getElementById("ladderStamp").textContent="Generated "+TODAY+" · pipeline "+fmt(pipeline)+" across 36 months";
+}
+
 // ---- boot ----
 let tab="leases";
 function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
@@ -530,7 +605,7 @@ function setTab(t){ tab=t; ["leases","uif","cohorts","ladder"].forEach(x=>
   lsSet("rn_tab",t);
 }
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest(".na-tab"); if(b) setTab(b.dataset.t);});
-function renderAll(){ rebuildBook(); renderLeases(); renderUif(); renderCohorts(); }
+function renderAll(){ rebuildBook(); renderLeases(); renderUif(); renderCohorts(); renderLadder(); }
 const monthName = m => new Date(m+"-01T00:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"});
 let _rafRender=null;
 function scheduleRender(){ if(_rafRender)return; _rafRender=requestAnimationFrame(()=>{ _rafRender=null; renderAll(); }); }
