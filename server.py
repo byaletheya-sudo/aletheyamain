@@ -1103,6 +1103,8 @@ def nova_admins_mutate():
                               ("historyDeals", "hdeal"), ("historyExpenses", "hexpense"), ("dealers", "dealer"), ("leasebook", "lease")):
                 item = body.get(key)
                 if isinstance(item, dict):
+                    if key in ("deal", "hdeal"):
+                        _norm_vehicle(item)          # one canonical vehicle spelling on every write
                     arr = data.setdefault(coll, [])
                     for i, x in enumerate(arr):
                         if x.get("id") == item.get("id"):
@@ -1122,6 +1124,135 @@ def nova_admins_mutate():
                 + [k for k in body if k.startswith("delete")]
             _audit("mutate", what=",".join(changed) or "none")
             return jsonify({"ok": True, "deals": len(data.get("deals", []))})
+    except Exception as e:
+        return jsonify({"error": str(e)[:160]}), 500
+
+
+# ---- vehicle normalization: ONE canonical way to write make/model, applied at every
+# write chokepoint (mutate/save/import/agent ops) + the one-shot /normalize-vehicles
+# migration. Conservative by design: only unambiguous fixes; junk stays for the
+# missing-fields report rather than being guessed at. ----
+_VEH_MAKES = {
+    "mercedes": "Mercedes-Benz", "mercedes benz": "Mercedes-Benz", "mercedes-benz": "Mercedes-Benz",
+    "benz": "Mercedes-Benz", "mb": "Mercedes-Benz",
+    "bmw": "BMW", "bmw?": "BMW", "toyota": "Toyota", "honda": "Honda", "lexus": "Lexus",
+    "kia": "Kia", "hyundai": "Hyundai", "hyundal": "Hyundai", "audi": "Audi", "porsche": "Porsche",
+    "genesis": "Genesis", "subaru": "Subaru", "mazda": "Mazda", "chevrolet": "Chevrolet",
+    "chevy": "Chevrolet", "dodge": "Dodge", "jeep": "Jeep", "land rover": "Land Rover",
+    "range rover": "Land Rover", "volkswagen": "Volkswagen", "vw": "Volkswagen", "nissan": "Nissan",
+    "ford": "Ford", "gmc": "GMC", "cadillac": "Cadillac", "volvo": "Volvo", "acura": "Acura",
+    "infiniti": "Infiniti", "bentley": "Bentley", "maserati": "Maserati", "alfa romeo": "Alfa Romeo",
+    "mini": "MINI", "lincoln": "Lincoln", "ram": "RAM",
+    "landrover": "Land Rover", "range": "Land Rover", "range rover sport": "Land Rover",
+    "jaguar": "Jaguar", "volvo": "Volvo", "hummer": "Hummer", "cadilac": "Cadillac",
+    "cadilaic": "Cadillac", "chrysler": "Chrysler", "buick": "Buick", "tesla": "Tesla",
+    "rivian": "Rivian", "lucid": "Lucid", "polestar": "Polestar", "fiat": "Fiat",
+}
+# a model code typed into the MAKE field implies the real make — rescue it into the model
+_VEH_MODEL_IMPLIES_MAKE = {
+    "c300": "Mercedes-Benz", "c43": "Mercedes-Benz", "c63": "Mercedes-Benz", "63s": "Mercedes-Benz",
+    "e350": "Mercedes-Benz", "s500": "Mercedes-Benz", "s580": "Mercedes-Benz",
+    "glc": "Mercedes-Benz", "gle": "Mercedes-Benz", "glb": "Mercedes-Benz", "gls": "Mercedes-Benz",
+    "gla": "Mercedes-Benz", "cle": "Mercedes-Benz", "cla": "Mercedes-Benz",
+    "eqb": "Mercedes-Benz", "eqe": "Mercedes-Benz", "eqs": "Mercedes-Benz", "maybach": "Mercedes-Benz",
+    "glc300": "Mercedes-Benz", "gle450": "Mercedes-Benz", "glb250": "Mercedes-Benz",
+    "m4": "BMW", "ix": "BMW", "i4": "BMW", "prius": "Toyota", "continental": "Bentley",
+    "g63": "Mercedes-Benz", "g550": "Mercedes-Benz", "m340": "BMW", "m440": "BMW",
+    "m550": "BMW", "x3": "BMW", "x5": "BMW", "x7": "BMW", "camry": "Toyota",
+    "corolla": "Toyota", "tacoma": "Toyota", "tundra": "Toyota", "rav4": "Toyota",
+    "4runner": "Toyota", "cr-v": "Honda", "crv": "Honda", "civic": "Honda",
+    "accord": "Honda", "charger": "Dodge", "wrangler": "Jeep", "elantra": "Hyundai",
+    "tucson": "Hyundai", "palisade": "Hyundai", "ioniq": "Hyundai", "telluride": "Kia",
+}
+# not vehicles at all — wholesale/trade/placeholder junk that should read as "no vehicle"
+_VEH_JUNK = {"wholesale", "whlesale", "wholsale", "trade", "used", "spectrum", "clutch",
+             "n/a", "na", "none", "tbd", "?", "-", "--", "3", "2-26"}
+# Mercedes 3-letter families read best spaced (GLB 250); single-letter classes unspaced
+# (C300) — matches how the majority of the ledger already writes them.
+_VEH_SPACED_RX = re.compile(r"^(GLA|GLB|GLC|GLE|GLS|CLA|CLE|CLS|EQB|EQE|EQS|AMG|SL)\s*-?\s*(\d{2,3})\b", re.I)
+_VEH_TIGHT_RX = re.compile(r"^([CES])\s+(\d{3})\b", re.I)
+_VEH_KEEP_CAPS = {"LE", "SE", "SEL", "XLE", "XSE", "LXS", "EX", "LX", "TRD", "SR5", "AMG", "GT",
+                  "M", "X", "RZ", "IX", "EQB", "EQE", "EQS", "LT", "Z71", "GTS", "S", "AWD", "RWD",
+                  "FWD", "4MATIC", "XDRIVE", "EDRIVE", "PHEV", "EV", "DEMO", "TRX", "SRT", "CRV",
+                  "CX5", "HRV", "SUV", "CT200H"}
+
+
+def _veh_norm_model(model, make):
+    """Canonical model text: strip a redundant leading make, fix family spacing, keep
+    trim codes upper-case, title-case plain words."""
+    s = re.sub(r"\s+", " ", str(model or "")).strip()
+    if not s:
+        return s
+    # strip redundant make words off either end ("Benz GLB250", "EQE Mercedes", "GT Bentley")
+    low = s.lower()
+    for lead in ("mercedes-benz", "mercedes benz", "mercedes", "benz", (make or "").lower()):
+        if not lead:
+            continue
+        if low.startswith(lead + " "):
+            s = s[len(lead) + 1:]
+            low = s.lower()
+        if low.endswith(" " + lead):
+            s = s[:-(len(lead) + 1)]
+            low = s.lower()
+    m = _VEH_SPACED_RX.match(s)
+    if m:
+        s = f"{m.group(1).upper()} {m.group(2)}{s[m.end():]}"
+    m = _VEH_TIGHT_RX.match(s)
+    if m:
+        s = f"{m.group(1).upper()}{m.group(2)}{s[m.end():]}"
+    def word(w):
+        if w.upper() in _VEH_KEEP_CAPS:
+            return "iX" if w.upper() == "IX" else ("CX-5" if w.upper() == "CX5" else ("CT200h" if w.upper() == "CT200H" else w.upper()))
+        if re.fullmatch(r"[a-z]?\d+[a-z]*", w, re.I) and not w[0].isdigit():
+            return w if w[0] in "ix" else w.upper()      # i4/e350 style vs M5/S580 style
+        if w.islower():
+            return w.capitalize()
+        return w
+    return " ".join(word(w) for w in s.split(" "))
+
+
+def _norm_vehicle(d):
+    """Normalize a deal's make/model in place. Returns True when something changed."""
+    mk_raw = re.sub(r"\s+", " ", str(d.get("make") or "")).strip()
+    md_raw = re.sub(r"\s+", " ", str(d.get("model") or "")).strip()
+    mk, md = mk_raw, md_raw
+    key = mk.lower()
+    if key in _VEH_JUNK:
+        # keep the original wording in the model so nothing is lost, clear the bogus make
+        mk, md = "", (mk_raw + (" " + md if md else "")).strip() if md_raw or mk_raw else ""
+        key = ""
+    if key in _VEH_MAKES:
+        mk = _VEH_MAKES[key]
+    elif key in _VEH_MODEL_IMPLIES_MAKE:
+        # the make field holds a model code — rescue it in front of the model
+        mk, md = _VEH_MODEL_IMPLIES_MAKE[key], (mk_raw + (" " + md if md else "")).strip()
+    md = _veh_norm_model(md, mk)
+    changed = (mk != (d.get("make") or "")) or (md != (d.get("model") or ""))
+    d["make"], d["model"] = mk, md
+    return changed
+
+
+@app.route("/nova-admins/normalize-vehicles", methods=["POST"])
+def nova_admins_normalize_vehicles():
+    """One-shot vehicle cleanup across live + historic deals. Idempotent — running it
+    twice changes nothing the second time. Returns a sample of what changed."""
+    try:
+        with _NOVA_LOCK:
+            data = _nova_load()
+            changed, sample = 0, []
+            for coll in ("deals", "historyDeals"):
+                for d in data.get(coll, []):
+                    if not isinstance(d, dict):
+                        continue
+                    before = f"{d.get('make') or ''} {d.get('model') or ''}".strip()
+                    if _norm_vehicle(d):
+                        changed += 1
+                        if len(sample) < 40:
+                            sample.append(f"{before} → {d['make']} {d['model']}".strip())
+            if changed:
+                _nova_write(data)
+            _audit("normalize-vehicles", changed=changed)
+            return jsonify({"ok": True, "changed": changed, "sample": sample})
     except Exception as e:
         return jsonify({"error": str(e)[:160]}), 500
 
@@ -1156,6 +1287,7 @@ def nova_admins_import_history():
         d.setdefault("phone", "")
         d.setdefault("email", "")
         d.setdefault("source", "")
+        _norm_vehicle(d)
     try:
         with _NOVA_LOCK:
             data = _nova_load()
@@ -1512,6 +1644,7 @@ def _nova_apply_actions(store, actions, user=None):
                      "refPaidD": str(data.get("refPaidD") or "")[:10] if data.get("refPaid") else "",
                      "envyColl": False, "envyCollD": "",
                      "notes": data.get("notes") or ""}
+                _norm_vehicle(d)
                 deals.insert(0, d)
                 results.append({"op": op, "ok": True, "id": d["id"], "label": d["client"] or "deal"})
             elif op == "create_expense":
@@ -1570,6 +1703,7 @@ def _nova_apply_actions(store, actions, user=None):
                     for k, v in data.items():
                         if k in _ALLOWED_DEAL:
                             d[k] = v
+                    _norm_vehicle(d)
                     # Keep fee paid-dates coherent (mirrors the UI toggle): a fee marked paid
                     # with no supplied date defaults to today; un-marking clears the date.
                     if "progPaid" in data:
