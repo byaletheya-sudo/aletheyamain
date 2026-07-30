@@ -1283,6 +1283,9 @@ def nova_admins_import_history():
                                      '{"deals": [...], "expenses": [...]} instead.'}), 404
     deals = [d for d in (arc.get("deals") or []) if isinstance(d, dict)]
     expenses = [e for e in (arc.get("expenses") or []) if isinstance(e, dict)]
+    # agents may ride along (the 2025 log introduced agents the live roster lacked).
+    # Additive only — an existing agent's pct config is never overwritten.
+    new_agents = [a for a in (arc.get("agents") or []) if isinstance(a, dict) and a.get("id")]
     for d in deals:  # keys the archive era predates — needed by the contact/channel editors
         d.setdefault("phone", "")
         d.setdefault("email", "")
@@ -1296,6 +1299,10 @@ def nova_admins_import_history():
                                 "historyDeals": len(data["historyDeals"])}), 409
             data["historyDeals"] = deals
             data["historyExpenses"] = expenses
+            have = {a.get("id") for a in data.get("agents", [])}
+            for a in new_agents:
+                if a["id"] not in have:
+                    data.setdefault("agents", []).append(a)
             _nova_write(data)
         _audit("import-history", deals=len(deals), expenses=len(expenses), force=bool(body.get("force")))
         return jsonify({"ok": True, "historyDeals": len(deals), "historyExpenses": len(expenses)})
