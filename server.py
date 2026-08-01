@@ -1564,8 +1564,9 @@ def _norm_assignees(data):
             out.append(a)
     return out
 _ALLOWED_DEAL = {"front", "back", "feeReferral", "feeProgram", "feeEnvy", "pay", "payBack", "lead", "source", "agentId",
-                 "notes", "override", "type", "term", "dealer", "client", "phone", "email",
+                 "notes", "override", "type", "term", "dealer", "client", "phone", "email", "date",
                  "progPaid", "progPaidD", "refPaid", "refPaidD", "envyColl", "envyCollD"}
+_YMD_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # Expense categories in use (matches the imported ledger + dashboard ROAS matcher).
 _EXPENSE_CATS = ("Ad Spend", "Software", "Office", "Developer", "Refunds", "Auto", "Other")
 # Per-confirm action ceiling — big enough for a pasted expense list, small enough to
@@ -1708,7 +1709,11 @@ def _nova_apply_actions(store, actions, user=None):
                     continue
                 if op == "update_deal":
                     for k, v in data.items():
-                        if k in _ALLOWED_DEAL:
+                        if k == "date":
+                            v = str(v or "")[:10]
+                            if _YMD_RX.match(v):      # a bad date would corrupt every rollup
+                                d["date"] = v
+                        elif k in _ALLOWED_DEAL:
                             d[k] = v
                     _norm_vehicle(d)
                     # Keep fee paid-dates coherent (mirrors the UI toggle): a fee marked paid
@@ -1800,7 +1805,7 @@ def nova_admins_agent():
         "If the note says a Program or Referral fee was ALREADY PAID — usually written right next to the fee, e.g. 'Program Fee: $750 (7/19 jason paid)' — set progPaid/refPaid=true and progPaidD/refPaidD to that date (resolve to YYYY-MM-DD). This is money OUT to the dealer/referrer, and is SEPARATE from collecting the deal's front/back money.\n"
         " update_task id=<taskId> data={status|priority|assignees(array)|due|title|notes}\n"
         " complete_task id=<taskId> data={}\n"
-        " update_deal id=<dealId> data={client|phone|email|front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|progPaidD|refPaid|refPaidD|envyColl}"
+        " update_deal id=<dealId> data={date(YYYY-MM-DD close date)|client|phone|email|type|term|dealer|front|back|feeReferral|feeProgram|feeEnvy|pay|payBack|lead|source|agentId|notes|override|progPaid|progPaidD|refPaid|refPaidD|envyColl}"
         " — Envy is a NOVA-ONLY COST: Envy receives the back, keeps 20% (Nova eats it), forwards 80% to Nova; it "
         "reduces Nova's take, never the agent's split. progPaid/refPaid = a shared fee was paid out; set progPaidD/refPaidD "
         "to the pay date (YYYY-MM-DD) when it's known, else it defaults to today.\n"

@@ -695,7 +695,9 @@ function filteredDeals(){
   if(fs==="unpaid") ds=ds.filter(d=>["a","r"].includes(paidStatus(d)));
   if(fs==="done") ds=ds.filter(d=>collStatus(d)==="g" && paidStatus(d)==="g");
   if(q) ds=ds.filter(d=>(`${d.client} ${d.vin} ${d.year} ${d.make} ${d.model} ${d.dealer}`).toLowerCase().includes(q));
-  return ds;
+  // newest first — so a deal you re-date lands where it belongs instead of sitting
+  // wherever it happened to be entered
+  return ds.sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.id-a.id));
 }
 
 // ---- RENDER: KPIs ----
@@ -761,6 +763,7 @@ function detailRow(d){
       <span class="db-tag">Editing this deal</span>
     </div>
     <div class="det-edit-head">
+      <div class="fieldgrp"><span class="lab">Date</span><input class="na-in" type="date" value="${d.date}" onchange="${E}'date',this.value)" title="Close date — drives MTD/YTD, the lease maturity and the Envy rule"></div>
       <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${d.client}" onchange="${E}'client',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Phone</span><input class="na-in" type="tel" style="width:132px" placeholder="—" value="${d.phone||''}" onchange="${E}'phone',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Email</span><input class="na-in" type="email" style="width:196px" placeholder="—" value="${d.email||''}" onchange="${E}'email',this.value)"></div>
@@ -822,6 +825,20 @@ function detailRow(d){
 const TODAY=CUR_MONTH+"-"+_pad(NOW.getDate());
 function edit(id, field, val, numeric){
   const d=DEALS.find(x=>x.id===id); if(!d)return;
+  // Close date: the one field every other number hangs off (period totals, lease
+  // maturity, the pre/post-July Envy rule). Reject junk rather than corrupt the row,
+  // and if the new date falls outside the current period, widen to All time so the
+  // deal you just edited doesn't vanish from under you.
+  if(field==='date'){
+    const v=String(val||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ renderLedger(); return; }
+    d.date=v;
+    if(!inPeriod(d)){
+      range=presetRange('all'); document.getElementById('periodLabel').textContent=range.label; lsSet('na_range','all');
+      lgReset();
+    }
+    scheduleRender(); saveDeal(id); return;
+  }
   if(field==='override'){ const n=parseFloat(val); d.override=(val===''||val==null||isNaN(n))?null:n; }
   else if(field==='feeEnvy'){ const n=parseFloat(val); d.feeEnvy=(val===''||val==null||isNaN(n))?'':n; }  // blank = auto 20% of back
   else { if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; } d[field]=val; }
@@ -1018,6 +1035,7 @@ function hdDetailRow(d){
       <span class="db-tag">Historic deal · pre-July 2026</span>
     </div>
     <div class="det-edit-head">
+      <div class="fieldgrp"><span class="lab">Date</span><input class="na-in" type="date" value="${d.date||''}" onchange="${E}'date',this.value)" title="Close date — drives the lease maturity and cohort month"></div>
       <div class="fieldgrp"><span class="lab">Client</span><input class="na-in" style="width:150px" value="${esc(d.client)}" onchange="${E}'client',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Phone</span><input class="na-in" type="tel" style="width:132px" placeholder="—" value="${esc(d.phone||'')}" onchange="${E}'phone',this.value)"></div>
       <div class="fieldgrp"><span class="lab">Email</span><input class="na-in" type="email" style="width:196px" placeholder="—" value="${esc(d.email||'')}" onchange="${E}'email',this.value)"></div>
@@ -1040,7 +1058,12 @@ function hdDetailRow(d){
 }
 function hdEdit(id, field, val, numeric){
   const d=HDEALS.find(x=>x.id===id); if(!d)return;
-  if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; }
+  if(field==='date'){
+    const v=String(val||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ renderHist(); return; }   // never blank out the date
+    val=v;
+  }
+  else if(numeric){ const n=parseFloat(val); val=isNaN(n)?0:n; }
   d[field]=val;
   scheduleRender(); saveRow({hdeal:d});
 }
