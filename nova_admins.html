@@ -384,6 +384,7 @@
           <button class="pp-opt" data-k="today">Today</button>
           <button class="pp-opt" data-k="week">This week</button>
           <button class="pp-opt" data-k="month">This month</button>
+          <button class="pp-opt" data-k="lastmonth">Last month</button>
           <button class="pp-opt" data-k="30">Last 30 days</button>
           <button class="pp-opt" data-k="90">Last 90 days</button>
           <button class="pp-opt" data-k="quarter">This quarter</button>
@@ -661,6 +662,10 @@ function presetRange(k){
   if(k==="today"){from=ymd(t);label="Today";}
   else if(k==="week"){const x=new Date(t);x.setDate(x.getDate()-((x.getDay()+6)%7));from=ymd(x);label="This week";}
   else if(k==="month"){from=ymd(new Date(t.getFullYear(),t.getMonth(),1));label="This month";}
+  // last month = the whole prior calendar month (day 0 of this month = its last day),
+  // so closing out a month doesn't drag today's deals in
+  else if(k==="lastmonth"){from=ymd(new Date(t.getFullYear(),t.getMonth()-1,1));
+    to=ymd(new Date(t.getFullYear(),t.getMonth(),0));label="Last month";}
   else if(k==="30"){const x=new Date(t);x.setDate(x.getDate()-29);from=ymd(x);label="Last 30 days";}
   else if(k==="90"){const x=new Date(t);x.setDate(x.getDate()-89);from=ymd(x);label="Last 90 days";}
   else if(k==="quarter"){const q=Math.floor(t.getMonth()/3)*3;from=ymd(new Date(t.getFullYear(),q,1));label="This quarter";}
@@ -671,7 +676,7 @@ function presetRange(k){
 // Period persistence: we store the PRESET KEY (e.g. "month") and recompute it against
 // TODAY on every load — so "This month" always means the real current month and a deal
 // dated today never falls outside a frozen range. Genuine custom ranges stay absolute.
-const _PRESET_LABELS={"Today":"today","This week":"week","This month":"month","Last 30 days":"30","Last 90 days":"90","This quarter":"quarter","Year to date":"ytd","All time":"all"};
+const _PRESET_LABELS={"Today":"today","This week":"week","This month":"month","Last month":"lastmonth","Last 30 days":"30","Last 90 days":"90","This quarter":"quarter","Year to date":"ytd","All time":"all"};
 let range=presetRange("month");
 try{
   const _sr=lsGet("na_range");
