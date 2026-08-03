@@ -25,10 +25,35 @@ from html import unescape as _html_unescape
 app = Flask(__name__)
 
 # Session signing key. NEVER hardcode a real one — this repo is public, and a known
-# key lets anyone forge a "logged-in" cookie and skip the password entirely. Use the
-# SECRET_KEY env var in production; otherwise fall back to a random per-process key
-# (sessions simply won't survive a restart, which just means logging in again).
-app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+# key lets anyone forge a "logged-in" cookie and skip the password entirely.
+# Order: SECRET_KEY env var (best) → a key persisted next to the data store → random.
+# The file fallback exists so a deploy/restart doesn't rotate the key and sign
+# everyone out; it lives in gitignored generated/, so it never reaches the repo.
+def _secret_key():
+    env = os.environ.get("SECRET_KEY")
+    if env:
+        return env
+    # BASE_DIR isn't defined this early in the module — derive the path from __file__
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated", ".secret_key")
+    try:
+        with open(path, encoding="utf-8") as f:
+            k = f.read().strip()
+        if len(k) >= 32:
+            return k
+    except OSError:
+        pass
+    k = secrets.token_hex(32)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(k)
+        os.chmod(path, 0o600)
+    except OSError:
+        pass          # read-only FS: fall back to per-process (sessions won't survive a restart)
+    return k
+
+
+app.secret_key = _secret_key()
 
 # Harden the session cookie.
 app.config.update(
@@ -78,7 +103,7 @@ if NOVA_ADMIN_TOKEN and len(NOVA_ADMIN_TOKEN) < 20:
 # each login is stamped with the current process's boot id, and when the server restarts
 # that id changes so stale sessions are dropped. Explicit Lock/logout still signs out.
 SERVER_BOOT_ID = secrets.token_hex(8)
-app.permanent_session_lifetime = timedelta(days=30)   # persisted-cookie lifetime (survives browser restarts)
+app.permanent_session_lifetime = timedelta(days=365)  # stay signed in; Flask re-issues the cookie on every request
 
 # Stricter throttle for the admin gate than the general site login.
 _ADMIN_MAX = 5
@@ -400,7 +425,10 @@ def unlock():
 
 # Paths anyone can reach without logging in: the public byAletheya home page,
 # the login screen, the brand asset the home page shows, and public event pages.
-PUBLIC_PATHS = ("/", "/login", "/logo.png", "/odyssey")
+# /logout is here so signing out ALWAYS works — gating it meant someone signed into
+# Nova Admins but not the main workspace got bounced to a login screen instead of
+# being signed out.
+PUBLIC_PATHS = ("/", "/login", "/logout", "/logo.png", "/odyssey")
 
 @app.before_request
 def require_login():
@@ -428,22 +456,18 @@ def require_login():
                 _audit("token_write", path=p)
             return None
         if session.get("admin_ok"):
-            # Signed in for as long as this server process is up — no idle/absolute time-out.
-            # A restart rotates SERVER_BOOT_ID, so a session stamped by an older process is
-            # dropped here (the only automatic sign-out). Explicit Lock/logout still works.
-            if session.get("admin_boot") != SERVER_BOOT_ID:
-                session.pop("admin_ok", None)      # server was refreshed -> re-login
-                _audit("admin_session_expired", reason="server_refresh")
-            else:
-                # cross-site write protection: browser writes must come from us
-                if request.method != "GET":
-                    origin = request.headers.get("Origin", "")
-                    if origin:
-                        from urllib.parse import urlsplit
-                        if urlsplit(origin).netloc != request.host:
-                            _audit("blocked_cross_origin", path=p, origin=origin)
-                            return jsonify({"error": "Cross-origin request blocked."}), 403
-                return None
+            # Stay signed in: no idle time-out, and deploys/restarts no longer sign you
+            # out (a stable secret key + no boot-id check). The cookie lasts a year and
+            # refreshes on every request. Signing out is deliberate — the Lock button.
+            # cross-site write protection: browser writes must come from us
+            if request.method != "GET":
+                origin = request.headers.get("Origin", "")
+                if origin:
+                    from urllib.parse import urlsplit
+                    if urlsplit(origin).netloc != request.host:
+                        _audit("blocked_cross_origin", path=p, origin=origin)
+                        return jsonify({"error": "Cross-origin request blocked."}), 403
+            return None
         if request.method == "GET":
             return redirect("/nova-admins-login")
         _audit("unauthorized_write", path=p)
