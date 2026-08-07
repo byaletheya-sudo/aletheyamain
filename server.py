@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect
+from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect, Response
 from openai import OpenAI
 import base64
 import calendar
@@ -836,6 +836,326 @@ def nova_admins_renewals_page():
 def nova_admins_dealers_page():
     """Tool 5: the dealer contract registry — which relationships are papered."""
     return _nova_admin_serve("nova_dealers.html")
+
+
+# ---------------------------------------------------------------------------
+# Nova Admins · Tool 6: CLIENT SHEETS
+# Paste a dealer listing URL -> render past bot-walls (ScraperAPI when a key is
+# set in SCRAPER_API_KEY, else a plain browser fetch that works on unprotected
+# sites) -> extract the vehicle (JSON-LD + OG image + an LLM pass over the page
+# text) with ALL dealer identity stripped -> a clean, Nova-branded client PDF.
+# Everything is editable in the UI before generating, so partial extraction is fine.
+# ---------------------------------------------------------------------------
+import re as _re
+SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "").strip()
+_SHEET_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/122.0 Safari/537.36")
+
+
+def _sheet_render(url):
+    """Rendered HTML of a listing. ScraperAPI (JS render + bot bypass) when a key
+    is configured; otherwise a plain browser-UA GET (fine for unprotected sites)."""
+    if SCRAPER_API_KEY:
+        api = "https://api.scraperapi.com/?" + urllib.parse.urlencode(
+            {"api_key": SCRAPER_API_KEY, "url": url, "render": "true"})
+        req = urllib.request.Request(api, headers={"User-Agent": _SHEET_UA})
+        with urllib.request.urlopen(req, timeout=75) as r:
+            return r.read().decode("utf-8", "replace"), "render"
+    req = urllib.request.Request(url, headers={"User-Agent": _SHEET_UA, "Accept": "text/html"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8", "replace"), "plain"
+
+
+def _sheet_jsonld(html):
+    nodes = []
+    for m in _re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', html, _re.S | _re.I):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        stack = [data]
+        while stack:
+            n = stack.pop()
+            if isinstance(n, list):
+                stack.extend(n)
+            elif isinstance(n, dict):
+                nodes.append(n)
+                stack.extend(n.values())
+    return nodes
+
+
+def _sheet_meta(html, prop):
+    m = _re.search(r'<meta[^>]+(?:property|name)=["\']%s["\'][^>]+content=["\'](.*?)["\']' % _re.escape(prop), html, _re.I)
+    if not m:
+        m = _re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]+(?:property|name)=["\']%s["\']' % _re.escape(prop), html, _re.I)
+    return (m.group(1) if m else "").strip()
+
+
+def _sheet_text(html):
+    t = _re.sub(r'(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>', ' ', html)
+    t = _re.sub(r'(?s)<[^>]+>', ' ', t)
+    for a, b in (("&amp;", "&"), ("&nbsp;", " "), ("&#39;", "'"), ("&quot;", '"'), ("&lt;", "<"), ("&gt;", ">")):
+        t = t.replace(a, b)
+    return _re.sub(r'\s+', ' ', t).strip()
+
+
+def _sheet_images(html):
+    urls = []
+    for pat in (r'https?://[^\s"\'<>]+?images\.dealer\.com/ddc/vehicles/[^\s"\'<>]+?\.(?:jpg|jpeg|png)',
+                r'https?://pictures\.dealer\.com/[^\s"\'<>]+?\.(?:jpg|jpeg|png)'):
+        for m in _re.finditer(pat, html, _re.I):
+            urls.append(m.group(0))
+    seen, out = set(), []
+    for u in urls:
+        base = u.split('?')[0]
+        if base not in seen:
+            seen.add(base)
+            out.append(base)
+    return out[:12]
+
+
+_SHEET_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["year", "make", "model", "trim", "condition", "mileage", "exterior", "interior",
+                 "engine", "horsepower", "torque", "transmission", "drivetrain", "mpg_city", "mpg_hwy",
+                 "seating", "highlights"],
+    "properties": {
+        "year": {"type": "string"}, "make": {"type": "string"}, "model": {"type": "string"}, "trim": {"type": "string"},
+        "condition": {"type": "string"}, "mileage": {"type": "string"}, "exterior": {"type": "string"}, "interior": {"type": "string"},
+        "engine": {"type": "string"}, "horsepower": {"type": "string"}, "torque": {"type": "string"},
+        "transmission": {"type": "string"}, "drivetrain": {"type": "string"},
+        "mpg_city": {"type": "string"}, "mpg_hwy": {"type": "string"}, "seating": {"type": "string"},
+        "highlights": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
+def _sheet_llm(text, ld_hint):
+    if not API_KEY or API_KEY == "sk-your-key-here":
+        return {}
+    sys = ("You extract ONE vehicle's details from a car listing for a clean, client-facing spec sheet. "
+           "Output STRICT JSON for the schema. HARD RULES: (1) NEVER invent — if a field isn't clearly "
+           "stated, return '' (or [] for highlights). (2) Strip ALL dealer identity: no dealer name, city, "
+           "phone, stock number, VIN, or dealer-specific pricing/fees anywhere. (3) mileage like '12' -> "
+           "'12 mi'. (4) highlights = up to 8 marquee features as short, client-friendly labels (e.g. "
+           "'360° Surround View Camera', 'Panoramic Moonroof', 'Apple CarPlay & Android Auto') — only "
+           "features actually present. (5) trim = the trim only (e.g. 'Dynamic SE'). Use natural units "
+           "(hp, lb-ft, mpg).")
+    user = "JSON-LD hint:\n" + json.dumps(ld_hint)[:1500] + "\n\nLISTING TEXT:\n" + text[:14000]
+    try:
+        client = _oai()
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
+            response_format={"type": "json_schema", "json_schema": {"name": "vehicle", "strict": True, "schema": _SHEET_SCHEMA}})
+        return json.loads(resp.choices[0].message.content)
+    except Exception:
+        return {}
+
+
+def _sheet_extract(html):
+    nodes = _sheet_jsonld(html)
+    veh = next((n for n in nodes if _re.search('car|vehicle', str(n.get('@type', '')), _re.I)), {}) or {}
+
+    def g(k, d=""):
+        v = veh.get(k)
+        return v if isinstance(v, (str, int, float)) else d
+    brand = veh.get("brand")
+    ld = {
+        "name": g("name"),
+        "brand": (brand.get("name") if isinstance(brand, dict) else (brand if isinstance(brand, str) else "")),
+        "model": g("model"), "year": str(g("vehicleModelDate") or g("modelDate") or ""),
+        "color": g("color"), "interior": g("vehicleInteriorColor"),
+        "mileage": str((veh.get("mileageFromOdometer") or {}).get("value") if isinstance(veh.get("mileageFromOdometer"), dict) else g("mileageFromOdometer")),
+        "condition": "New" if "new" in str(g("itemCondition")).lower() else ("Used" if g("itemCondition") else ""),
+    }
+    llm = _sheet_llm(_sheet_text(html), ld)
+
+    def pick(*vals):
+        for v in vals:
+            if v:
+                return str(v)
+        return ""
+    year = pick(llm.get("year"), ld["year"])
+    make = pick(llm.get("make"), ld["brand"])
+    model = pick(llm.get("model"), ld["model"])
+    cond = pick(llm.get("condition"), ld["condition"]) or "New"
+    mileage = pick(llm.get("mileage"), (ld["mileage"] + " mi") if ld["mileage"] else "")
+    images = _sheet_images(html)
+    ogimg = _sheet_meta(html, "og:image")
+    if ogimg:
+        base = ogimg.split('?')[0]
+        images = [base] + [u for u in images if u != base]
+    specs = []
+    for lab, key in (("Engine", "engine"), ("Horsepower", "horsepower"), ("Torque", "torque"),
+                     ("Transmission", "transmission"), ("Drivetrain", "drivetrain"), ("Seating", "seating")):
+        if llm.get(key):
+            specs.append([lab, llm[key]])
+    if llm.get("mpg_city") and llm.get("mpg_hwy"):
+        specs.append(["Fuel Economy", "%s City / %s Hwy mpg" % (llm["mpg_city"], llm["mpg_hwy"])])
+    return {
+        "eyebrow": "  ·  ".join([x for x in [year, (make or "").upper(), cond.upper()] if x]),
+        "title": model or ld["name"] or "Vehicle",
+        "subtitle": pick(llm.get("trim")),
+        "price": "",
+        "facts": [["CONDITION", cond], ["MILEAGE", mileage],
+                  ["EXTERIOR", pick(llm.get("exterior"), ld["color"])],
+                  ["INTERIOR", pick(llm.get("interior"), ld["interior"])]],
+        "specs": specs,
+        "highlights": [h for h in (llm.get("highlights") or []) if h][:8],
+        "images": images,
+    }
+
+
+def _sheet_fetch_image(url):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _SHEET_UA})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            raw = r.read()
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw))
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        else:
+            im = im.convert("RGB")
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=90)
+        out.seek(0)
+        return out
+    except Exception:
+        return None
+
+
+def _sheet_pdf_bytes(vehicles, include_photos):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.colors import HexColor, white
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.utils import ImageReader
+    buf = io.BytesIO()
+    W, H = letter
+    INK = HexColor("#0F1216"); BLUE = HexColor("#3A8EEF"); GRAY = HexColor("#6B7280")
+    DGRAY = HexColor("#2A2F36"); LINE = HexColor("#E5E8EC"); SOFT = HexColor("#F5F6F8")
+    c = _canvas.Canvas(buf, pagesize=letter); M = 46
+    logo_path = os.path.join(BASE_DIR, "logo.png")
+
+    def track(x, y, txt, font, size, color, ch=0, align='l'):
+        txt = str(txt or "")
+        w = c.stringWidth(txt, font, size) + ch * max(0, len(txt) - 1)
+        if align == 'r':
+            x -= w
+        elif align == 'c':
+            x -= w / 2
+        t = c.beginText(x, y); t.setFont(font, size); t.setFillColor(color)
+        if ch:
+            t.setCharSpace(ch)
+        t.textOut(txt); c.drawText(t)
+
+    for d in (vehicles or []):
+        c.setFillColor(INK); c.rect(0, H - 92, W, 92, fill=1, stroke=0)
+        try:
+            lg = ImageReader(logo_path); lw, lh = lg.getSize(); LH = 30; LW = LH * lw / lh
+            c.drawImage(lg, M, H - 92 + (92 - LH) / 2, LW, LH, mask='auto', preserveAspectRatio=True)
+        except Exception:
+            pass
+        track(W - M, H - 50, "VEHICLE PRESENTATION", "Helvetica", 8, BLUE, 3, 'r')
+        c.setFillColor(BLUE); c.rect(0, H - 94, W, 2, fill=1, stroke=0)
+        iy = H - 94 - 20
+        photo = _sheet_fetch_image(d.get("photo")) if (include_photos and d.get("photo")) else None
+        if photo:
+            try:
+                img = ImageReader(photo); iw, ih = img.getSize(); dw = 360; dh = dw * ih / iw
+                ix = (W - dw) / 2; iy = H - 94 - 20 - dh
+                c.setFillColor(SOFT); c.roundRect(ix - 12, iy - 12, dw + 24, dh + 24, 9, fill=1, stroke=0)
+                c.drawImage(img, ix, iy, dw, dh, preserveAspectRatio=True, anchor='c')
+            except Exception:
+                iy = H - 94 - 20
+        ty = iy - 30
+        track(M, ty, d.get("eyebrow", ""), "Helvetica-Bold", 8.5, BLUE, 2)
+        c.setFillColor(INK); c.setFont("Helvetica-Bold", 25); c.drawString(M, ty - 27, str(d.get("title", "")))
+        c.setFillColor(GRAY); c.setFont("Helvetica", 12.5); c.drawString(M, ty - 44, str(d.get("subtitle", "")))
+        if d.get("price"):
+            track(W - M, ty - 2, "PRICE", "Helvetica", 8, GRAY, 2, 'r')
+            c.setFillColor(INK); c.setFont("Helvetica-Bold", 22); c.drawRightString(W - M, ty - 27, str(d["price"]))
+        dy = ty - 60
+        c.setStrokeColor(LINE); c.setLineWidth(1); c.line(M, dy, W - M, dy)
+        facts = [f for f in (d.get("facts") or []) if f and len(f) == 2 and f[1]]
+        fy = dy - 22; colw = (W - 2 * M) / max(1, len(facts))
+        for i, (k, v) in enumerate(facts):
+            x = M + i * colw
+            track(x, fy, k, "Helvetica", 7, GRAY, 1.5)
+            c.setFillColor(INK); c.setFont("Helvetica-Bold", 11); c.drawString(x, fy - 15, str(v))
+        sy = fy - 42
+        track(M, sy, "SPECIFICATIONS", "Helvetica-Bold", 8.5, BLUE, 2)
+        yy = sy - 21
+        for row in (d.get("specs") or [])[:8]:
+            if not (isinstance(row, (list, tuple)) and len(row) == 2 and row[1]):
+                continue
+            c.setFillColor(GRAY); c.setFont("Helvetica", 9); c.drawString(M, yy, str(row[0]))
+            c.setFillColor(INK); c.setFont("Helvetica-Bold", 9.5); c.drawRightString(M + 226, yy, str(row[1]))
+            c.setStrokeColor(LINE); c.setLineWidth(0.5); c.line(M, yy - 7, M + 226, yy - 7)
+            yy -= 20
+        rx = W / 2 + 22
+        track(rx, sy, "HIGHLIGHTS", "Helvetica-Bold", 8.5, BLUE, 2)
+        yy = sy - 20
+        for f in (d.get("highlights") or [])[:8]:
+            if not f:
+                continue
+            c.setFillColor(BLUE); c.circle(rx + 3, yy + 3, 1.5, fill=1, stroke=0)
+            c.setFillColor(DGRAY); c.setFont("Helvetica", 10); c.drawString(rx + 13, yy, str(f))
+            yy -= 20
+        c.setFillColor(INK); c.rect(0, 0, W, 40, fill=1, stroke=0)
+        track(M, 15, "NOVAUTOUSA.COM", "Helvetica-Bold", 8.5, white, 2)
+        track(M + 128, 15, "@NOVAUTOUSA", "Helvetica", 8.5, BLUE, 2)
+        c.setFillColor(HexColor("#8A9098")); c.setFont("Helvetica", 7.5)
+        c.drawRightString(W - M, 15, "Prepared " + time.strftime("%b %d, %Y"))
+        c.showPage()
+    c.save(); buf.seek(0)
+    return buf.read()
+
+
+@app.route("/nova-admins/sheets")
+def nova_admins_sheets_page():
+    """Tool 6: paste a listing link -> clean Nova client PDF."""
+    return _nova_admin_serve("nova_sheets.html")
+
+
+@app.route("/nova-admins/sheet/fetch", methods=["POST"])
+def nova_sheet_fetch():
+    url = ((request.json or {}).get("url") or "").strip()
+    if not url.startswith("http"):
+        return jsonify({"error": "Paste a full listing URL (https://…)."}), 400
+    try:
+        html, method = _sheet_render(url)
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403, 429):
+            return jsonify({"error": "The dealer site blocked the fetch (bot protection). Set SCRAPER_API_KEY in Railway to get through, then try again.", "blocked": True}), 502
+        return jsonify({"error": "Couldn't load that page (HTTP %s)." % e.code}), 502
+    except Exception as e:
+        return jsonify({"error": "Couldn't reach that page — check the URL. (%s)" % str(e)[:90]}), 502
+    data = _sheet_extract(html)
+    data["method"] = method
+    _audit("sheet_fetch", url=url[:120], method=method)
+    return jsonify(data)
+
+
+@app.route("/nova-admins/sheet/pdf", methods=["POST"])
+def nova_sheet_pdf():
+    body = request.json or {}
+    vehicles = body.get("vehicles") or []
+    if not vehicles:
+        return jsonify({"error": "Nothing to generate — fetch a listing first."}), 400
+    try:
+        pdf = _sheet_pdf_bytes(vehicles, bool(body.get("includePhotos", True)))
+    except Exception as e:
+        return jsonify({"error": "PDF build failed: %s" % str(e)[:120]}), 500
+    base = "Nova_%s_%s" % (vehicles[0].get("title", "Vehicle"), vehicles[0].get("subtitle", ""))
+    fn = (_re.sub(r'[^A-Za-z0-9]+', '_', base).strip('_') or "Nova_Vehicle_Sheet")[:60]
+    _audit("sheet_pdf", n=len(vehicles))
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="%s.pdf"' % fn})
 
 
 @app.route("/nova-admins/parse-task", methods=["POST"])

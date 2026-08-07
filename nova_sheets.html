@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Admins — Client Sheets</title>
+<link rel="stylesheet" href="/nova-admins/common.css">
+<script src="/nova-admins/common.js"></script>
+<style>
+  :root{
+    --na-bg:#0c0d11; --na-panel:#15171e; --na-panel-2:#1b1e27; --na-line:rgba(255,255,255,.07);
+    --na-line-2:rgba(255,255,255,.12); --na-fg:#e8eaf0; --na-muted:#8b909e; --na-muted-2:#646a78;
+    --na-blue:#3a8eef; --na-purple:#8a5cf0; --na-green:#34d399; --na-red:#f87171; --na-amber:#fbbf24;
+    --na-mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  .na-app{max-width:1080px;margin:0 auto;padding:26px 22px 80px;}
+  .sh-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--na-panel);border:1px solid var(--na-line);border-radius:14px;padding:14px 16px;margin:6px 0 20px;}
+  .sh-bar input.url{flex:1;min-width:260px;}
+  .na-in{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:9px;color:var(--na-fg);padding:9px 11px;font-size:13.5px;font-family:inherit;}
+  .na-in:focus{outline:none;border-color:var(--na-blue);}
+  .na-btn{background:var(--na-panel-2);border:1px solid var(--na-line);border-radius:9px;color:var(--na-fg);padding:9px 14px;font-size:13px;font-weight:650;cursor:pointer;}
+  .na-btn:hover{border-color:var(--na-line-2);}
+  .na-btn.pri{background:var(--na-blue);border-color:var(--na-blue);color:#04101f;}
+  .na-btn.ghost{background:transparent;}
+  .na-btn:disabled{opacity:.5;cursor:default;}
+  .tog{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--na-muted);cursor:pointer;user-select:none;}
+  .tog .box{width:34px;height:20px;border-radius:20px;background:var(--na-panel-2);border:1px solid var(--na-line);position:relative;transition:.15s;}
+  .tog .box::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--na-muted);transition:.15s;}
+  .tog.on .box{background:rgba(58,142,239,.3);border-color:var(--na-blue);}
+  .tog.on .box::after{left:16px;background:var(--na-blue);}
+  .sh-status{font-size:12.5px;color:var(--na-muted);min-height:16px;margin:-8px 2px 14px;}
+  .sh-status.err{color:var(--na-red);}
+  .vcard{background:var(--na-panel);border:1px solid var(--na-line);border-radius:16px;padding:18px 20px;margin-bottom:18px;}
+  .vc-grid{display:grid;grid-template-columns:340px 1fr;gap:22px;}
+  @media(max-width:760px){.vc-grid{grid-template-columns:1fr;}}
+  .vc-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
+  .vc-photos img{width:100%;height:64px;object-fit:contain;background:#fff;border-radius:8px;border:2px solid transparent;cursor:pointer;opacity:.62;}
+  .vc-photos img.sel{border-color:var(--na-blue);opacity:1;}
+  .vc-hero{width:100%;height:200px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:9px;}
+  .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--na-muted-2);font-weight:700;display:block;margin:11px 0 4px;}
+  .fld{width:100%;}
+  .row2{display:flex;gap:8px;}
+  .row2 .fld{flex:1;}
+  .kvrow{display:flex;gap:6px;margin-bottom:5px;align-items:center;}
+  .kvrow .k{width:120px;} .kvrow .v{flex:1;}
+  .kvrow .x{background:transparent;border:none;color:var(--na-muted-2);cursor:pointer;font-size:15px;padding:0 4px;}
+  .kvrow .x:hover{color:var(--na-red);}
+  .mini{font-size:11.5px;color:var(--na-muted);}
+  .add{font-size:11.5px;color:var(--na-blue);cursor:pointer;background:none;border:none;padding:4px 0;font-weight:650;}
+  .vc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  .empty{text-align:center;color:var(--na-muted);padding:60px 20px;border:1px dashed var(--na-line);border-radius:16px;}
+  .suite-nav{display:inline-flex;gap:4px;background:var(--na-panel);border:1px solid var(--na-line);border-radius:11px;padding:3px;margin-top:12px;}
+  .suite-nav a{text-decoration:none;color:var(--na-muted);font-size:12.5px;font-weight:650;padding:6px 13px;border-radius:8px;}
+  .suite-nav a.on{background:var(--na-panel-2);color:var(--na-fg);}
+  .suite-nav a:not(.on):hover{color:var(--na-fg);}
+  .na-eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--na-muted-2);font-weight:700;}
+  .na-eyebrow b{color:var(--na-blue);}
+  .na-title{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:8px 0 0;}
+  .na-title-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+</style>
+</head>
+<body>
+<div class="na-app">
+  <div class="na-eyebrow">NOVA ADMINS · <b>byAletheya</b></div>
+  <div class="na-title-row">
+    <div>
+      <h1 class="na-title">Client Sheets</h1>
+      <nav class="suite-nav">
+        <a href="/nova-admins">Deal Ledger</a>
+        <a href="/nova-admins/renewals">Renewals</a>
+        <a href="/nova-admins/dealers">Dealers</a>
+        <a href="/nova-admins/tasks">Tasks</a>
+        <a href="/nova-admins/notes">Notes</a>
+        <a class="on" href="/nova-admins/sheets">Sheets</a>
+      </nav>
+    </div>
+    <div class="na-right"><a class="na-btn ghost" style="text-decoration:none;font-size:11.5px" href="/logout" title="Sign out">🔒 Lock</a></div>
+  </div>
+
+  <p class="mini" style="margin:2px 0 4px">Paste a dealer listing link → we pull the vehicle, strip the dealer, and build a clean Nova PDF for the client. Everything's editable before you generate.</p>
+
+  <div class="sh-bar">
+    <input class="na-in url" id="urlIn" placeholder="Paste a listing URL — https://…" onkeydown="if(event.key==='Enter')fetchListing()">
+    <button class="na-btn pri" id="fetchBtn" onclick="fetchListing()">Fetch listing</button>
+    <span class="tog on" id="photoTog" onclick="togglePhotos()"><span class="box"></span> Include photos</span>
+    <span style="flex:1"></span>
+    <button class="na-btn" onclick="generate()" id="genBtn" disabled>Generate PDF ↓</button>
+  </div>
+  <div class="sh-status" id="status"></div>
+
+  <div id="cards"></div>
+</div>
+
+<script>/*NOVA_SEED*/</script>
+<script>
+let VEHICLES = [];
+let INCLUDE_PHOTOS = true;
+const E = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+
+function setStatus(msg, err){ const s=document.getElementById("status"); s.textContent=msg||""; s.className="sh-status"+(err?" err":""); }
+function togglePhotos(){ INCLUDE_PHOTOS=!INCLUDE_PHOTOS; document.getElementById("photoTog").classList.toggle("on",INCLUDE_PHOTOS); render(); }
+
+async function fetchListing(){
+  const inp=document.getElementById("urlIn"), url=inp.value.trim();
+  if(!/^https?:\/\//.test(url)){ setStatus("Paste a full listing URL (https://…).", true); return; }
+  const btn=document.getElementById("fetchBtn"); btn.disabled=true; btn.textContent="Fetching…"; setStatus("Reading the listing…");
+  try{
+    const res=await fetch("/nova-admins/sheet/fetch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
+    const data=await res.json();
+    if(!res.ok){ setStatus(data.error||"Couldn't fetch that listing.", true); return; }
+    const v=normalize(data); VEHICLES.push(v); inp.value="";
+    setStatus(v.specs.length||v.highlights.length ? "" : "Loaded — thin on specs, fill in what's missing below.");
+  }catch(e){ setStatus("Network error — try again.", true); }
+  finally{ btn.disabled=false; btn.textContent="Fetch listing"; render(); }
+}
+function normalize(d){
+  return {
+    eyebrow:d.eyebrow||"", title:d.title||"", subtitle:d.subtitle||"", price:d.price||"",
+    facts:(d.facts&&d.facts.length?d.facts:[["CONDITION",""],["MILEAGE",""],["EXTERIOR",""],["INTERIOR",""]]),
+    specs:d.specs||[], highlights:d.highlights||[],
+    images:d.images||[], photo:(d.images&&d.images[0])||""
+  };
+}
+function delVehicle(vi){ VEHICLES.splice(vi,1); render(); }
+function selectPhoto(vi,url){ VEHICLES[vi].photo=(VEHICLES[vi].photo===url?"":url); render(); }
+function setF(vi,f,val){ VEHICLES[vi][f]=val; }
+function setFact(vi,fi,val){ VEHICLES[vi].facts[fi][1]=val; }
+function setSpec(vi,si,w,val){ VEHICLES[vi].specs[si][w]=val; }
+function addSpec(vi){ VEHICLES[vi].specs.push(["",""]); render(); }
+function delSpec(vi,si){ VEHICLES[vi].specs.splice(si,1); render(); }
+function setHl(vi,hi,val){ VEHICLES[vi].highlights[hi]=val; }
+function addHl(vi){ VEHICLES[vi].highlights.push(""); render(); }
+function delHl(vi,hi){ VEHICLES[vi].highlights.splice(hi,1); render(); }
+function addAnother(){ document.getElementById("urlIn").focus(); document.getElementById("urlIn").scrollIntoView({block:"center"}); }
+
+function render(){
+  document.getElementById("genBtn").disabled = VEHICLES.length===0;
+  const el=document.getElementById("cards");
+  if(!VEHICLES.length){ el.innerHTML=`<div class="empty">No vehicles yet — paste a listing link above to start.</div>`; return; }
+  el.innerHTML = VEHICLES.map((v,vi)=>{
+    const photos = INCLUDE_PHOTOS ? `
+      ${v.photo?`<img class="vc-hero" src="${E(v.photo)}" alt="">`:``}
+      <div class="vc-photos">${(v.images||[]).map(u=>`<img class="${v.photo===u?'sel':''}" src="${E(u)}" onclick="selectPhoto(${vi},'${E(u)}')" alt="">`).join("")||'<span class="mini">No photos found on the page.</span>'}</div>
+      <div class="mini" style="margin-top:6px">Tap a photo to include it (tap again to drop). Only clean ones — skip any with a dealer watermark.</div>`
+      : `<div class="mini">Photos are off for this sheet.</div>`;
+    const specs = v.specs.map((s,si)=>`<div class="kvrow">
+        <input class="na-in k" value="${E(s[0])}" placeholder="Label" oninput="setSpec(${vi},${si},0,this.value)">
+        <input class="na-in v" value="${E(s[1])}" placeholder="Value" oninput="setSpec(${vi},${si},1,this.value)">
+        <button class="x" onclick="delSpec(${vi},${si})" title="Remove">✕</button></div>`).join("");
+    const hls = v.highlights.map((h,hi)=>`<div class="kvrow">
+        <input class="na-in" style="flex:1" value="${E(h)}" placeholder="Highlight" oninput="setHl(${vi},${hi},this.value)">
+        <button class="x" onclick="delHl(${vi},${hi})" title="Remove">✕</button></div>`).join("");
+    return `<div class="vcard">
+      <div class="vc-head"><span class="mini">Vehicle ${vi+1}</span><button class="na-btn ghost" style="font-size:11.5px;color:var(--na-red)" onclick="delVehicle(${vi})">Remove</button></div>
+      <div class="vc-grid">
+        <div>${photos}</div>
+        <div>
+          <span class="lab">Eyebrow</span><input class="na-in fld" value="${E(v.eyebrow)}" placeholder="2026 · LAND ROVER · NEW" oninput="setF(${vi},'eyebrow',this.value)">
+          <div class="row2"><div class="fld"><span class="lab">Model</span><input class="na-in fld" value="${E(v.title)}" oninput="setF(${vi},'title',this.value)"></div>
+            <div class="fld"><span class="lab">Trim</span><input class="na-in fld" value="${E(v.subtitle)}" oninput="setF(${vi},'subtitle',this.value)"></div></div>
+          <span class="lab">Price <span class="mini" style="text-transform:none;letter-spacing:0;font-weight:400">— optional, blank = hidden</span></span>
+          <input class="na-in fld" value="${E(v.price)}" placeholder="(leave blank to hide)" oninput="setF(${vi},'price',this.value)">
+          <span class="lab">Key facts</span>
+          ${v.facts.map((f,fi)=>`<div class="kvrow"><input class="na-in k" value="${E(f[0])}" disabled><input class="na-in v" value="${E(f[1])}" placeholder="—" oninput="setFact(${vi},${fi},this.value)"></div>`).join("")}
+          <span class="lab">Specifications</span>${specs}<button class="add" onclick="addSpec(${vi})">+ add spec</button>
+          <span class="lab">Highlights</span>${hls}<button class="add" onclick="addHl(${vi})">+ add highlight</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("") + `<button class="na-btn" onclick="addAnother()">+ Add another vehicle</button>`;
+}
+
+async function generate(){
+  if(!VEHICLES.length) return;
+  const btn=document.getElementById("genBtn"); btn.disabled=true; btn.textContent="Building…"; setStatus("Generating PDF…");
+  try{
+    const res=await fetch("/nova-admins/sheet/pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({vehicles:VEHICLES,includePhotos:INCLUDE_PHOTOS})});
+    if(!res.ok){ const e=await res.json().catch(()=>({})); setStatus(e.error||"PDF build failed.", true); return; }
+    const blob=await res.blob(), a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=((VEHICLES[0].title||"Nova_Sheet")+"_"+(VEHICLES[0].subtitle||"")).trim().replace(/[^A-Za-z0-9]+/g,"_").replace(/_+$/,"")+".pdf";
+    document.body.appendChild(a); a.click(); a.remove(); setStatus("Downloaded ✓");
+  }catch(e){ setStatus("Network error building the PDF.", true); }
+  finally{ btn.disabled=false; btn.textContent="Generate PDF ↓"; }
+}
+render();
+</script>
+</body>
+</html>
