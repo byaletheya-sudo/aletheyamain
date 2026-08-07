@@ -78,13 +78,15 @@
     <div class="na-right"><a class="na-btn ghost" style="text-decoration:none;font-size:11.5px" href="/logout" title="Sign out">🔒 Lock</a></div>
   </div>
 
-  <p class="mini" style="margin:2px 0 4px">Paste a dealer listing link → we pull the vehicle, strip the dealer, and build a clean Nova PDF for the client. Everything's editable before you generate.</p>
+  <p class="mini" style="margin:2px 0 4px">Paste a dealer listing link → we pull the vehicle, strip the dealer, and build a clean Nova PDF for the client. Everything's editable before you generate — and your queue auto-saves, so a refresh won't lose it.</p>
 
   <div class="sh-bar">
     <input class="na-in url" id="urlIn" placeholder="Paste a listing URL — https://…" onkeydown="if(event.key==='Enter')fetchListing()">
     <button class="na-btn pri" id="fetchBtn" onclick="fetchListing()">Fetch listing</button>
     <span class="tog on" id="photoTog" onclick="togglePhotos()"><span class="box"></span> Include photos</span>
     <span style="flex:1"></span>
+    <span class="mini" id="queueCount"></span>
+    <button class="na-btn ghost" id="clearBtn" onclick="clearAll()" style="display:none">Clear all</button>
     <button class="na-btn" onclick="generate()" id="genBtn" disabled>Generate PDF ↓</button>
   </div>
   <div class="sh-status" id="status"></div>
@@ -94,12 +96,18 @@
 
 <script>/*NOVA_SEED*/</script>
 <script>
+const LS_KEY = "nova_sheets_queue", LS_PH = "nova_sheets_photos";
 let VEHICLES = [];
-let INCLUDE_PHOTOS = true;
+try{ VEHICLES = JSON.parse(localStorage.getItem(LS_KEY) || "[]") || []; }catch(e){ VEHICLES = []; }
+let INCLUDE_PHOTOS = localStorage.getItem(LS_PH) !== "0";
+// Auto-save the whole queue (vehicles + edits + toggle) to this browser, so a
+// refresh restores exactly where you left off.
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(VEHICLES)); localStorage.setItem(LS_PH, INCLUDE_PHOTOS?"1":"0"); }catch(e){} }
 const E = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
 
 function setStatus(msg, err){ const s=document.getElementById("status"); s.textContent=msg||""; s.className="sh-status"+(err?" err":""); }
-function togglePhotos(){ INCLUDE_PHOTOS=!INCLUDE_PHOTOS; document.getElementById("photoTog").classList.toggle("on",INCLUDE_PHOTOS); render(); }
+function togglePhotos(){ INCLUDE_PHOTOS=!INCLUDE_PHOTOS; document.getElementById("photoTog").classList.toggle("on",INCLUDE_PHOTOS); save(); render(); }
+function clearAll(){ if(!VEHICLES.length) return; if(!confirm("Clear all vehicles from the queue?")) return; VEHICLES=[]; save(); setStatus(""); render(); }
 
 async function fetchListing(){
   const inp=document.getElementById("urlIn"), url=inp.value.trim();
@@ -109,7 +117,7 @@ async function fetchListing(){
     const res=await fetch("/nova-admins/sheet/fetch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
     const data=await res.json();
     if(!res.ok){ setStatus(data.error||"Couldn't fetch that listing.", true); return; }
-    const v=normalize(data); VEHICLES.push(v); inp.value="";
+    const v=normalize(data); VEHICLES.push(v); inp.value=""; save();
     setStatus(v.specs.length||v.highlights.length ? "" : "Loaded — thin on specs, fill in what's missing below.");
   }catch(e){ setStatus("Network error — try again.", true); }
   finally{ btn.disabled=false; btn.textContent="Fetch listing"; render(); }
@@ -122,20 +130,23 @@ function normalize(d){
     images:d.images||[], photo:(d.images&&d.images[0])||""
   };
 }
-function delVehicle(vi){ VEHICLES.splice(vi,1); render(); }
-function selectPhoto(vi,url){ VEHICLES[vi].photo=(VEHICLES[vi].photo===url?"":url); render(); }
-function setF(vi,f,val){ VEHICLES[vi][f]=val; }
-function setFact(vi,fi,val){ VEHICLES[vi].facts[fi][1]=val; }
-function setSpec(vi,si,w,val){ VEHICLES[vi].specs[si][w]=val; }
-function addSpec(vi){ VEHICLES[vi].specs.push(["",""]); render(); }
-function delSpec(vi,si){ VEHICLES[vi].specs.splice(si,1); render(); }
-function setHl(vi,hi,val){ VEHICLES[vi].highlights[hi]=val; }
-function addHl(vi){ VEHICLES[vi].highlights.push(""); render(); }
-function delHl(vi,hi){ VEHICLES[vi].highlights.splice(hi,1); render(); }
+function delVehicle(vi){ VEHICLES.splice(vi,1); save(); render(); }
+function selectPhoto(vi,url){ VEHICLES[vi].photo=(VEHICLES[vi].photo===url?"":url); save(); render(); }
+function setF(vi,f,val){ VEHICLES[vi][f]=val; save(); }
+function setFact(vi,fi,val){ VEHICLES[vi].facts[fi][1]=val; save(); }
+function setSpec(vi,si,w,val){ VEHICLES[vi].specs[si][w]=val; save(); }
+function addSpec(vi){ VEHICLES[vi].specs.push(["",""]); save(); render(); }
+function delSpec(vi,si){ VEHICLES[vi].specs.splice(si,1); save(); render(); }
+function setHl(vi,hi,val){ VEHICLES[vi].highlights[hi]=val; save(); }
+function addHl(vi){ VEHICLES[vi].highlights.push(""); save(); render(); }
+function delHl(vi,hi){ VEHICLES[vi].highlights.splice(hi,1); save(); render(); }
 function addAnother(){ document.getElementById("urlIn").focus(); document.getElementById("urlIn").scrollIntoView({block:"center"}); }
 
 function render(){
   document.getElementById("genBtn").disabled = VEHICLES.length===0;
+  document.getElementById("queueCount").textContent = VEHICLES.length ? (VEHICLES.length + (VEHICLES.length===1?" vehicle":" vehicles") + " · auto-saved") : "";
+  document.getElementById("clearBtn").style.display = VEHICLES.length ? "" : "none";
+  document.getElementById("photoTog").classList.toggle("on", INCLUDE_PHOTOS);
   const el=document.getElementById("cards");
   if(!VEHICLES.length){ el.innerHTML=`<div class="empty">No vehicles yet — paste a listing link above to start.</div>`; return; }
   el.innerHTML = VEHICLES.map((v,vi)=>{
