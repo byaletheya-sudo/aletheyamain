@@ -937,10 +937,14 @@ def _sheet_llm(text, ld_hint):
            "Output STRICT JSON for the schema. HARD RULES: (1) NEVER invent — if a field isn't clearly "
            "stated, return '' (or [] for highlights). (2) Strip ALL dealer identity: no dealer name, city, "
            "phone, stock number, VIN, or dealer-specific pricing/fees anywhere. (3) mileage like '12' -> "
-           "'12 mi'. (4) highlights = up to 8 marquee features as short, client-friendly labels (e.g. "
-           "'360° Surround View Camera', 'Panoramic Moonroof', 'Apple CarPlay & Android Auto') — only "
-           "features actually present. (5) trim = the trim only (e.g. 'Dynamic SE'). Use natural units "
-           "(hp, lb-ft, mpg).")
+           "'12 mi'. (4) Keep every spec value SHORT and clean so it fits a narrow column — engine ≤ ~16 "
+           "chars (e.g. '2.0L Turbo I-4', '3.0L I-6 Hybrid', NOT '2.0L I-4 turbocharged mild hybrid'); "
+           "horsepower '255 hp'; torque '295 lb-ft'; transmission '9-Speed Automatic'; seating '5 Seats'; "
+           "mpg_city/mpg_hwy = the NUMBER ONLY ('24', not '24 mpg'). (5) exterior/interior = the clean color "
+           "name only (e.g. 'Obsidian Black', 'Red / Black') — no marketing words. (6) highlights = up to 7 "
+           "marquee, desirable features in TITLE CASE, client-friendly (e.g. '360° Surround View Camera', "
+           "'Panoramic Moonroof', 'Apple CarPlay & Android Auto', 'Heated & Ventilated Seats') — only features "
+           "actually present, skip generic filler. (7) trim = the trim only (e.g. '4MATIC', 'Dynamic SE').")
     user = "JSON-LD hint:\n" + json.dumps(ld_hint)[:1500] + "\n\nLISTING TEXT:\n" + text[:14000]
     try:
         client = _oai()
@@ -982,17 +986,25 @@ def _sheet_extract(html):
     cond = pick(llm.get("condition"), ld["condition"]) or "New"
     mileage = pick(llm.get("mileage"), (ld["mileage"] + " mi") if ld["mileage"] else "")
     images = _sheet_images(html)
-    ogimg = _sheet_meta(html, "og:image")
-    if ogimg:
-        base = ogimg.split('?')[0]
-        images = [base] + [u for u in images if u != base]
+    ogimg = _sheet_meta(html, "og:image").split('?')[0]
+    if ogimg and ogimg not in images:
+        images.append(ogimg)
+    # Prefer clean manufacturer renders (the ddc CDN is never dealer-branded) as the default
+    # photo; dealer lot photos (which often carry a dealer name/logo band) sort last so the
+    # auto-selected first image is clean whenever a render exists.
+    renders = [u for u in images if '/ddc/vehicles/' in u]
+    others = [u for u in images if '/ddc/vehicles/' not in u]
+    images = renders + others
     specs = []
     for lab, key in (("Engine", "engine"), ("Horsepower", "horsepower"), ("Torque", "torque"),
                      ("Transmission", "transmission"), ("Drivetrain", "drivetrain"), ("Seating", "seating")):
         if llm.get(key):
             specs.append([lab, llm[key]])
     if llm.get("mpg_city") and llm.get("mpg_hwy"):
-        specs.append(["Fuel Economy", "%s City / %s Hwy mpg" % (llm["mpg_city"], llm["mpg_hwy"])])
+        cty = _re.sub(r'[^0-9]', '', str(llm["mpg_city"]))
+        hwy = _re.sub(r'[^0-9]', '', str(llm["mpg_hwy"]))
+        if cty and hwy:
+            specs.append(["Fuel Economy", "%s City / %s Hwy mpg" % (cty, hwy)])
     return {
         "eyebrow": "  ·  ".join([x for x in [year, (make or "").upper(), cond.upper()] if x]),
         "title": model or ld["name"] or "Vehicle",
@@ -1052,6 +1064,8 @@ def _sheet_pdf_bytes(vehicles, include_photos):
         if ch:
             t.setCharSpace(ch)
         t.textOut(txt); c.drawText(t)
+        if ch:  # reset the Tc graphics state — else this char-spacing leaks into the
+            rt = c.beginText(x, y); rt.setCharSpace(0); c.drawText(rt)  # next plain drawString/drawRightString
 
     for d in (vehicles or []):
         c.setFillColor(INK); c.rect(0, H - 92, W, 92, fill=1, stroke=0)
@@ -1093,8 +1107,15 @@ def _sheet_pdf_bytes(vehicles, include_photos):
         for row in (d.get("specs") or [])[:8]:
             if not (isinstance(row, (list, tuple)) and len(row) == 2 and row[1]):
                 continue
-            c.setFillColor(GRAY); c.setFont("Helvetica", 9); c.drawString(M, yy, str(row[0]))
-            c.setFillColor(INK); c.setFont("Helvetica-Bold", 9.5); c.drawRightString(M + 226, yy, str(row[1]))
+            lab, val = str(row[0]), str(row[1])
+            c.setFillColor(GRAY); c.setFont("Helvetica", 9); c.drawString(M, yy, lab)
+            # right-align the value at M+226 and auto-shrink its font so it always fits
+            # between the label and that edge — never overlaps the label or the Highlights column.
+            avail = (M + 226) - (M + c.stringWidth(lab, "Helvetica", 9)) - 10
+            vfs = 9.5
+            while vfs > 6.5 and c.stringWidth(val, "Helvetica-Bold", vfs) > avail:
+                vfs -= 0.5
+            c.setFillColor(INK); c.setFont("Helvetica-Bold", vfs); c.drawRightString(M + 226, yy, val)
             c.setStrokeColor(LINE); c.setLineWidth(0.5); c.line(M, yy - 7, M + 226, yy - 7)
             yy -= 20
         rx = W / 2 + 22
@@ -1156,6 +1177,26 @@ def nova_sheet_pdf():
     _audit("sheet_pdf", n=len(vehicles))
     return Response(pdf, mimetype="application/pdf",
                     headers={"Content-Disposition": 'attachment; filename="%s.pdf"' % fn})
+
+
+@app.route("/nova-admins/sheet/img")
+def nova_sheet_img():
+    """Same-origin image proxy for the photo picker. Dealer CDNs hotlink-block browser
+    <img> requests (foreign referer) but allow a plain server fetch — so we fetch here
+    and stream it back, and the thumbnails load. Admin-gated by the /nova-admins guard."""
+    u = request.args.get("u", "")
+    if not (u.startswith("http://") or u.startswith("https://")):
+        return ("", 400)
+    try:
+        req = urllib.request.Request(u, headers={"User-Agent": _SHEET_UA})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = r.read()
+            ct = r.headers.get("Content-Type", "image/jpeg")
+    except Exception:
+        return ("", 404)
+    if not ct.startswith("image/"):
+        return ("", 415)
+    return Response(data, mimetype=ct, headers={"Cache-Control": "private, max-age=3600"})
 
 
 @app.route("/nova-admins/parse-task", methods=["POST"])

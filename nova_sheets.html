@@ -37,6 +37,7 @@
   .vc-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
   .vc-photos img{width:100%;height:64px;object-fit:contain;background:#fff;border-radius:8px;border:2px solid transparent;cursor:pointer;opacity:.62;}
   .vc-photos img.sel{border-color:var(--na-blue);opacity:1;}
+  .vc-photos img.dealer{box-shadow:0 0 0 2px var(--na-amber) inset;}
   .vc-hero{width:100%;height:200px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:9px;}
   .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--na-muted-2);font-weight:700;display:block;margin:11px 0 4px;}
   .fld{width:100%;}
@@ -104,6 +105,7 @@ let INCLUDE_PHOTOS = localStorage.getItem(LS_PH) !== "0";
 // refresh restores exactly where you left off.
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(VEHICLES)); localStorage.setItem(LS_PH, INCLUDE_PHOTOS?"1":"0"); }catch(e){} }
 const E = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+const PX = u => "/nova-admins/sheet/img?u=" + encodeURIComponent(u);   // proxy CDN images (hotlink-blocked in <img>)
 
 function setStatus(msg, err){ const s=document.getElementById("status"); s.textContent=msg||""; s.className="sh-status"+(err?" err":""); }
 function togglePhotos(){ INCLUDE_PHOTOS=!INCLUDE_PHOTOS; document.getElementById("photoTog").classList.toggle("on",INCLUDE_PHOTOS); save(); render(); }
@@ -151,9 +153,9 @@ function render(){
   if(!VEHICLES.length){ el.innerHTML=`<div class="empty">No vehicles yet — paste a listing link above to start.</div>`; return; }
   el.innerHTML = VEHICLES.map((v,vi)=>{
     const photos = INCLUDE_PHOTOS ? `
-      ${v.photo?`<img class="vc-hero" src="${E(v.photo)}" alt="">`:``}
-      <div class="vc-photos">${(v.images||[]).map(u=>`<img class="${v.photo===u?'sel':''}" src="${E(u)}" onclick="selectPhoto(${vi},'${E(u)}')" alt="">`).join("")||'<span class="mini">No photos found on the page.</span>'}</div>
-      <div class="mini" style="margin-top:6px">Tap a photo to include it (tap again to drop). Only clean ones — skip any with a dealer watermark.</div>`
+      ${v.photo?`<img class="vc-hero" referrerpolicy="no-referrer" src="${PX(v.photo)}" alt="">`:``}
+      <div class="vc-photos">${(v.images||[]).map(u=>{const dealer=u.indexOf('/ddc/vehicles/')<0; return `<img class="${v.photo===u?'sel ':''}${dealer?'dealer':''}" referrerpolicy="no-referrer" title="${dealer?'Dealer photo — may show a watermark/band':'Clean manufacturer render'}" src="${PX(u)}" onclick="selectPhoto(${vi},'${E(u)}')" alt="">`;}).join("")||'<span class="mini">No photos found on the page.</span>'}</div>
+      <div class="mini" style="margin-top:6px">Tap a photo to include it (tap again to drop). <b>Amber ring = dealer photo</b> (may have branding) — prefer the clean ones.</div>`
       : `<div class="mini">Photos are off for this sheet.</div>`;
     const specs = v.specs.map((s,si)=>`<div class="kvrow">
         <input class="na-in k" value="${E(s[0])}" placeholder="Label" oninput="setSpec(${vi},${si},0,this.value)">
